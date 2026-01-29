@@ -872,7 +872,7 @@ class ReportGenerator:
             # plot
             ax = axes[0,i]
             bp = ax.boxplot(values, vert=True, showfliers=True)
-            ax.set_title(f"Standard {std_name}")
+            ax.set_title(f"{std_name}")
             ax.set_ylabel("Abundance")
             ax.set_xticks([])
 
