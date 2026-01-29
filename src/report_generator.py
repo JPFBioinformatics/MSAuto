@@ -552,7 +552,7 @@ class ReportGenerator:
             "% Intensity Outliers" : int_outs
             }
     
-    def identify_outliers(self, matrix: np.ndarray, threshold: float = 3.5):
+    def identify_outliers(self, matrix: np.ndarray, value_map: dict, threshold: float = 3.5):
         """
         Helper method that takes an input matrix and calculates outliers in each column
         Params:
@@ -566,7 +566,7 @@ class ReportGenerator:
 
         # inverse maps to map row/col to sample/feature
         inv_sample = {idx:name for name,idx in self.sample_map.items()}
-        inv_value = {idx:name for name,idx in self.value_map.items()}
+        inv_value = {idx:name for name,idx in value_map.items()}
         
         # iterate over all columns of the matrix
         for col_i,col in enumerate(matrix.T):
@@ -586,7 +586,7 @@ class ReportGenerator:
                 skipped_cols.add(col_i)
                 continue
             # skip column if it is sparse
-            if mask.sum() / len(col) > 0.5:
+            if mask.sum() / len(col) < 0.5:
                 skipped_cols.add(col_i)
                 continue
 
@@ -614,7 +614,7 @@ class ReportGenerator:
 
         return outliers,eligable_cols_by_sample
 
-    def flag_intensity_outliers(self, threshold: float = 3.5):
+    def flag_intensity_outliers(self):
         """
         Flags outlier values columnwise in the matrix, allowing for finding of raw abundance values that stick out from the distribution expected for that molecule
         uses a modified MAD (median absolute deviation) based z-score function
@@ -623,58 +623,12 @@ class ReportGenerator:
         """
         # grab data matrix
         data = self.norm_matrix.copy()
-        """
-        # get inverse maps so we can map idx:name of mol/sample
-        inv_sample = {idx:name for name,idx in self.sample_map.items()}
-        inv_value = {idx:name for name,idx in self.value_map.items()}
-        outliers = []
         
-        # find outliers in each column
-        skipped_cols = set()
-        eligalbe_cols_by_sample = defaultdict(set())
-        for col_i, col in enumerate(data.T):
-            
-            # generate mask to remove nan values
-            mask = ~np.isnan(col)
-            if mask.sum() < 3:
-                skipped_cols.add(col_i)
-                continue
-            nonzero_col = col[mask]
-            median = np.median(nonzero_col)
-            mad = np.median(np.abs(nonzero_col-median))
-
-            # if no variation then skip this column
-            if mad == 0:
-                skipped_cols.add(col_i)
-                continue
-            # skip sparse features
-            if mask.sum() / len(col) < 0.5:
-                skipped_cols.add(col_i)
-                continue
-            
-            # calculate modified z scor
-            mod_z = 0.6745 * (nonzero_col-median) / mad
-
-            # find row index values of outliers
-            row_indices = np.where(mask)[0]
-            for row_i, val in zip(row_indices,mod_z):
-                if abs(val) > threshold:
-                    values = {
-                        'row': row_i,
-                        'col': col_i,
-                        'sample': inv_sample[row_i],
-                        'molecule': inv_value[col_i],
-                        'mod_z': float(val)
-                    }
-                    outliers.append(values)
-
-        return outliers, data.shape[1] - skipped_cols
-        """
         # identify outliers
-        outliers, eligable_counts = self.identify_outliers(data)
+        outliers, eligable_counts = self.identify_outliers(data,self.norm_value_map)
         return outliers, eligable_counts
 
-    def flag_rt_outliers(self, threshold: float = 3.5):
+    def flag_rt_outliers(self):
         """
         Finds outliers in the RT of collcted peaks
         Params:
@@ -686,61 +640,12 @@ class ReportGenerator:
         samples = list(peaks.keys())
         num_molecules = len(self.value_map)
         num_samples = len(samples)
-        #inv_sample = {idx:name for name,idx in self.sample_map.items()}
-        #inv_value = {idx:name for name,idx in self.value_map.items()}
 
+        # get data
         data = np.full((num_samples,num_molecules), np.nan)
-        """
-        outliers = []
-        
-        # iterate through all peaks for each sample, placing rt_diff in the correct place in the matrix
-        for sample in samples:
-            row_idx = self.sample_map[sample]
-            for entry in peaks[sample]:
-                col_idx = self.value_map[entry["molecule"]]
-                rt_matrix[row_idx,col_idx] = entry["rt_diff"]
 
-        # now detect outliers in each column and save rt_outliers = value_name :  sample_name for an outlier
-        skipped_cols = 0
-        for col_i, col in enumerate(rt_matrix.T):
-
-            # generate mask to remove nan values
-            mask = ~np.isnan(col)
-            if mask.sum() < 3:
-                continue
-            nonzero_col = col[mask]
-            median = np.median(nonzero_col)
-            mad = np.median(np.abs(nonzero_col-median))
-
-            # if no variation then skip column
-            if mad == 0:
-                skipped_cols += 1
-                continue
-            # don't calculate outliers for spase features
-            if mask.sum() / len(col) < 0.5:
-                skipped_cols += 1
-                continue
-            
-            # calculate mod z score
-            mod_z = 0.6745 * (nonzero_col-median) / mad
-
-            # collect data
-            row_indices = np.where(mask)[0]
-            for row_i,val in zip(row_indices,mod_z):
-                if abs(val) > threshold:
-                    values = {
-                        'row': row_i,
-                        'col': col_i,
-                        'sample': inv_sample[row_i],
-                        'molecule': inv_value[col_i],
-                        'mod_z': float(val),
-                    }
-                    outliers.append(values)
-
-        return outliers
-        """
         # identify outliers
-        outliers, eligable_counts = self.identify_outliers(data)
+        outliers, eligable_counts = self.identify_outliers(data,self.value_map)
         return outliers,eligable_counts
 
     def flag_outliers(self):
@@ -1713,10 +1618,12 @@ class ReportGenerator:
 
         if len(rt_outs) > 0:
             rt_df = pd.DataFrame(rt_outs)
+            rt_df.drop(columns=["col","row"],inplace=True)
             self.add_table_to_pdf(pdf,rt_df,"RT Outliers",rows_per_page)
 
         if len(int_outs) > 0:
             int_df = pd.DataFrame(int_outs)
+            int_df.drop(columns=["col","row"],inplace=True)
             self.add_table_to_pdf(pdf,int_df,"Intensity Outliers",rows_per_page)
 
     def add_table_to_pdf(self, pdf, df: pd.DataFrame, title: str, rows_per_page: int = 25):
