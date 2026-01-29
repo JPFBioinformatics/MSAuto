@@ -604,17 +604,17 @@ class IntensityMatrix:
             print(f"No peaks availbe in ion chromatogram for ion: {mz}\n{e}")
             print(len(peaks))
 
-        # find rt difference
+        # find rt difference (positive if RT > real value negative if RT < real value)
         if  np.isnan(closest_peak['precise_max_location']):
             diff = np.nan
         else:
-            diff = abs(closest_peak['precise_max_location'] - rt)
+            diff = rt - closest_peak['precise_max_location']
 
         # save rt difference to closest peak
         closest_peak["rt_diff"] = diff
         
         # update rt valid flag
-        if np.isnan(diff) or diff > threshold:
+        if np.isnan(diff) or abs(diff) > threshold:
             closest_peak["rt_valid"] = False
         else:
             closest_peak["rt_valid"] = True

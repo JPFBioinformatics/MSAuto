@@ -2,6 +2,7 @@
 
 import sys, math
 from pathlib import Path
+from collections import defaultdict
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -44,8 +45,7 @@ class ReportGenerator:
         self.clean_value_map = None             # column map for the clean matrix
         self.sample_map = None                  # row map (sample name: index)
         self.std_cols = None                    # dictionary of standard name: standard column from raw matrix
-        self.group_cols = None                  # dictionary of group columns (onehot encoded columns typically located at the end of the matrix)
-        self.num_groups = None                  # number of groups samples are organized into for this analysis
+        self.group_index_map = None             # dictionary of group_name: list of column index values for that group
         self.output_flags = None                # flag dictionary for coloring the output data tables
         self.outliers = None                    # dictionary of outliers for outlier flagging
         self.nan_ratios = None                  # dictionary of NaN ratios for each column
@@ -69,7 +69,7 @@ class ReportGenerator:
 
         # get data matrix
         raw_matrix = self.matrix
-        if raw_matrix == None:
+        if raw_matrix is None:
             raise ValueError("No data matrix detected, please run generate_matrix before normalizing")
 
         # load template values
@@ -100,6 +100,9 @@ class ReportGenerator:
         self.clean_matrix = clean_matrix
         self.clean_value_map = clean_map
 
+        # flag outliers
+        self.flag_outliers()
+
     def read_template(self):
         """
         reads a given template file and returns the relevant data, lists are matched by index
@@ -121,14 +124,21 @@ class ReportGenerator:
         data['norm_factors'] = self.get_col(df,'norm')
         data['standards'] = self.get_col(df,'standard')
         data['molecules'] = self.get_col(df,'molecule')
+        data['mz'] = self.get_col(df,'mz')
+        data['rt'] = self.get_col(df,'rt')
 
-        groups = data['gropus']
-        gset = set(groups)
-
-        self.num_groups = len(gset)
+        
+        # build group index map
+        group_index_map = {}
+        for sample,group in zip(data['samples'],data['groups']):
+            sample_i = self.sample_map[sample]
+            if group not in group_index_map:
+                group_index_map[group] = [(sample_i)]
+            else:
+                group_index_map[group].append(sample_i)
+            
+        self.group_index_map = group_index_map
         self.template_dict = data
-
-        self.flag_outliers()
     
     def normalize_istd(self, matrix: np.ndarray, standards: list, molecules: list):
         """
@@ -152,12 +162,15 @@ class ReportGenerator:
         for standard in std_set:
             std_i = feature_map[standard]
             values = data[:,std_i].copy()
-            if np.any(values == 0) or np.isnan(values):
-                raise ValueError(f"{standard} contains zero/NaN value(s), cannot normalize")
+            if np.any(values <= 0) or np.any(~np.isfinite(values)):
+                raise ValueError(f"{standard} contains zero/NaN/ivalid value(s), cannot normalize")
             std_cols[standard] = values
             std_idxs.append(std_i)
+
+        # save standard columns (std_name:column) to object
         self.std_cols = std_cols
-        std_idxs = set(std_idxs)
+        std_idxs_set = set(std_idxs)
+        std_idxs_list = sorted(std_idxs_set)
 
         # divide each value in the row by its corrosponding istd value (each sample has its own istd value)
         for name,col_i in feature_map.items():
@@ -166,9 +179,9 @@ class ReportGenerator:
             std_name = feature_to_std[name]
             std_vals = std_cols[std_name]
             data[:,col_i] /= std_vals
-        
+
         # remove istd columns from matrix
-        new_data = np.delete(data,std_idxs,axis=1)
+        new_data = np.delete(data,std_idxs_list,axis=1)
 
         # reprocess value map to match this new matrix
         inv_map = {idx:name for name,idx in feature_map.items()}
@@ -226,35 +239,29 @@ class ReportGenerator:
         """
 
         # get group information
-        num_groups = self.num_groups
-        group_cols = matrix[:,-num_groups:].copy()
-        group_names = [name for name,_ in sorted(col_map.items(), key=lambda x: x[1])][-num_groups:]
-        group_map = {
-            group_name: np.where(group_cols[:,i] == 1)[0].tolist()
-            for i,group_name in enumerate(group_names)
-        }
+        group_index_map = self.group_index_map
 
         # get data information
-        data = matrix[:,:-num_groups].copy()
+        data = matrix.copy()
         num_features = data.shape[1]
 
         # calculate nan ratio for each column
         nan_ratios = {}
-        for group_name,rows in group_map.items():
+        for group_name,rows in group_index_map.items():
             sub = data[rows,:]
             nan_ratios[group_name] = np.isnan(sub).mean(axis=0)
         self.nan_ratios = nan_ratios
         
         # generate mask for columns to keep, keep column if ANY group has valid nan ratio
         keep = np.zeros(data.shape[1],dtype=bool)
-        for group_name in group_map:
+        for group_name in group_index_map:
             group_keep = nan_ratios[group_name] <= max_nan_ratio
             keep |= group_keep
 
         # filter the data matrix
         filtered_data = data[:,keep]
 
-        # rebuild column map
+        # rebuild column map to reflect filtered_data with nan columns removed
         inv_map = {idx:name for name,idx in col_map.items() if idx < num_features}
         new_map = {}
         new_i = 0
@@ -263,14 +270,7 @@ class ReportGenerator:
                 new_map[inv_map[old_i]] = new_i
                 new_i += 1
 
-        # restack data and group matrices
-        filtered_matrix = self.stack_new_col(filtered_data,group_cols)
-        # combine data and group maps
-        start_i = filtered_data.shape[1]
-        for i,group_name in enumerate(group_names):
-            new_map[group_name]  = start_i + i
-
-        return filtered_matrix, new_map
+        return filtered_data, new_map
 
     def impute_nans(self, matrix: np.ndarray, factor: float = 0.5):
         """
@@ -399,15 +399,16 @@ class ReportGenerator:
         """
         # ensure values and matrix are compatible size
         num_rows = matrix.shape[0]
+        num_cols = matrix.shape[1]
         if len(values) != num_rows:
             raise ValueError(f"Incorrect column lenght, {len(values)} rows cannot be added to a matrix with {num_rows} rows")
         
         # if compatible then continue
-        new_col = np.ndarray(values).reshape(-1,1)
+        new_col = np.array(values).reshape(-1,1)
         matrix = np.hstack((matrix,new_col))
 
         # add to value map
-        self.value_map[label] = num_rows
+        self.value_map[label] = num_cols
 
         # save new matrix
         self.matrix = matrix
@@ -425,7 +426,9 @@ class ReportGenerator:
         """
 
         if self.peaks is None:
-                raise ValueError("No peak data availabe for QC plots")
+            raise ValueError("No peak data availabe for QC plots")
+        if self.outliers is None:
+            raise ValueError("No outlier data available for QC plots")
         
         # get metric data
         sample_data = {}
@@ -485,8 +488,27 @@ class ReportGenerator:
                 total_data["symmetry"].append(sym)
                 total_data["sym_valid"].append(sv)
 
-            sample_data[sample] = data
+            # calculate pct outliers per sample
+            if self.pct_outliers is not None:
+                pct_int = self.pct_outliers['sample']['intensity'].get(sample,0)
+                pct_rt = self.pct_outliers['sample']['rt_diff'].get(sample,0)
+                data['% Intensity Outliers'] = pct_int
+                data['% RT Outliers'] = pct_rt
+            else:
+                data['% Intensity Outliers'] = 0
+                data['% RT Outliers'] = 0
 
+            sample_data[sample] = data
+        
+        # calculate total pct outliers
+        if self.pct_outliers is not None:
+            total_int = list(self.pct_outliers['sample']['intensity'].values())
+            total_rt = list(self.pct_outliers['sample']['rt_diff'].values())
+            total_data['% Intensity Outliers'] = np.mean(total_int)
+            total_data['% RT Outliers'] = np.mean(total_rt)
+        else:
+            total_data['% Intensity Outliers'] = 0
+            total_data['% RT Outliers'] = 0
         return total_data, sample_data
 
     def compute_stats(self, flags_dict: dict):
@@ -509,6 +531,8 @@ class ReportGenerator:
         sym_valid_pct = 100 * (1 - np.mean(flags_dict["sym_valid"]))
         avg_sym = np.mean(flags_dict["symmetry"])
         err_sym = np.std(flags_dict["symmetry"]) / np.sqrt(num_peaks)
+        rt_outs = flags_dict['% RT Outliers']
+        int_outs = flags_dict['% Intensity Outliers']
 
         return {
             r"% FlatTop": flat_top_pct,
@@ -523,33 +547,97 @@ class ReportGenerator:
             "\u03C3 \u0394RT": err_rt,
             "% Valid Sym": sym_valid_pct,
             "\u03BC Sym": avg_sym,
-            "\u03C3 Sym": err_sym
+            "\u03C3 Sym": err_sym,
+            "% RT Outliers": rt_outs,
+            "% Intensity Outliers" : int_outs
             }
     
+    def identify_outliers(self, matrix: np.ndarray, threshold: float = 3.5):
+        """
+        Helper method that takes an input matrix and calculates outliers in each column
+        Params:
+            matrix                  the matrix you want to find outliers in
+            threshold               threshold for mod_z scores that denotes an outlier
+        """
+        # structures to hold data about which columns were skipped
+        skipped_cols = set()
+        eligable_cols_by_sample = defaultdict(set)
+        outliers = []
+
+        # inverse maps to map row/col to sample/feature
+        inv_sample = {idx:name for name,idx in self.sample_map.items()}
+        inv_value = {idx:name for name,idx in self.value_map.items()}
+        
+        # iterate over all columns of the matrix
+        for col_i,col in enumerate(matrix.T):
+            # mask to remove nan values
+            mask = ~np.isnan(col)
+            if mask.sum() < 3:
+                skipped_cols.add(col_i)
+                continue
+            nonzero_vals = col[mask]
+            
+            # calculate median and MAD
+            median = np.median(nonzero_vals)
+            mad = np.median(np.abs(nonzero_vals-median))
+
+            # skip column if there is no variation
+            if mad == 0:
+                skipped_cols.add(col_i)
+                continue
+            # skip column if it is sparse
+            if mask.sum() / len(col) > 0.5:
+                skipped_cols.add(col_i)
+                continue
+
+            # grab row indices for eligable column
+            row_indices = np.where(mask)[0]
+
+            # mark eligability per sample
+            for row_i in row_indices:
+                sample = inv_sample[row_i]
+                eligable_cols_by_sample[sample].add(col_i)
+            
+            # compute modz
+            mod_z = 0.6745 * (nonzero_vals - median) / mad
+
+            # flag outliers
+            for row_i,z in zip(row_indices,mod_z):
+                if abs(z) > threshold:
+                    outliers.append({
+                        'row': row_i,
+                        'col': col_i,
+                        'sample' : inv_sample[row_i],
+                        'molecule' : inv_value[col_i],
+                        'mod_z' : float(z)
+                    })
+
+        return outliers,eligable_cols_by_sample
+
     def flag_intensity_outliers(self, threshold: float = 3.5):
         """
         Flags outlier values columnwise in the matrix, allowing for finding of raw abundance values that stick out from the distribution expected for that molecule
-        uses a modified, MAD (median absolute deviation) based z-score function
+        uses a modified MAD (median absolute deviation) based z-score function
         Params:
             theshold                threshold value for samples to be flagged
         """
         # grab data matrix
-        if self.num_groups > 0:
-            data = self.norm_matrix[:,:-self.num_groups]
-        else:
-            data = self.norm_matrix
-
+        data = self.norm_matrix.copy()
+        """
         # get inverse maps so we can map idx:name of mol/sample
         inv_sample = {idx:name for name,idx in self.sample_map.items()}
         inv_value = {idx:name for name,idx in self.value_map.items()}
         outliers = []
         
         # find outliers in each column
+        skipped_cols = set()
+        eligalbe_cols_by_sample = defaultdict(set())
         for col_i, col in enumerate(data.T):
             
-            # generate mask to remove 0 values
+            # generate mask to remove nan values
             mask = ~np.isnan(col)
             if mask.sum() < 3:
+                skipped_cols.add(col_i)
                 continue
             nonzero_col = col[mask]
             median = np.median(nonzero_col)
@@ -557,6 +645,11 @@ class ReportGenerator:
 
             # if no variation then skip this column
             if mad == 0:
+                skipped_cols.add(col_i)
+                continue
+            # skip sparse features
+            if mask.sum() / len(col) < 0.5:
+                skipped_cols.add(col_i)
                 continue
             
             # calculate modified z scor
@@ -570,11 +663,16 @@ class ReportGenerator:
                         'row': row_i,
                         'col': col_i,
                         'sample': inv_sample[row_i],
-                        'molecule': inv_value[col_i]
+                        'molecule': inv_value[col_i],
+                        'mod_z': float(val)
                     }
                     outliers.append(values)
 
-        return outliers
+        return outliers, data.shape[1] - skipped_cols
+        """
+        # identify outliers
+        outliers, eligable_counts = self.identify_outliers(data)
+        return outliers, eligable_counts
 
     def flag_rt_outliers(self, threshold: float = 3.5):
         """
@@ -588,10 +686,11 @@ class ReportGenerator:
         samples = list(peaks.keys())
         num_molecules = len(self.value_map)
         num_samples = len(samples)
-        inv_sample = {idx:name for name,idx in self.sample_map.items()}
-        inv_value = {idx:name for name,idx in self.value_map.items()}
+        #inv_sample = {idx:name for name,idx in self.sample_map.items()}
+        #inv_value = {idx:name for name,idx in self.value_map.items()}
 
-        rt_matrix = np.full((num_samples,num_molecules), np.nan)
+        data = np.full((num_samples,num_molecules), np.nan)
+        """
         outliers = []
         
         # iterate through all peaks for each sample, placing rt_diff in the correct place in the matrix
@@ -602,9 +701,10 @@ class ReportGenerator:
                 rt_matrix[row_idx,col_idx] = entry["rt_diff"]
 
         # now detect outliers in each column and save rt_outliers = value_name :  sample_name for an outlier
+        skipped_cols = 0
         for col_i, col in enumerate(rt_matrix.T):
 
-            # generate mask to remove 0 values
+            # generate mask to remove nan values
             mask = ~np.isnan(col)
             if mask.sum() < 3:
                 continue
@@ -614,6 +714,11 @@ class ReportGenerator:
 
             # if no variation then skip column
             if mad == 0:
+                skipped_cols += 1
+                continue
+            # don't calculate outliers for spase features
+            if mask.sum() / len(col) < 0.5:
+                skipped_cols += 1
                 continue
             
             # calculate mod z score
@@ -627,26 +732,84 @@ class ReportGenerator:
                         'row': row_i,
                         'col': col_i,
                         'sample': inv_sample[row_i],
-                        'molecule': inv_value[col_i]
+                        'molecule': inv_value[col_i],
+                        'mod_z': float(val),
                     }
                     outliers.append(values)
 
         return outliers
-            
+        """
+        # identify outliers
+        outliers, eligable_counts = self.identify_outliers(data)
+        return outliers,eligable_counts
+
     def flag_outliers(self):
         """
-        Function that will flag all rt and intensity (types) outliers and save them to self.outliesrs[type] dict
+        Function that will flag all rt and intensity (types) and calculates percent outliers per sample and per molecule
         """
+        # inverse value maps
+        inv_val = {idx:name for name,idx in self.value_map.items()}
+        inv_norm_val = {idx:name for name,idx in self.norm_value_map.items()}
 
-        int_outliers = self.flag_intensity_outliers()
-        rt_outliers = self.flag_rt_outliers()
+        # find outliers in intensity and rt
+        int_outliers,int_counts = self.flag_intensity_outliers()
+        rt_outliers,rt_counts = self.flag_rt_outliers()
+        int_counts_mol = {mol:0 for mol in self.norm_value_map.keys()}
+        rt_counts_mol = {mol:0 for mol in self.value_map.keys()}
+        
+        # initialize dicts for counting outliers/sample
+        pct_rt_outliers = {sample: 0 for sample in self.sample_map.keys()}
+        pct_rt_outliers_mol = {mol: 0 for mol in self.value_map.keys()}
+        pct_int_outliers = {sample: 0 for sample in self.sample_map.keys()}
+        pct_int_outliers_mol = {mol: 0 for mol in self.norm_value_map.keys()}
 
-        outliers = {
-            'rt_diff': rt_outliers,
-            "intensity": int_outliers
+        # count outliers per sample
+        for out in int_outliers:
+            pct_int_outliers[out['sample']] += 1
+            pct_int_outliers_mol[out['molecule']] += 1
+        for out in rt_outliers:
+            pct_rt_outliers[out['sample']] += 1
+            pct_rt_outliers_mol[out['molecule']] += 1
+        # calculate % outlier per sample
+        for sample,count in pct_int_outliers.items():
+            denom = len(int_counts.get(sample,set()))
+            pct_int_outliers[sample] = 100 * count / denom if denom > 0 else np.nan
+        for sample,count in pct_rt_outliers.items():
+            denom = len(rt_counts.get(sample,set()))
+            pct_rt_outliers[sample] = 100 * count / denom if denom > 0 else np.nan
+
+        # count eligable counts per molecule
+        for sample,cols in int_counts.items():
+            for col_i in cols:
+                mol = inv_norm_val[col_i]
+                int_counts_mol[mol] += 1
+        for sample,cols in rt_counts.items():
+            for col_i in cols:
+                mol = inv_val[col_i]
+                rt_counts_mol[mol] += 1
+        # compute % outliers per molecule
+        for mol,count in pct_int_outliers_mol.items():
+            denom = int_counts_mol.get(mol,0)
+            pct_int_outliers_mol[mol] = 100 * count / denom if denom > 0 else np.nan
+        for mol,count in pct_rt_outliers_mol.items():
+            denom = rt_counts_mol.get(mol,0)
+            pct_rt_outliers_mol[mol] = 100 * count / denom if denom > 0 else np.nan
+
+        # save values
+        self.outliers = {
+            'intensity' : int_outliers,
+            'rt_diff' : rt_outliers
         }
-
-        self.outliers = outliers
+        self.pct_outliers = {
+            'sample' : {
+                'intensity' : pct_int_outliers,
+                'rt_diff' : pct_rt_outliers
+            },
+            'molecule' : {
+                'intensity' : pct_int_outliers_mol,
+                'rt_diff' : pct_rt_outliers_mol
+            }
+        }
 
     # endregion
 
@@ -740,7 +903,6 @@ class ReportGenerator:
 
         # add sample map page
         self.add_sample_map_page(pdf)
-        self.add_feature_map_page(pdf)
 
         # compute stats per sample
         rows = []
@@ -770,7 +932,9 @@ class ReportGenerator:
             "\u03C3 \u0394RT",
             "% Valid Sym",
             "\u03BC Sym",
-            "\u03C3 Sym"
+            "\u03C3 Sym",
+            "% RT Outliers",
+            "% Intensity Outliers"
         ]]
         # add table to QC PDF
         self.add_table_to_pdf(pdf,df_qc,"QC Summary Table",rows_per_page)
@@ -846,17 +1010,48 @@ class ReportGenerator:
         name = cfg.get("run_name")
         out_file = Path(out_dir) / f"{name}_report.pdf"
 
-        if self.norm_matrix == None:
+        if self.norm_matrix is None:
             raise ValueError("Normalize Matrix before generating report")
 
         with PdfPages(out_file) as pdf:
+            self.add_metadata_pages(pdf)
             self.std_qc_plots(pdf=pdf)
             total,per_sample = self.qc_data()
             df = self.qc_df(pdf,per_sample,total)
             self.plot_outliers(pdf)
             self.plot_qc_total(pdf,total)
             self.plot_qc_per_sample(pdf,df)
+            self.plot_qc_per_molecule(pdf)
             self.pca_plots(pdf=pdf,num_comps=num_pcs)
+
+    def add_metadata_pages(self, pdf):
+        """
+        adds metadata pages to the report pdf showing group membership/collection information
+        Params:
+            pdf                         pdf to save the page to
+        """
+        metadata = self.template_dict
+        num_samples = len(metadata['samples'])
+        num_molecules = len(metadata['molecules'])
+
+        # sample table
+        sample_df = pd.DataFrame({
+            'Sample': metadata['samples'],
+            'Group': metadata['groups'] if metadata['groups'] else ['' for _ in range(num_samples)],
+            'Norm Factor': metadata['norm_factors'] if metadata['norm_factors'] else ['' for _ in range(num_samples)]
+        })
+
+        # molecule table
+        mol_df = pd.DataFrame({
+            'Molecule': metadata['molecules'],
+            'Ion': metadata['mz'],
+            'Retention Time': metadata['rt'],
+            'Standard': metadata['standards'] if metadata['standards'] else ['' for _ in range(num_molecules)]
+        })
+
+        # add pages to pdf
+        self.add_table_to_pdf(pdf,sample_df,"Sample Metadata")
+        self.add_table_to_pdf(pdf,mol_df,"Molecule Metadata")
 
     def add_sample_map_page(self, pdf):
         """
@@ -1013,6 +1208,12 @@ class ReportGenerator:
             linewidth=2,
             label="RT Threshold"
         )
+        axes[1,0].axvline(
+            -1*rt_threshold,
+            linestyle="--",
+            linewidth=2,
+            label="RT Threshold"
+        )
         axes[1,0].legend()
 
         # rt diffs box and whisker plot
@@ -1057,30 +1258,31 @@ class ReportGenerator:
             r"% FlatTop",
             "% RT Valid",
             "% Valid Sym",
-            "# Outliers",
             "\u03BC Width",
             "\u03C3 Width",
             "\u03BC \u0394RT",
             "\u03C3 \u0394RT",
             "\u03BC Sym",
             "\u03C3 Sym",
+            "% Intensity Outliers",
+            "% RT Outliers"
         ]
 
         # generate plot
-        fig,axes = plt.subplots(5, 2, figsize=(8,10))
-        fig.suptitle("Per Sample QC", fontsize=14)
-
+        fig,axes = plt.subplots(4,3, figsize=(10,10))
+        fig.suptitle("Per-Sample QC", fontsize=14)
+        
         # generate figures per metric
         for idx,metric in enumerate(metrics):
             
             # position the figure
-            row = idx // 2
-            col = idx % 2
+            row = idx // 3
+            col = idx % 3
             ax = axes[row,col]
 
-            # handle width seperately
+            # error if the df does not have the relevant data
             if metric not in df_qc.columns:
-                raise ValueError(f"Metric {metric} not found in samples dataframe")
+                raise ValueError(f"Metric {metric} not found in samples dataframe:\n{df_qc.columns}")
             
             # handle the rest of the plots
             else:
@@ -1101,7 +1303,7 @@ class ReportGenerator:
                 # annotate fliers
                 fliers = bp["fliers"][0].get_ydata()
                 for y in fliers:
-                    idx = (metric_values == y).nonzero()[0]
+                    idx = [j for j,val in enumerate(metric_values) if val == y]
                     for i in idx:
                         ax.annotate(
                             samples[i],
@@ -1114,6 +1316,80 @@ class ReportGenerator:
         pdf.savefig(fig)
         plt.close(fig)
 
+    def plot_qc_per_molecule(self,pdf):
+        """
+        generates boxplots for per molecule metrics of interest, all calculated from normalized matrix EXCEPT the % rt outliers
+        %RT outliers, %Intensity Outliers, medain intensity, % missingness, and Coefficeint of variation per molecule
+        """
+
+        # check that data is present
+        if self.norm_matrix is None:
+            raise ValueError("Normalized matrix is required for per-molecule QC plotting")
+
+        # get per molecule data
+        molecules = list(self.norm_value_map.keys())
+        data = self.norm_matrix
+        n_mol = data.shape[1]
+
+        # % outliers per molecule
+        all_molecules = list(self.value_map.keys())
+        pct_rt_out = [self.pct_outliers['molecule']['rt_diff'].get(mol,0) for mol in all_molecules]
+        pct_int_out = [self.pct_outliers['molecule']['intensity'].get(mol,0) for mol in molecules]
+
+
+        # calculate median intensity, missingness, and cv values
+        med_int = []
+        missing = []
+        cv = []
+        for col in range(n_mol):
+            vals = data[:,col]
+            med_int.append(np.nanmedian(vals))
+            missing.append(100*np.isnan(vals).sum()/len(vals))
+            mean = np.nanmean(vals)
+            std = np.nanstd(vals)
+            cv.append(std/mean if mean != 0 else 0)
+
+            # metrics to plot
+        metrics = [
+            ('% RT Outliers',pct_rt_out),
+            ('% Intensity Outliers',pct_int_out),
+            ('Median Intensity',med_int),
+            ('% Missing Values',missing),
+            ('Coefficient of Variation',cv)
+        ]
+
+        # build the figure
+        fig,axes = plt.subplots(3,2,figsize=(10,10))
+        axes = axes.flatten()
+        fig.suptitle("Per-Molecule QC",fontsize=16)
+
+        for met_i,(title,values) in enumerate(metrics):
+            ax = axes[met_i]
+            bp = ax.boxplot(values,vert=True,showfliers=True)
+            ax.set_title(title)
+            ax.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+
+            # annotate fliers
+            fliers = bp["fliers"][0].get_ydata()
+            for y in fliers:
+                values_arr = np.array(values)
+                idx = [j for j,val in enumerate(values_arr) if val == y]
+                for i in idx:
+                    if title == '% RT Outliers':
+                        label = all_molecules[i]
+                    else:
+                        label = molecules[i]
+                    ax.annotate(
+                        label,
+                        xy=(1,y),
+                        xytext=(1.05,y),
+                        fontsize=5,
+                        va="center"
+                    )
+
+        pdf.savefig(fig)
+        plt.close(fig)
+
     def pca_plots(self, pdf, num_comps: int = 2):
         """
         Generates a PCA plot for the data stored in this object (self.matrix) and saves output to report pdf
@@ -1122,16 +1398,11 @@ class ReportGenerator:
             num_comps                       the number of PCA components to include in plot
         """
         # raise error if normalized matrix does not exist
-        if self.norm_matrix is None:
+        if self.clean_matrix is None:
             raise ValueError("No normalized matrix available for PCA")
 
         # get matrix and remove the one-hot encoded groups if needed
-        if self.num_groups > 0:
-            group_data = self.norm_matrix[:, -self.num_groups:]
-            data = self.norm_matrix[:, :-self.num_groups].copy()
-        else:
-            group_data = None
-            data = self.norm_matrix.copy()
+        data = self.clean_matrix.copy()
 
         # calculate value for imputing nan 
         min_nonzero = np.nanmin(data,axis=0)
@@ -1153,14 +1424,19 @@ class ReportGenerator:
         keep = feature_var > float(var_threshold)
         data = data[:,keep]
 
+        # crate new feature map to reflect filtered matrix
+        start_map = self.clean_value_map
+        feature_names = [name for name,_ in sorted(start_map.items(), key=lambda x:x[1])]
+        filtered_names = np.array(feature_names)[keep]
+        filtered_map = {name:i for i,name in enumerate(filtered_names)}
+
         # z-score transform
         data = StandardScaler().fit_transform(data)
 
         # calculate PCA and explained variance
         pca = PCA(n_components=num_comps)
         cg = False
-        if group_data is not None:
-            data = np.hstack([data,group_data])
+        if self.group_index_map:
             cg = True
         scores = pca.fit_transform(data)
         variance = pca.explained_variance_ratio_
@@ -1168,7 +1444,7 @@ class ReportGenerator:
         # plot variance bar graph
         fig,ax=plt.subplots(figsize=(7,5), constrained_layout=True)
 
-        ax.bar(range(1,num_comps+1), variance, color="skyblue", edgecolor = 'k')
+        ax.bar(range(1,num_comps+1), variance, color="skyblue", edgecolor = 'k', label="Explained Variance")
         ax.set_xlabel("Principal Component")
         ax.set_ylabel("Explained Variance Ratio")
         ax.set_title("PCA explained Variance")
@@ -1187,14 +1463,32 @@ class ReportGenerator:
         # plot relevant pca combinations
         for i in range(num_to_plot - 1):
             for j in range(i+1,num_to_plot):
+
                 pc_pair = scores[:,[i,j]]
+                
+                # plot pca scatter plot
                 self.plot_pca(pc_pair,num_pcx=i+1, num_pcy=j+1, pdf=pdf, color_groups=cg)
+
+                # get top loadings for this pca pair
+                x_loadings = self.get_top_features(pca, filtered_map, i)
+                y_loadings = self.get_top_features(pca, filtered_map, j)
+
+                # build loadings dataframe
+                loadings = pd.DataFrame({
+                    f'PC{i+1} Feature': list(x_loadings.keys()),
+                    f'PC{i+1} Loadings': list(x_loadings.values()),
+                    f'PC{j+1} Feature': list(y_loadings.keys()),
+                    f'PC{j+1} Loadings': list(y_loadings.values())
+                })
+
+                # add table to PDF
+                self.add_table_to_pdf(pdf,loadings,f"Top Features: PC{j+1} vs PC{i+1}",rows_per_page=10)
 
     def plot_pca(self, pc_scores, num_pcx: int, num_pcy: int, pdf, color_groups: bool = True, color_molecule: str = None):
         """
         Generates a PCA plot for a given two principal components, helper method for calculate_pca
         Params:
-            pc_scores                       2d numpy array with shape (num_samples,2) that contains your two pcs to plot
+            pc_scores                       scores extracted from the PCA object
             num_pcx/num_pcy                 numbers of the pcs being graphed (for labels)
             pdf                             pdf file to save figures to
             color_groups                    bool True if you want to color by group false if you don't want to
@@ -1206,29 +1500,21 @@ class ReportGenerator:
         # color samples based on gruoup (explicit, not continuous)
         if color_groups:
 
-            # get group information
-            group_onehot_cols = self.norm_matrix[:,-self.num_groups:]
-            group_indices = np.argmax(group_onehot_cols, axis=1)
-
-            # get keys to associate with idxs
-            all_keys = list(self.norm_value_map.keys())
-            group_keys = all_keys[-self.num_groups:]
-            index_to_group = {i:name for i,name in enumerate(group_keys)}
-
-
             # assign colors to groups
-            unique_groups = sorted(set(group_indices))
+            unique_groups = sorted(self.group_index_map.keys())
             colors = plt.cm.tab10.colors
             group_color_map = {g:colors[i%10] for i,g in enumerate(unique_groups)}
 
-            # add color to each point and plot
-            for g in unique_groups:
-                idx = np.where(group_indices==g)[0]
-                if len(idx) == 0:
-                    continue
-                ax.scatter(pc_scores[idx,0], pc_scores[idx,1], 
-                           label = index_to_group[g], 
-                           color = group_color_map[g], alpha=0.8)
+            # plot PCA with each group colored
+            for group_name, row_list in self.group_index_map.items():
+                idx = np.array(row_list)
+                ax.scatter(
+                    pc_scores[idx,0],
+                    pc_scores[idx,1],
+                    label=group_name,
+                    color=group_color_map[group_name],
+                    alpha=0.8
+                    )
 
             ax.set_xlabel(f"PC {num_pcx}")
             ax.set_ylabel(f"PC {num_pcy}")
@@ -1252,7 +1538,6 @@ class ReportGenerator:
             ax.set_xlabel(f"PC {num_pcx}")
             ax.set_ylabel(f"PC {num_pcy}")
             ax.set_title(f"{num_pcy} vs {num_pcx}")
-            ax.legend()
         
         # do not color samples if not specified
         else:
@@ -1260,16 +1545,57 @@ class ReportGenerator:
             ax.set_title(f"{num_pcy} vs {num_pcx}")
             ax.set_xlabel(f"PC {num_pcx}")
             ax.set_ylabel(f"PC {num_pcy}")
-            
-        # save figure
+        
+        # save figure   
         fig.tight_layout()
         pdf.savefig(fig)
         plt.close(fig)
+
+    def get_top_features(self, pca, feature_map: dict, pc_index: int, n=10):
+        """
+        finds the top n features that contribute most to this pc of your pca
+        Params:
+            pca                             output from PCA run on you rmatrix
+            feature_map                     map of feature_name:column_index for the cleaned/filtered matrix used for PCA
+            pc_index                        index value of the pc you want to get features from
+            n                               number of feature/loading pairs to retrieve
+        Returns:
+            top_loadings                    dict of col_index : loading score for the top n loadings for this pc (pc_index of pca)
+        """
+        # generate inverse feature map for easy access to feature names
+        inv_feat_map = {i:name for name,i in feature_map.items()}
+
+        # get top n loadings
+        loadings = np.abs(pca.components_[pc_index])
+        top_idx = np.argsort(loadings)[-n:][::1]
+
+        # place in a dict
+        top_loadings = {}
+        for idx in top_idx:
+            top_loadings[inv_feat_map[idx]] = loadings[idx]
+
+        return top_loadings
 
     def write_to_excel(self):
         """
         Generates the output excel file
         """
+        # grab config values
+        cfg = self.cfg
+        template = cfg.get('template_file')
+        input_dir = Path(cfg.get("input_dir"))
+        template_location = input_dir / template
+        name = cfg.get("run_name")
+        results = cfg.get("results_dir")
+        results_dir = input_dir / results
+        results_dir.mkdir(parents=True,exist_ok=True)
+        out_file = Path(results_dir) / f"{name}.xlsx"
+
+        # grab all the metadata
+        metadata = self.template_dict
+        num_samples = len(metadata['samples'])
+        num_molecules = len(metadata['molecules'])
+
         # set up dict to inform coloring of cells
         fills = {
             "red": PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
@@ -1277,44 +1603,55 @@ class ReportGenerator:
             "yellow": PatternFill(start_color="FFEB84", end_color="FFEB84", fill_type="solid"),
             "blue": PatternFill(start_color="9BC2E6", end_color="9BC2E6", fill_type="solid"),
         }
-
-        # get config values
-        cfg = self.cfg
-        input_dir = Path(cfg.get("input_dir"))
-        name = cfg.get("run_name")
-
-        results = cfg.get("results_dir")
-        results_dir = input_dir / results
-        results_dir.mkdir(parents=True,exist_ok=True)
-
-        out_file = Path(results_dir) / f"{name}.xlsx"
-
         # sort sample and molecule maps to ensure correct ordering
         samples_ordered = [sample for sample, _ in sorted(self.sample_map.items(), key=lambda x: x[1])]
         molecules_ordered = [mol for mol, _ in sorted(self.value_map.items(), key=lambda x: x[1])]
         if self.norm_value_map is not None:
             norm_molecules_ordered = [mol for mol, _ in sorted(self.norm_value_map.items(), key=lambda x: x[1])]
-        # remove group columns
-        norm_molecules_ordered = norm_molecules_ordered[:-self.num_groups]
+        if self.clean_value_map is not None:
+            clean_molecules_ordered = [mol for mol, _ in sorted(self.clean_value_map.items(), key=lambda x: x[1])]
 
         # generate excel file
         with pd.ExcelWriter(out_file,engine="openpyxl") as writer:
 
-            # get raw values
+            # ===== Metadata Tab =====
+            # sample table
+            sample_df = pd.DataFrame({
+                'Sample': metadata['samples'],
+                'Group': metadata['groups'] if metadata['groups'] else ['' for _ in range(num_samples)],
+                'Norm Factor': metadata['norm_factors'] if metadata['norm_factors'] else ['' for _ in range(num_samples)]
+            })
+            sample_df.to_excel(writer, sheet_name="Metadata", startrow=4, startcol=2, index=False)
+
+            # molecule table
+            mol_df = pd.DataFrame({
+                'Molecule': metadata['molecules'],
+                'Ion': metadata['mz'],
+                'Retention Time': metadata['rt'],
+                'Standard': metadata['standards'] if metadata['standards'] else ['' for _ in range(num_molecules)]
+            })
+            mol_df.to_excel(writer, sheet_name="Metadata", startrow=4, startcol=6, index=False)
+
+            # add tables/header to tab
+            ws_meta = writer.sheets["Metadata"]
+            ws_meta['B2'] = f"Metadata for reference only, to change analysis edit template sheet at: {template_location}"
+
+            # ===== Raw Data Tab =====
             df_raw = pd.DataFrame(self.matrix, index=samples_ordered, columns=molecules_ordered)
-            df_raw.to_excel(writer, sheet_name="raw", index=True)
+            df_raw.to_excel(writer, sheet_name="Raw", index=True)
 
             # color the sheet
-            ws = writer.sheets["raw"]
+            ws = writer.sheets["Raw"]
 
             # genreate legend
-            ws.insert_rows(1,7)
+            ws.insert_rows(1,8)
             ws["A1"] = "Flag Key:"
             ws["A2"] = "Red = Invalid RT"
             ws["A3"] = "Orange = Flat-Top Peak"
             ws["A4"] = "Yellow = Small Peak"
             ws["A5"] = "Blue = Overloaded/Wide Peak"
-            ws["A6"] = "Red Text = Outlier"
+            ws["A6"] = "Dark Red Text = RT Outlier"
+            ws["A7"] = "Purple Text = Intensity Outlier"
 
             for color, entries in self.output_flags.items():
                 # skip coloring "normal" peaks
@@ -1328,33 +1665,47 @@ class ReportGenerator:
                 for entry in entries:
                     i,j = entry["coords"]
                         
-                    excel_row = i+9
+                    excel_row = i+10
                     excel_col = j+2
 
                     ws.cell(row=excel_row, column=excel_col).fill = fill
 
-            # add text color to outliers
-            outlier_font = Font(color="FF0000")
+            # add text color to RT outliers
+            outlier_font = {
+                'rt_diff': Font(color="C00000", bold=True),
+                'intensity': Font(color="7030A0", bold=True)
+            }
             if self.outliers:
-                for i,j in self.outliers:
-                    row_i = i+8
-                    col_i = j+2
+                for out_type,value_list in self.outliers.items():
+                    for entry in value_list:
+                        i = int(entry['row'])
+                        j = int(entry['col'])
+                        row_i = i+10
+                        col_i = j+2
 
-                    cell = ws.cell(row=row_i,col=col_i)
-                    cell.font = outlier_font
+                        cell = ws.cell(row=row_i,column=col_i)
+                        cell.font = outlier_font[out_type]
 
-            # get normalized values
+            # ===== Normalized Matrix =====
             if self.norm_matrix is None:
                 raise ValueError(f"Normailze matrix before returning normalized data")
                 
-            df_norm = pd.DataFrame(self.norm_matrix[:,:-self.num_groups], index=samples_ordered, columns=norm_molecules_ordered)
-            df_norm.to_excel(writer, sheet_name="normalized", index=True)
+            df_norm = pd.DataFrame(self.norm_matrix, index=samples_ordered, columns=norm_molecules_ordered)
+            df_norm.to_excel(writer, sheet_name="Normalized", index=True)
+
+            # ===== Cleaned Matrix ======
+            if self.clean_matrix is None:
+                raise ValueError(f"Generate Clean matrix before outputting")
+            
+            df_clean = pd.DataFrame(self.clean_matrix, index=samples_ordered, columns=clean_molecules_ordered)
+            df_clean.to_excel(writer, sheet_name="Cleaned")
 
     def plot_outliers(self, pdf, rows_per_page: int = 25):
         """
-        Adds some kind? of plot to visualize the outliers in RT/intensity 
+        Adds tables of outliers for RT and Intensity
         Params
-            pdf                 PDF file to save this figure to
+            pdf                         PDF file to save this figure to
+            rows_per_page               Number of rows to add to the table per page
         """
 
         rt_outs = self.outliers['rt_diff']
@@ -1431,4 +1782,3 @@ class ReportGenerator:
             plt.close(fig)
 
     # endregion
-
