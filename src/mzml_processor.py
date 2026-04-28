@@ -4,6 +4,7 @@ import subprocess, base64, zlib, sys
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
 
 # location of pipeline root dir
 root_dir = Path(__file__).resolve().parent.parent
@@ -114,6 +115,7 @@ class MzMLProcessor:
             decompressed = zlib.decompress(decoded)
         except Exception as e:
             print(f"Exception:\n{e}")
+            return None
 
         return np.frombuffer(decompressed, dtype=dtype)
 
@@ -246,7 +248,7 @@ class MzMLProcessor:
             unique_mzs.update(mz_array)
 
         # show how many spectra have beens skipped
-        if len(skipped) > 0:
+        if skipped > 0:
             print(f"File: {mzml_path.stem}\nSkipped: {skipped}\n")
 
         # Convert the set of unique m/z values to a sorted list
@@ -371,6 +373,8 @@ class MzMLProcessor:
 
         # convert ion map to sorted list
         mzs = [ion for ion,_ in sorted(ion_map.items(), key=lambda x: x[1])]
+
+        # get row varainces for time matrix and see if it looks good
 
         # create intensity matrix object and return
         output_matrix = IntensityMatrix(intensity_matrix=matrix,unique_mzs=mzs,spectra_name=file_name,spectra_metadata=time_map,matrix_type="SIM")

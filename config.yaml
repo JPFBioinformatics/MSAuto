@@ -1,11 +1,11 @@
 # name of this run of the pipeline
-run_name: 1_16_25 Plasma Reruns
+run_name: Danica_SIM_test
 
 # name of the excel template file that contains molecule name/id, mz list, and rt list to collect
-template_file: 1_16_25 Plasma Template.xlsx
+template_file: Template.xlsx
 
 # full path to the imput directory where your files to be processed live
-input_dir: 'C:\Jack\Projects\IlyaAura Mouse Labelling\1_16_25 Plasma Reruns\SIM'
+input_dir: 'C:\Jack\Projects\Danica SD 2025\11_25_25 Plasma\Sims'
 
 # path relative to input dir where results will be stored
 results_dir: results/
@@ -14,7 +14,7 @@ results_dir: results/
 mzml_dir: mzml_files/
 
 # true to keep mzml files, False to delete once main.py is done
-keep_mzml: False
+keep_mzml: True
 
 # thesholds
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged

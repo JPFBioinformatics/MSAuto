@@ -1,3 +1,9 @@
+"""
+
+Class that stores an mzml file's data as a matrix for peak identification and searching
+
+"""
+
 # region Imports
 
 import sys
@@ -24,7 +30,7 @@ class IntensityMatrix:
         self.spectra_metadata = spectra_metadata
         self.noise_factor = None
         self.abundance_threshold = None
-        self.peak_list = None
+        self.peak_dict = None
         self.cfg = cfg
         self.spectra_name = spectra_name
         self.matrix_type = matrix_type
@@ -255,16 +261,16 @@ class IntensityMatrix:
     # finds the peaks (maxima and bounds) for each row of a given intensity matrix and the tic, last row is TIC
     def identify_peaks(self, matrix, prom=None):
 
-        # array to hold the lists of peak values, each entry of peaks corrosponds to a single m/z row in same order as unique_mzs
-        peaks = []
+        # dict to hold the lists of peak values m/z : peak_list
+        peaks = {}
 
         for row_idx,row in enumerate(matrix):
 
             ion = self.unique_mzs[row_idx]
             row_peaks = self.find_maxima(row,ion,prom=prom)
-            peaks.append(row_peaks)
+            peaks[ion] = row_peaks
 
-        self.peak_list = peaks
+        self.peak_dict = peaks
 
         return peaks
 
@@ -464,18 +470,28 @@ class IntensityMatrix:
             return True
 
     # calculates convolution value for a single peak, used to see if peak is singlet or not
-    def convolution_value(self,row,max):
+    def convolution_value(self,peak):
         
+        # get values from the peak dict
+        peak_max = peak["center"]
+        left = peak["left_bound"]
+        right = peak["right_bound"]
+        row = self.intensity_matrix[self.unique_mzs.index(peak["ion"])]
+
         # holds the sum of all rates of sharpness calculated for the peak
         rate_sum = 0
 
         # value to prevent divide by 0 errors
         eps = 1e-12
 
+        # if the peak is not wide enough then return None
+        if peak_max - left < 4 or right - peak_max < 4:
+            return None
+
         # loop over all the scans in the 3 scan window and calculate rate for each
         for i in range(1,4):
-            term1 = (row[max+(i+1)] - row[max+i]) / (row[max+i] + eps)
-            term2 = (row[max-(i+1)] - row[max-i]) / (row[max-i] + eps)
+            term1 = (row[peak_max+(i+1)] - row[peak_max+i]) / (row[peak_max+i] + eps)
+            term2 = (row[peak_max-(i+1)] - row[peak_max-i]) / (row[peak_max-i] + eps)
 
             rate_sum += term1+term2
 
@@ -488,20 +504,10 @@ class IntensityMatrix:
     # calculates a tentative baseline for a percieved component (minutes not scans)
     def tentative_baseline(self,left_bound,right_bound,array):
 
-        # get scan to minute map and generate the left and right times
-        scan_map = self.spectra_metadata
-        s = max(scan_map.keys())
-        l = min(scan_map.keys())
-
         # create componenet array
         component_array = array[left_bound:right_bound+1]
-
-        # creates an x-values array to use later for baseline computing (in min, not scans)
-        try:
-            x = np.array([scan_map[i] for i in range(left_bound,right_bound+1)], dtype=float)
-        except Exception:
-            print(f"Max key: {s}\n Min key: {l}")
-            print(f"Left Bound: {left_bound}    Right Bound: {right_bound}")
+        if len(component_array) != right_bound - left_bound + 1:
+            raise ValueError(f"Baseline bounds [{left_bound}, {right_bound}] exceed array length {len(array)}")
 
         # get the index of the peak maximum
         max_idx = np.argmax(component_array)
@@ -522,7 +528,7 @@ class IntensityMatrix:
         b = left_val - m * left_idx
 
         # generate tentative baseline array
-        baseline_array = m * x + b
+        baseline_array = m * np.arange(len(component_array)) + b
 
         # shfit baseline down if any of its values are greater than the value of input array at same index
         diffs = []

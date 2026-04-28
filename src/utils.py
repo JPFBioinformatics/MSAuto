@@ -92,3 +92,4 @@ def delete_directory(dir_path: Path):
         print(f"File:\n{dir_path}\nnot found\nError:\n{e}")
     except PermissionError as p:
         print(f"Permission error deleting:\n{dir_path}\nError:\n{p}")
+

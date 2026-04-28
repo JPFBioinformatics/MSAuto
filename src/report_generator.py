@@ -640,9 +640,18 @@ class ReportGenerator:
         samples = list(peaks.keys())
         num_molecules = len(self.value_map)
         num_samples = len(samples)
+        sample_map = self.sample_map
+        value_map = self.value_map
 
         # get data
         data = np.full((num_samples,num_molecules), np.nan)
+        for sample,peak_list in peaks.items():
+            row_i = sample_map[sample]
+            for peak in peak_list:
+                mol = peak["molecule"]
+                if mol in value_map:
+                    col_i = value_map[mol]
+                    data[row_i,col_i] = peak["rt_diff"]
 
         # identify outliers
         outliers, eligable_counts = self.identify_outliers(data,self.value_map)
@@ -748,8 +757,8 @@ class ReportGenerator:
         # generate heatmap
         sns.heatmap(df.T, cmap="viridis",cbar=True,ax=axes[2])
         axes[2].set_title("MIssingness Heatmap (Group x Features)")
-        axes[2].set_xlable("Feature Index")
-        axes[2].set_ylable("Group")
+        axes[2].set_xlabel("Feature Index")
+        axes[2].set_ylabel("Group")
 
         # save figure
         fig.tight_layout()
