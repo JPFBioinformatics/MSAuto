@@ -7,7 +7,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from collections import Counter
-from openpyxl import load_workbook
 from openpyxl.styles import PatternFill,Font
 import pandas as pd
 import numpy as np
@@ -854,64 +853,6 @@ class ReportGenerator:
         self.add_table_to_pdf(pdf,df_qc,"QC Summary Table",rows_per_page)
         
         return df_qc
-
-    def generate_template(self):
-        """
-        generates a templeate xlsx file for inputting m/z and rt values
-        """
-        # get input dir
-        cfg = self.cfg
-        input_dir = Path(cfg.get("input_dir"))
-        out_dir = Path(cfg.get_path("results_dir"), input_dir)
-        template = cfg.get("template_file")
-        file = out_dir / template
-
-        # get list of sample names from input dir
-        names = sorted(
-            p.stem
-            for p in input_dir.iterdir()
-            if p.is_dir() and p.suffix == ".D"
-        )
-
-        # generate sample table df
-        sample_df = pd.DataFrame({
-            "samples": names,
-            "group": ['' for _ in names],
-            "norm": ['' for _ in names],
-        })
-
-        # generate data df 
-        data_df = pd.DataFrame(columns=["molecule","mz","rt","standard"])
-
-        # generate headers
-        header1 = "Template file for gcms automatic peak picking/integration, please ONLY fill in appropriate values and feel free to leave case/control empty if need be"
-        header2 = "group = grouping for samples (ie case/control), norm = normalization factor, molecule = id of this moleucue, mz = ion to measure, rt = peak retention time, standard = name of standard to apply to that sample"
-
-        # add sample/data dfs to excel file
-        with pd.ExcelWriter(file, engine="openpyxl") as writer:
-
-            sample_df.to_excel(
-                writer,
-                index=False,
-                startrow=3,
-                startcol=1
-            )
-
-            data_df.to_excel(
-                writer,
-                index=False,
-                startrow=3,
-                startcol=5
-            )
-        
-        # add headers
-        wb = load_workbook(file)
-        ws = wb.active
-
-        ws["A1"] = header1
-        ws["A2"] = header2
-
-        wb.save(file)
 
     def generate_report(self, num_pcs: int = 5):
         """

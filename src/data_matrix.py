@@ -22,4 +22,29 @@ from src.config_loader import ConfigLoader
 class DataMatrix:
 
     def __init__(self, cfg: ConfigLoader, peak_dict: dict):
+
+        if not peak_dict:
+            raise ValueError("peak_dict is empty")
+        
+        self.sample_map = {name:i for i,name in enumerate(peak_dict.keys())}
+        self.mol_map = {peak["molecule"]: i for i,peak in enumerate(next(iter(peak_dict.values())))}
+        self.n_samples = len(self.sample_map)
+        self.n_molecules = len(self.mol_map)
+
+        self.cfg = cfg
+
+        # all matrices are samples x features (rows x columns)
+        empty = lambda: np.full(self.n_samples, self.n_molecules)
+        self.intensity_matrix = empty()                                     # peak areas
+        self.rt_matrix = empty()                                            # rt/precise maximization time
+        self.bounds_matrix = empty()                                        # (left_bound, right_bound)
+        self.height_matrix = empty()                                        # baseline corrected height
+        self.symmetry_matrix = empty()                                      # bound symmetry
+        self.conv_matrix = empty()                                          # convolution value
+
+
+    def _fill_matrices(peak_dict: dict):
+        """
+        Fills the qc calculation and feature value matrices
+        """
         

@@ -7,6 +7,9 @@ template_file: Template.xlsx
 # full path to the imput directory where your files to be processed live
 input_dir: 'C:\Jack\Projects\Danica SD 2025\11_25_25 Plasma\Sims'
 
+# path to GCMSdata database
+db_dir: /
+
 # path relative to input dir where results will be stored
 results_dir: results/
 

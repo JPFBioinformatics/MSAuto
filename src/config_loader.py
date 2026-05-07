@@ -3,6 +3,7 @@
 from pathlib import Path
 import pandas as pd
 import yaml, os
+from openpyxl import load_workbook
 
 # endregion
 
@@ -104,13 +105,13 @@ class ConfigLoader:
         else:
             print("All boolean fields valid, continuing pipeline")
 
-    def load_collection_info(self):
+    def load_template(self):
         """
         Retreives the template file specified and returns the molecule, m/z, and rt lists
         Returns:
-            molecules                   list of molecules
-            mzs                         list of m/z ions 
-            rts                         list of retention times
+            molecule_data               dict of molecule information (for collection), key: list
+            sample_data                 dict of sample information (for analysis), key: list
+
             all return values are matched by index, so the first molecule is idx 0 in all 3 lists
         """
 
@@ -122,8 +123,77 @@ class ConfigLoader:
         # read file (without header) and load moleucle, mz values, and retention times to lists
         df = pd.read_excel(file,skiprows=3)
 
-        molecules = df["molecule"].dropna().to_list()
-        mzs = df["mz"].dropna().to_list()
-        rts = df["rt"].dropna().to_list()
+        molecule_data = {
+            "names": df["molecule"].dropna().to_list(),
+            "mzs": df["mz"].dropna().to_list(),
+            "rts": df["rt"].dropna().to_list()
+        }
 
-        return molecules, mzs, rts
+        sample_data = {
+            "names": df["samples"].dropna().to_list(),
+            "mouseIDs": df["mousID"].dropna().to_list(),
+            "groups": df["group"].dropna().to_list(),
+            "norms": df["norm"].dropna().to_list(),
+            "inj_order": df["injection_order"].dropna().to_list()
+        }
+
+        return molecule_data, sample_data
+    
+    def generate_template(self):
+        """
+        generates a templeate xlsx file for inputting m/z and rt values
+        """
+        # get input dir
+        input_dir = Path(self.get("input_dir"))
+        out_dir = Path(self.get_path("results_dir"), input_dir)
+        template = self.get("template_file")
+        file = out_dir / template
+
+        # get list of sample names from input dir
+        names = sorted(
+            p.stem
+            for p in input_dir.iterdir()
+            if p.is_dir() and p.suffix == ".D"
+        )
+
+        # generate sample table df
+        sample_df = pd.DataFrame({
+            "samples": names,
+            "mouseID": ['' for _ in names],
+            "group": ['' for _ in names],
+            "norm": ['' for _ in names],
+            "injection_order": ['' for _ in names]
+        })
+
+        # generate data df 
+        data_df = pd.DataFrame(columns=["molecule","mz","rt","standard"])
+
+        # generate headers
+        header1 = "Template file for gcms automatic peak picking/integration, please ONLY fill in appropriate values and feel free to leave case/control empty if need be"
+        header2 = "group = grouping for samples (ie case/control), norm = normalization factor, molecule = id of this moleucue, mz = ion to measure, rt = peak retention time, standard = name of standard to apply to that sample"
+
+        # add sample/data dfs to excel file
+        with pd.ExcelWriter(file, engine="openpyxl") as writer:
+
+            sample_df.to_excel(
+                writer,
+                index=False,
+                startrow=3,
+                startcol=1
+            )
+
+            data_df.to_excel(
+                writer,
+                index=False,
+                startrow=3,
+                startcol=7
+            )
+
+        # add headers
+        wb = load_workbook(file)
+        ws = wb.active
+
+        ws["A1"] = header1
+        ws["A2"] = header2
+
+        wb.save(file)

@@ -21,9 +21,7 @@ cfg = ConfigLoader(root_dir / "config.yaml")
 template_name = cfg.get("template_file")
 template = Path(cfg.get("input_dir")) / template_name
 
-RG = ReportGenerator(cfg)
-
-RG.generate_template()
+cfg.generate_template()
 
 # open the file
 if sys.platform.startswith("win"):                  # widows

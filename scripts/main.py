@@ -25,7 +25,10 @@ def main():
     results = Path(cfg.get("results_dir"))
     log_dir = indir / results
     log_dir.mkdir(parents=True,exist_ok=True)
-    molecules,mzs,rts = cfg.load_collection_info()
+    mol_data, smple_data = cfg.load_template()
+    molecules = mol_data["molecules"]
+    mzs = mol_data["mzs"]
+    rts = mol_data["rts"]
     mzml = cfg.get("mzml_dir")
     mzml_dir = log_dir / mzml
 

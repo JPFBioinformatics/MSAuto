@@ -6,33 +6,36 @@ Class that stores an mzml file's data as a matrix for peak identification and se
 
 # region Imports
 
-import sys
+import sys,h5py
 import numpy as np
 from scipy.signal import find_peaks
 from pathlib import Path
 import matplotlib.pyplot as plt
 
 # location of pipeline root dir
-root_dir = Path(__file__).resolve().parent.parent
+root_dir = Path(__file__).resolve()
 # tell python to look here for modules
 sys.path.insert(0, str(root_dir))
 
 from src.config_loader import ConfigLoader
+from src.utils import get_app_dir
+from src.db import insert_im
 
 # endregion
 
 # Class for storage and cleaning of intensity matrix extracted by mzml_processor
 class IntensityMatrix:
 
-    def __init__(self, intensity_matrix: np.ndarray, unique_mzs: list, spectra_name: str = None, spectra_metadata: dict = None, matrix_type: str = None, cfg: ConfigLoader = ConfigLoader(root_dir / "config.yaml")):
+    def __init__(self, intensity_matrix: np.ndarray, unique_mzs: list, sample_name: str = None, time_map: dict = None, matrix_type: str = None, cfg: ConfigLoader = ConfigLoader(root_dir / "config.yaml")):
         self.intensity_matrix = intensity_matrix
         self.unique_mzs = unique_mzs
-        self.spectra_metadata = spectra_metadata
+        self.time_map = time_map
         self.noise_factor = None
         self.abundance_threshold = None
         self.peak_dict = None
+        self.baseline_mask = None
         self.cfg = cfg
-        self.spectra_name = spectra_name
+        self.sample_name = sample_name
         self.matrix_type = matrix_type
 
         # calculate and apply abundnace threshold transformation to intensity matrix
@@ -42,45 +45,6 @@ class IntensityMatrix:
         self.calculate_noise_factor()
         # identify peaks in this intensity matrix
         self.identify_peaks(self.intensity_matrix)
-        
-    # region Getter/Setters
-    @property
-    def intensity_matrix(self):
-        return self._intensity_matrix
-
-    @intensity_matrix.setter
-    def intensity_matrix(self,value):
-        if isinstance(value,np.ndarray):
-            self._intensity_matrix = value
-        else:
-            raise ValueError("intensity matrix is not a numpy array")
-
-    @property
-    def unique_mzs(self):
-        return self._unique_mzs
-
-    @unique_mzs.setter
-    def unique_mzs(self,value):
-        if not len(value) == self.intensity_matrix.shape[0]:
-            raise ValueError(f"unique m/z length {len(value)} does not match intensity array row count {self.intensity_matrix.shape[0]}")
-        if not isinstance(value, list):
-            raise ValueError('unique m/z is not a list')
-        else:
-            self._unique_mzs = value
-
-    @property
-    def spectra_metadata(self):
-        return self._spectra_metadata
-
-    @spectra_metadata.setter
-    def spectra_metadata(self,value):
-        if value is not None:
-            if not len(value) == self.intensity_matrix.shape[1]:
-                raise ValueError('Spectra metadata length does not match intensity array column count')
-            if not isinstance(value, dict):
-                raise ValueError('Spectra metadata is not a list')
-        self._spectra_metadata = value
-    #endregion
 
     # region Abundance Threshold
 
@@ -254,6 +218,28 @@ class IntensityMatrix:
         # return the median of the deviations / sqrt of the mean (Nf for that row)
         return nf
 
+    # calculates per-row masks to use for S/N calculations
+    def noise_mask(self, peak_list: list):
+        """
+        Calculates per-row mask to use for S/N calculations
+
+        Params
+        ------
+        peak_list                   list of peaks for this row from find_maxima
+        
+        Returns
+        -------
+        masks                       bool row masks for a list of peaks (1=true 2=false)
+        """
+        mask = np.ones(len(self.time_map))
+
+        for peak in peak_list:
+            l = peak["left_bound"]
+            r = peak["right_bound"]
+            mask[l:r+1] = 0
+
+        return mask
+    
     # endregion
 
     # region Finding Maxima
@@ -263,19 +249,24 @@ class IntensityMatrix:
 
         # dict to hold the lists of peak values m/z : peak_list
         peaks = {}
+        masks = []
+        all_vrs = []
 
         for row_idx,row in enumerate(matrix):
 
             ion = self.unique_mzs[row_idx]
-            row_peaks = self.find_maxima(row,ion,prom=prom)
+            row_peaks, vrs = self.find_maxima(row,ion,prom=prom)
+            all_vrs.append(vrs)
             peaks[ion] = row_peaks
+            masks.append(self.noise_mask(row_peaks))
 
         self.peak_dict = peaks
+        self.baseline_mask = np.vstack(masks)
 
         return peaks
 
     # finds local maxima and bounds of peaks for a given 1D array
-    def find_maxima(self, array, ion, prom = None):
+    def find_maxima_old(self, array, ion, prom = None):
 
         # set prominance
         if prom == None:
@@ -353,7 +344,9 @@ class IntensityMatrix:
                 max_info["width_flag"] = "overloaded"
 
             # add baseline/flat top flag
-            if baseline == None:
+            top_values = array[peak_max-1:peak_max+2]
+            ft = (np.max(top_values) - np.min(top_values)) / np.max(top_values)
+            if ft < 0.01:
                 max_info["flat_top"] = True
             else:
                 max_info["flat_top"] = False
@@ -364,6 +357,174 @@ class IntensityMatrix:
 
         # returns list of dictionary entries containing maxima information
         return maxima
+
+    def find_maxima(self, array, ion, prom=None, vr=0.5):
+        """
+        Uses a 2 pass appraoch to determine bounds and peak features for each detected maxima point, defines
+        baseline using valley-to-valley baseline calculation
+
+        Params
+        ------
+        array                           row from intensity matrix
+        ion                             ion label from row of intensity matrix
+        vr                              valley ratio for calculating baseline for clusters
+
+        Returns
+        -------
+        maxima                          list of peaks for this ion's row array
+        """
+
+        # set prominance
+        if prom is None:
+            # handle nan/0 noise factors (SIM files have this a lot)
+            if np.isnan(self.noise_factor) or self.noise_factor == 0:
+                # set based on median and mad (3*MAD is a common noise threshold hueristic)
+                prom = np.median(array) + 3 * np.median(np.abs(array-np.median(array)))
+            else:
+                prom = self.noise_factor*100
+            
+        # Excludes the first and last 12 points from the search to prevent bounding errors
+        array_range = array[12:-12]
+
+        # finds the local maxima of the given array, stores their index
+        max_idxs, _ = find_peaks(array_range, prominence=prom)
+
+        # Shifts indices found in the range for use in the original array
+        max_idxs += 12
+
+        # list to hold dictionary entries containing left_bound, right_bound and center for each maxima
+        maxima = []
+
+        # first pass, finds bounds of peaks and saves to maxima
+        for peak_max in max_idxs:
+
+            left_bound = self.find_bound(array, peak_max, -1)
+            right_bound = self.find_bound(array, peak_max, 1)
+            fit = self.quadratic_fit(array, peak_max)
+
+            maxima.append({
+                'center': peak_max,
+                'left_bound': left_bound,
+                'right_bound': right_bound,
+                'rt': fit['x_values'][1],
+                'raw_height': fit['y_values'][1],
+                'ion': ion,
+                'cluster': None,
+                'valid': False
+            })
+
+        # second pass, finds baseline and other relevant features
+        n_clusters = 1
+        time_map = self.time_map
+        nf = self.noise_factor
+        vrs = []
+        for i,peak in enumerate(maxima):
+
+            # if baseline already set then skip this peak, it's already been handled
+            if peak['valid']:
+                continue
+
+            # set initial anchors
+            l_anchor = peak['left_bound']
+            r_anchor = peak['right_bound']
+
+            # check right bound because peaks are processed left to right
+            j = i
+            while j < len(maxima) - 1:
+                
+                next_peak = maxima[j+1]
+
+                # exit loop if peak bounds do not overlap
+                if maxima[j]['right_bound'] != next_peak['left_bound']:
+                    break
+                
+                # caluclate valley ratio
+                valley_height = array[maxima[j]['right_bound']]
+                valley_ratio = valley_height / min(array[peak['center']], array[next_peak['center']])
+                vrs.append(valley_ratio)
+
+                # break if the valley ratio is small
+                if valley_ratio < vr:
+                    break
+
+                # if still overlapping then extend right anchor and keep walking
+                r_anchor = next_peak['right_bound']
+                j += 1
+
+            # get baseline for culster
+            baseline = self.tentative_baseline(l_anchor, r_anchor, array)
+            bl_array = baseline['baseline_array']
+
+            # handle cluster value assignments
+            cluster_peaks = maxima[i:j+1]
+            bl_start = 0
+            for entry in cluster_peaks:
+
+                # calculate sharpness/conv value
+                conv = self.convolution_value(entry)
+                entry['conv'] = conv
+
+                # assign cluster identity
+                if j > i:
+                    entry['cluster'] = n_clusters
+
+                # assign baseline array
+                size = entry['right_bound'] - entry['left_bound'] + 1
+                bl = bl_array[bl_start:bl_start+size]
+                entry['baseline'] = bl
+                entry['bl_slope'] = bl[-1] - bl[0] / (len(bl) - 1) if len(bl) > 1 else 0.0
+                entry['bl_yint'] = bl[0]
+                bl_start += size
+
+                # find which two scans the percise max lives between
+                center = entry['center']
+                rt = entry['rt']
+                c_time = time_map[center]
+                if rt > c_time:
+                    time1 = c_time
+                    time2 = time_map[center+1]
+                    scan1 = center
+                    scan2 = center+1
+                elif rt < c_time:
+                    time1 = time_map[center-1]
+                    time2 = c_time
+                    scan1 = center-1
+                    scan2 = center
+                else:
+                    time1 = time2 = c_time
+                    scan1 = scan2 = center
+
+                # if maximizes directly on scan then handle, else linear impute
+                if scan1 == scan2:
+                    bl_i = center - entry['left_bound']
+                    bl_norm = bl[bl_i]
+                else:
+                    frac = (rt - time1) / (time2 - time1)
+                    bl_i1 = scan1 - entry['left_bound']
+                    bl_i2 = scan2 - entry['left_bound']
+                    bl_norm = bl[bl_i1] + frac * (bl[bl_i2] - bl[bl_i1])
+                
+                # assign height
+                entry['height'] = entry['raw_height'] - bl_norm
+
+                # apply threshold check
+                if nf == 0 or np.isnan(nf):
+                    peak['valid'] = True
+                else:
+                    threshold = 4 * nf * entry['raw_height']**0.5
+                    entry['valid'] = entry['height'] >= threshold
+
+            # update cluster counter
+            if j > i:
+                n_clusters += 1
+
+            # filter valid/invalid peaks, return only valid peaks and count for logs
+            valid_peaks = [p for p in maxima if p.get('valid', True)]
+            count_valid = len(valid_peaks)
+            count_invalid = len(maxima) - count_valid
+            print(f"{ion} row peaks picked, {count_valid} valid peaks, {count_invalid} invalid peaks")
+
+        return valid_peaks, vrs
 
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
     def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25):
@@ -433,7 +594,7 @@ class IntensityMatrix:
     def quadratic_fit(self, array, center):
 
         # get map to convert scans to minutes
-        scan_map = self.spectra_metadata
+        scan_map = self.time_map
         # x values for fit, the center index and its two direct neighbors (in minutes)
         x_points = np.array([scan_map[center-1], scan_map[center], scan_map[center+1]])
         # y values for fit, from row corrosponding to x values
@@ -496,7 +657,7 @@ class IntensityMatrix:
             rate_sum += term1+term2
 
         return rate_sum
-    
+
     # endregion
 
     # region Baseline Calculation
@@ -702,7 +863,7 @@ class IntensityMatrix:
 
             for idx,molecule in enumerate(molecules):
                 if np.isnan(matrix.noise_factor):
-                    print(f"Spectra {matrix.spectra_name} NF error\nNF: {matrix.noise_factor}")
+                    raise ValueError(f"Spectra {matrix.spectra_name} NF error\nNF: {matrix.noise_factor}")
                 peak = matrix.closest_peak(mzs[idx],rts[idx])
                 peak["molecule"] = molecule
                 matrix.integrate_peak(peak)
@@ -754,5 +915,156 @@ class IntensityMatrix:
         plt.ylabel("Abundance")
         plt.title(f"{mz} Ion Chromatogram")
         plt.show()
+
+    # endregion
+
+    # region Data Storage
+    
+    def save_sql_im(self, conn):
+        """
+        saves this intensity matrix object to the sql database
+        
+        Returns
+        -------
+        imID to use to query this object later
+        """
+        return insert_im(conn,
+                         self.sample_name,
+                         self.matrix_type,
+                         self.noise_factor,
+                         self.abundance_threshold,
+                         self.intensity_matrix.shape[0],
+                         self.intensity_matrix.shape[1])
+
+    def save_h5_object(self):
+        """
+        Saves intensity matrix object to a .h5 file in the save_dir
+        """
+
+        appdir = get_app_dir()
+        db_dir = appdir / "databases"
+        db_dir.mkdir(exist_ok=True,parents=True)
+        h5_file = db_dir / "data.h5"
+
+        with h5py.File(h5_file, 'a') as f:
+
+            # define group
+            grp = f.require_group(f"intensity_matrices/{self.sample_name}")
+
+            # store compressed intensity matrix
+            grp.create_dataset('intensity_matrix',
+                               data=self.intensity_matrix,
+                               compression = 'gzip',
+                               compression_opts = 4,
+                               chunks = True)
+            # store compressed bool baseline mask matrix
+            grp.create_dataset('baseline_mask',
+                               data=self.baseline_mask,
+                               compression = 'gzip',
+                               compression_opts = 4,
+                               chunks = True)
+            # store time and molecule maps as well as group atts
+            grp.create_dataset('time_array', data = np.array(list(self.time_map.values())))
+            grp.create_dataset('unique_mzs', data = np.array(self.unique_mzs))
+
+            # store peaks
+            peaks_group = grp.require_group('peaks')
+            for ion,peak_list in self.peak_dict.items():
+
+                if not peak_list:
+                    continue
+
+                # create lists and group to store values
+                centers, left_bounds, right_bounds, rts, heights, bl_slopes, bl_yints = [], [], [], [], [], [], []
+                ion_group = peaks_group.require_group(str(ion))
+
+                # store peak attributes
+                for p in peak_list:
+                    centers.append(p['center'])
+                    left_bounds.append(p['left_bound'])
+                    right_bounds.append(p['right_bound'])
+                    rts.append(p['rt'])
+                    heights.append(p['height'])
+                    bl_slopes.append(p['bl_slope'])
+                    bl_yints.append(p['bl_yint'])
+                ion_group.create_dataset('centers', data = np.array(centers,dtype=np.int32))
+                ion_group.create_dataset('left_bounds', data = np.array(left_bounds,dtype=np.int32))
+                ion_group.create_dataset('right_bounds', data = np.array(right_bounds,dtype=np.int32))
+                ion_group.create_dataset('rts', data = np.array(rts,dtype=np.float64))
+                ion_group.create_dataset('heights', data = np.array(heights,dtype=np.float64))
+                ion_group.create_dataset('bl_slopes', data = np.array(bl_slopes, dtype=np.float64))
+                ion_group.create_dataset('bl_yints', data = np.array(bl_yints, dtype=np.float64))
+    
+    @staticmethod
+    def load_h5_object(sample_name: str):
+        """
+        Loads the .h5 object for a given sample
+
+        Params
+        ------
+        sample_name                     name of the sample to retreive
+
+        Returns
+        -------
+        im                              rebuilt IntensityMatrix obj
+        """
+
+        appdir = get_app_dir()
+        db_dir = appdir / "databases"
+        h5_file = db_dir / "data.h5"
+
+        if not db_dir.exists():
+            raise FileNotFoundError(f"Database directory not found: {db_dir}")
+        if not h5_file.exists():
+            raise FileNotFoundError(f"H5 data file not found: {h5_file}")
+        
+        with h5py.File(h5_file, 'r') as f:
+            grp = f"intensity_matrices/{sample_name}"
+
+            # intensity matrix
+            intensity_matrix = grp['intensity_matrix'][:]
+            baseline_mask = grp['intensity_matrix'][:]
+            time_array = grp['time_array'][:]
+            unique_mzs = list(grp['unique_mzs'][:])
+
+            # reconstruct time map
+            time_map = {i:t for i,t in enumerate(time_array)}
+
+            # reconstruct peak_dict
+            peak_dict = {}
+            for ion_str, ion_group in grp['peaks'].items():
+                ion = int(ion_str)
+                centers = ion_group['centers'][:]
+                left_bounds = ion_group['left_bounds'][:]
+                right_bounds = ion_group['right_bounds'][:]
+                rts = ion_group['rts'][:]
+                heights = ion_group['heights'][:]
+                bl_slopes = ion_group['bl_slopes'][:]
+                bl_yints = ion_group['bl_yints'][:]
+
+                peak_list = []
+                for i in range(len(centers)):
+                    size = right_bounds[i] - left_bounds[i] + 1
+                    baseline = bl_slopes * np.arange(size) + bl_yints[i]
+                    peak_list.append({
+                        'center': centers[i],
+                        'left_bound': left_bounds[i],
+                        'right_bound': right_bounds[i],
+                        'rt': rts[i],
+                        'height': heights[i],
+                        'baseline': baseline,
+                        'ion': ion,
+                        'valid': True
+                    })
+                peak_dict[ion] = peak_list
+        
+        im = IntensityMatrix(intensity_matrix=intensity_matrix,
+                             unique_mzs=unique_mzs,
+                             sample_name=sample_name,
+                             time_map=time_map,)
+        im.baseline_mask = baseline_mask
+
+        return im
+    
 
     # endregion

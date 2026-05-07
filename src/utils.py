@@ -1,4 +1,4 @@
-import subprocess,json,shutil
+import subprocess,json,shutil,sys
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -92,4 +92,18 @@ def delete_directory(dir_path: Path):
         print(f"File:\n{dir_path}\nnot found\nError:\n{e}")
     except PermissionError as p:
         print(f"Permission error deleting:\n{dir_path}\nError:\n{p}")
+
+def get_app_dir():
+    """
+    Gets the directroy for the appliation, if frozen (windows app) then put databases right
+    next to installation .exe, if scripting then put databases in root
+
+    Returns
+    -------
+    path to the application directory (root or .exe)
+    """
+
+    if getattr(sys,'frozen',False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
 
