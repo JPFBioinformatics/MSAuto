@@ -1,3 +1,39 @@
+=============================================== Project Summary ===============================================
+
+MSAuto is an application that addresses current shortcomings in available data analysis
+packages for GC-MS, both for untargeted metabolomics and for targeted data gathering.  Current 
+automation packages do not center the quality control of peaks, leaving this up to the user
+and treating the data collection as somewhat of a black box, just taking a peak as specified. The
+goal of MSAuto is to create a comprehensive QC report with each run, and handle data storage for
+various projects made of many individual runs (collections of samples) to allow for easy data
+organization and retrevial for paper production.
+
+QC metrics are centered around detecting molecules, samples, and individual features that are 
+outliers in the dataset, as well as general dataset peak quality based on standard metrics such 
+as signal to noise ration (S/N), full-width at half-height (FWHH), peak symmetry (Tailing factor),
+in addition to other metrics undelrined in the QC Metrics section.  RT drift and peak quality is
+also analyzed with respect to injection order in order to investigate column integrity and give
+users an idea of when it is time to cut, adjust, or replace columns in their machine.
+
+Once peaks are picked and quality is checked, data is stored in a hybrid SQL/h5 file format for
+easy visualization and retrevial in the MSAuto GUI, allowing users to investigate the peak and
+chromatogram quality manually as well.
+
+Basic data analysis techniques are also available for the output data matrix.  PCA to see how
+clusters arise within the dataset help inform wether or not the data is structured as one would
+expect (case/control clustering seperately for example). In addition to MSEA (metabolite set
+enrichment analyiss), which just applies the concepts of GSEA to metabolite sets defined by users
+or by metabolomic pathways informed by KEGG networks.  Pathway analysis as well as network generation
+and topological analysis are the end goal of generating these feature matrices, although having
+a limited feature set as is common in metabolomics makes this more difficult and potentially less
+informative as these same techniques when applied to transcriptomic datasets.
+
+The end goal of MSAuto is to streamline data collection for GC-MS in a way that allows users
+to have control over the set of peaks being picked and full access to a robust QC system 
+that can quantify any issues with the chromatography, allowing for more consistent results and 
+better machine management. The untargeted metabolomics and pathway analysis applications are in
+addition to this, but due to the nature of GC-MS being applied more commonly to targeted analysis
+the QC and peak picking are centered in this application.
 
 ================================================= Data Storage =================================================
 
@@ -103,6 +139,8 @@ QC metrics/plots and use them to flag peaks of interest for manual review
         T = (a + b) / 2a
         a = distance from peak front to max
         b = distance from peak max to tail
+        measurments at 10% of peak height (BL adjusted)
+            close to 1 is good, >1 is tailing <1 is fronting
     theoretical plates - measures column efficiency
         N = 5.545 * (RT/FWHH)**2
 

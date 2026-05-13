@@ -186,7 +186,7 @@ class IntensityMatrix:
 
         # fallback if no noise factors calculated:
         if len(noise_factors) == 0:
-            self.noise_factor = 0
+            self.noise_factor = None
         else:
             self.noise_factor = np.median(noise_factors)
     
@@ -250,15 +250,13 @@ class IntensityMatrix:
         # dict to hold the lists of peak values m/z : peak_list
         peaks = {}
         masks = []
-        all_vrs = []
 
         for row_idx,row in enumerate(matrix):
 
             ion = self.unique_mzs[row_idx]
-            row_peaks, vrs = self.find_maxima(row,ion,prom=prom)
-            all_vrs.append(vrs)
+            row_peaks, row_nm = self.find_maxima(row,ion,prom=prom)
             peaks[ion] = row_peaks
-            masks.append(self.noise_mask(row_peaks))
+            masks.append(row_nm)
 
         self.peak_dict = peaks
         self.baseline_mask = np.vstack(masks)
@@ -398,9 +396,23 @@ class IntensityMatrix:
         # first pass, finds bounds of peaks and saves to maxima
         for peak_max in max_idxs:
 
+            # get basic info
             left_bound = self.find_bound(array, peak_max, -1)
             right_bound = self.find_bound(array, peak_max, 1)
             fit = self.quadratic_fit(array, peak_max)
+            sn_ratio = self.calculate_sn(peak_max, ion)
+
+            # detect flat top peaks
+            max_val = array[peak_max]
+            if peak_max == left_bound or peak_max == right_bound:
+                flat_top = True
+            else:
+                l_val = array[peak_max-1]
+                r_val = array[peak_max+1]
+                tol = max_val * 0.001
+                flat_top = False
+                if abs(l_val-max_val) <= tol or abs(r_val-max_val) <= tol:
+                    flat_top = True
 
             maxima.append({
                 'center': peak_max,
@@ -409,19 +421,33 @@ class IntensityMatrix:
                 'rt': fit['x_values'][1],
                 'raw_height': fit['y_values'][1],
                 'ion': ion,
+                'flat_top': flat_top,
                 'cluster': None,
-                'valid': False
+                'valid': False,
+                'processed': False,
+                'fwhh': np.nan,
+                'feature': None,
+                'valley_ratio': None,
+                'tailing_factor': np.nan,
+                'sn_ratio': np.nan,
+                'height': np.nan,
+                'baseline': None,
+                'bl_slope': np.nan,
+                'bl_yint': np.nan,
+                'conv': np.nan
             })
+
+        # get noise mask for this row
+        row_nm = self.noise_mask(maxima)
 
         # second pass, finds baseline and other relevant features
         n_clusters = 1
         time_map = self.time_map
         nf = self.noise_factor
-        vrs = []
         for i,peak in enumerate(maxima):
 
             # if baseline already set then skip this peak, it's already been handled
-            if peak['valid']:
+            if peak['processed']:
                 continue
 
             # set initial anchors
@@ -430,6 +456,7 @@ class IntensityMatrix:
 
             # check right bound because peaks are processed left to right
             j = i
+            min_vr = 1.0
             while j < len(maxima) - 1:
                 
                 next_peak = maxima[j+1]
@@ -441,11 +468,13 @@ class IntensityMatrix:
                 # caluclate valley ratio
                 valley_height = array[maxima[j]['right_bound']]
                 valley_ratio = valley_height / min(array[peak['center']], array[next_peak['center']])
-                vrs.append(valley_ratio)
 
-                # break if the valley ratio is small
+                # break if the valley ratio is small (cluster ends)
                 if valley_ratio < vr:
                     break
+
+                # get min_vr for cluster
+                min_vr = min(min_vr, valley_ratio)
 
                 # if still overlapping then extend right anchor and keep walking
                 r_anchor = next_peak['right_bound']
@@ -460,6 +489,9 @@ class IntensityMatrix:
             bl_start = 0
             for entry in cluster_peaks:
 
+                # assign valley ratio
+                entry['valley_ratio'] = min_vr if j > i else None
+
                 # calculate sharpness/conv value
                 conv = self.convolution_value(entry)
                 entry['conv'] = conv
@@ -472,7 +504,7 @@ class IntensityMatrix:
                 size = entry['right_bound'] - entry['left_bound'] + 1
                 bl = bl_array[bl_start:bl_start+size]
                 entry['baseline'] = bl
-                entry['bl_slope'] = bl[-1] - bl[0] / (len(bl) - 1) if len(bl) > 1 else 0.0
+                entry['bl_slope'] = (bl[-1] - bl[0]) / (len(bl) - 1) if len(bl) > 1 else 0.0
                 entry['bl_yint'] = bl[0]
                 bl_start += size
 
@@ -507,12 +539,26 @@ class IntensityMatrix:
                 # assign height
                 entry['height'] = entry['raw_height'] - bl_norm
 
+                # calculate signal to noise ratio
+                sn_ratio = self.calculate_sn(entry, array, row_nm)
+                entry['sn_ratio'] = sn_ratio
+
+                # calculate fwhh
+                fwhh = self.calculate_fwhh(entry, array)
+                entry['fwhh'] = fwhh
+
+                # calculate tailing factor
+                tailing = self.calculate_tailing(entry, array)
+                entry['tailing_factor'] = tailing
+
                 # apply threshold check
                 if nf == 0 or np.isnan(nf):
                     peak['valid'] = True
                 else:
                     threshold = 4 * nf * entry['raw_height']**0.5
                     entry['valid'] = entry['height'] >= threshold
+                
+                entry['processed'] = True
 
             # update cluster counter
             if j > i:
@@ -524,7 +570,7 @@ class IntensityMatrix:
             count_invalid = len(maxima) - count_valid
             print(f"{ion} row peaks picked, {count_valid} valid peaks, {count_invalid} invalid peaks")
 
-        return valid_peaks, vrs
+        return valid_peaks, row_nm
 
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
     def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25):
@@ -558,9 +604,7 @@ class IntensityMatrix:
         min_value = array[center + counter]
 
         # iterate up to 12 setps in given direction from center
-        while(abs(counter) <= max_width 
-              and 0 <= center + counter < n
-        ):
+        while(abs(counter) <= max_width and 0 <= center + counter < n):
 
             value = array[center + counter]
             
@@ -631,7 +675,7 @@ class IntensityMatrix:
             return True
 
     # calculates convolution value for a single peak, used to see if peak is singlet or not
-    def convolution_value(self,peak):
+    def convolution_value(self, peak):
         
         # get values from the peak dict
         peak_max = peak["center"]
@@ -657,6 +701,110 @@ class IntensityMatrix:
             rate_sum += term1+term2
 
         return rate_sum
+
+    def calculate_sn(self, peak: dict, row_array: np.ndarray, row_nm: np.ndarray, n_closest: int = 20):
+        """
+        Calculates S/N ratio for a given peak using the baseline mask to determine local
+        noise. If this calculation fails then falls back to avereage noise level for
+        that ion.
+        
+        Params
+        ------
+        peak                            peak to calculate S/N for
+        row_array                       array for this row of intensity matrix
+        row_nm                          noise mask for this row of intensity matrix
+        n_closest                       how far in each direction from center to use for calculation
+
+        Returns
+        -------
+        sn_ratio                        signal to noise ratio for this peak
+        """
+
+        if not self.baseline_mask:
+            raise ValueError(f"No baseline mask calculated")
+        
+        center = peak['center']
+
+        bl_indices = np.where(row_nm)[0]
+
+        left_bl = bl_indices[bl_indices < center][-n_closest:]
+        right_bl = bl_indices[bl_indices > center][:n_closest]
+        local_bl = np.concatenate([left_bl,right_bl])
+
+        if len(local_bl) == 0:
+            return np.nan
+        
+        # calculate RMS noise
+        noise = np.sqrt(np.mean(row_array[local_bl]**2))
+        return peak['height'] / noise if noise > 0 else np.nan
+
+    def calculate_fwhh(self, peak: dict, row_array: np.ndarray):
+        """
+        Calculates FWHH for a peak
+        """
+
+        # get peak values
+        half_height = peak['height'] / 2
+        baseline = peak['baseline']
+        left = peak['left_bound']
+        right = peak['right_bound']
+
+        # calculate signal array (bl corrected) and corrected center
+        signal = row_array[left:right+1] - baseline
+        center = peak['center'] - left
+
+        # find left and right index directly after the half height value
+        left_i = center
+        while left_i > 0 and signal[left_i] > half_height:
+            left_i -= 1
+        right_i = center
+        while right_i < len(signal)-1 and signal[right_i] > half_height:
+            right_i += 1
+
+        # interpolate precise HH time
+        frac_l = (half_height - signal[left_i]) / (signal[left_i+1] - signal[left_i])
+        frac_r = (half_height -signal[right_i]) / (signal[right_i-1] - signal[right_i])
+        time_l = self.time_map[left+left_i] + frac_l * (self.time_map[left+left_i+1] - self.time_map[left+left_i])
+        time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
+        
+        return time_r - time_l
+
+    def calculate_tailing(self, peak: dict, row_array: np.ndarray):
+        """
+        Calculates tailing factor (ratio of center to right/center to left distances)
+        calucalted as the quotiont of the distance from peak center to left and peak center
+        to right over twice the distance from center to left
+        """
+        # get peak values
+        tf_height = peak['height'] * 0.1
+        baseline = peak['baseline']
+        left = peak['left_bound']
+        right = peak['right_bound']
+
+        # calculate signal array (bl corrected) and corrected center
+        signal = row_array[left:right+1] - baseline
+        center = peak['center'] - left
+        center_time = peak['rt']
+
+        # find left and right index directly after the tailing factor height value
+        left_i = center
+        while left_i > 0 and signal[left_i] > tf_height:
+            left_i -= 1
+        right_i = center
+        while right_i < len(signal)-1 and signal[right_i] > tf_height:
+            right_i += 1
+
+        # interpolate precise times when tf height is reached
+        frac_l = (tf_height - signal[left_i]) / (signal[left_i+1] - signal[left_i])
+        frac_r = (tf_height -signal[right_i]) / (signal[right_i-1] - signal[right_i])
+        time_l = self.time_map[left+left_i] + frac_l * (self.time_map[left+left_i+1] - self.time_map[left+left_i])
+        time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
+        
+        # calculate tailing factor
+        a = center_time - time_l
+        b = time_r - center_time
+
+        return (a+b)/(2*a)
 
     # endregion
 
@@ -736,46 +884,32 @@ class IntensityMatrix:
             # get indx value of this m/z chromatogram
             row_idx = self.unique_mzs.index(mz)
             # get the peak list for this row
-            peaks = self.peak_list[row_idx]
+            peaks = self.peak_dict[row_idx]
 
         except Exception as e:
             print(f"Error locating ion chromatogram for ion: {mz}\n{e}")
             print(f"Unique mzs:\n {self.unique_mzs}")
             return None
         
-        # if no peaks are found then store an empty peak
+        # if no peaks are found raise error
         if len(peaks) == 0:
-            closest_peak = {
-                'left_bound' : np.nan,
-                'right_bound' : np.nan,
-                'center' : np.nan,
-                'precise_max_location' : np.nan,
-                'precise_max_height' : np.nan,
-                'max_abundance' : np.nan,
-                'bin' : np.nan,
-                'conv_value' : np.nan,
-                'ion' : np.nan,
-                'tentative_baseline': np.nan,
-                'width': np.nan,
-                'width_flag': np.nan,
-                'flat_top': np.nan,
-            }
+            raise ValueError(f"No peaks found for {self.sample_name}")
         
         # find the peak closest to specified RT
         try:
             closest_peak = min(
                 peaks,
-                key = lambda p: abs(p['precise_max_location'] - rt)
+                key = lambda p: abs(p['rt'] - rt)
             )
         except Exception as e:
             print(f"No peaks availbe in ion chromatogram for ion: {mz}\n{e}")
             print(len(peaks))
 
         # find rt difference (positive if RT > real value negative if RT < real value)
-        if  np.isnan(closest_peak['precise_max_location']):
+        if  np.isnan(closest_peak['rt']):
             diff = np.nan
         else:
-            diff = rt - closest_peak['precise_max_location']
+            diff = rt - closest_peak['rt']
 
         # save rt difference to closest peak
         closest_peak["rt_diff"] = diff
@@ -835,11 +969,11 @@ class IntensityMatrix:
             peak["symmetry_valid"] = True
 
         # adjust to baseline
-        if len(signal) != len(peak['tentative_baseline']['baseline_array']):
-            print(f"Array length: {len(signal)}\nBaseline length: {len(peak['tentative_baseline'])}")
+        if len(signal) != len(peak['baseline']):
+            print(f"Array length: {len(signal)}\nBaseline length: {len(peak['baseline'])}")
             raise ValueError("baseline and signal arrays are of different length")
         
-        net = signal - peak['tentative_baseline']['baseline_array']
+        net = signal - peak['baseline']
 
         # tarpazoidal integrate the net value
         peak_area = np.trapezoid(net)
@@ -936,13 +1070,13 @@ class IntensityMatrix:
                          self.intensity_matrix.shape[0],
                          self.intensity_matrix.shape[1])
 
-    def save_h5_object(self):
+    def save_h5_object(self, proj_name: str):
         """
         Saves intensity matrix object to a .h5 file in the save_dir
         """
 
         appdir = get_app_dir()
-        db_dir = appdir / "databases"
+        db_dir = appdir / "databases" / proj_name
         db_dir.mkdir(exist_ok=True,parents=True)
         h5_file = db_dir / "data.h5"
 
@@ -996,7 +1130,7 @@ class IntensityMatrix:
                 ion_group.create_dataset('bl_yints', data = np.array(bl_yints, dtype=np.float64))
     
     @staticmethod
-    def load_h5_object(sample_name: str):
+    def load_h5_object(sample_name: str, proj_name: str, run_name: str):
         """
         Loads the .h5 object for a given sample
 
@@ -1010,7 +1144,7 @@ class IntensityMatrix:
         """
 
         appdir = get_app_dir()
-        db_dir = appdir / "databases"
+        db_dir = appdir / "databases" / proj_name / run_name
         h5_file = db_dir / "data.h5"
 
         if not db_dir.exists():
@@ -1019,11 +1153,11 @@ class IntensityMatrix:
             raise FileNotFoundError(f"H5 data file not found: {h5_file}")
         
         with h5py.File(h5_file, 'r') as f:
-            grp = f"intensity_matrices/{sample_name}"
+            grp = f[f"intensity_matrices/{sample_name}"]
 
             # intensity matrix
             intensity_matrix = grp['intensity_matrix'][:]
-            baseline_mask = grp['intensity_matrix'][:]
+            baseline_mask = grp['baseline_mask'][:]
             time_array = grp['time_array'][:]
             unique_mzs = list(grp['unique_mzs'][:])
 
@@ -1045,7 +1179,7 @@ class IntensityMatrix:
                 peak_list = []
                 for i in range(len(centers)):
                     size = right_bounds[i] - left_bounds[i] + 1
-                    baseline = bl_slopes * np.arange(size) + bl_yints[i]
+                    baseline = bl_slopes[i] * np.arange(size) + bl_yints[i]
                     peak_list.append({
                         'center': centers[i],
                         'left_bound': left_bounds[i],
@@ -1066,5 +1200,4 @@ class IntensityMatrix:
 
         return im
     
-
     # endregion

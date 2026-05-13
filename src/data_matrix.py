@@ -16,35 +16,58 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 from src.config_loader import ConfigLoader
+from src.db import get_samples, get_molecules, connect
 
 # endregion
 
 class DataMatrix:
 
-    def __init__(self, cfg: ConfigLoader, peak_dict: dict):
+    def __init__(self, cfg: ConfigLoader, peak_data: dict, db_path: Path):
 
-        if not peak_dict:
-            raise ValueError("peak_dict is empty")
+        if not peak_data:
+            raise ValueError("List of IntensityMatrix objects is is empty")
         
-        self.sample_map = {name:i for i,name in enumerate(peak_dict.keys())}
-        self.mol_map = {peak["molecule"]: i for i,peak in enumerate(next(iter(peak_dict.values())))}
+        conn = connect(db_path)
+        self.samples = get_samples(conn)
+        self.molecules = get_molecules(conn)
+        self.sample_map = {row['sample_name']:i for i,row in enumerate(self.samples)}
+        self.mol_map = {row['molecule_name']: i for i,row in enumerate(self.molecules)}
         self.n_samples = len(self.sample_map)
         self.n_molecules = len(self.mol_map)
-
         self.cfg = cfg
 
         # all matrices are samples x features (rows x columns)
         empty = lambda: np.full(self.n_samples, self.n_molecules)
-        self.intensity_matrix = empty()                                     # peak areas
+        self.area_matrix = empty()                                          # peak areas
+        self.fwhh_matrix = empty()                                          # full width at half height
         self.rt_matrix = empty()                                            # rt/precise maximization time
         self.bounds_matrix = empty()                                        # (left_bound, right_bound)
         self.height_matrix = empty()                                        # baseline corrected height
-        self.symmetry_matrix = empty()                                      # bound symmetry
+        self.tailing_matrix = empty()                                      # tailing factor matrix
         self.conv_matrix = empty()                                          # convolution value
+        self.sn_matrix = empty()                                            # signal to noise values
 
+        self._fill_matrices(peak_data)
 
-    def _fill_matrices(peak_dict: dict):
+    def _fill_matrices(self, peak_data: dict):
         """
         Fills the qc calculation and feature value matrices
         """
-        
+
+        for name,peak_list in peak_data.items():
+            row_i = self.sample_map[name]
+
+            for peak in peak_list:
+                if peak['molecule'] is None:
+                    raise ValueError(f"Sample {name} has no valid peaks collected")
+                
+                col_i = self.mol_map[peak['molecule']]
+
+                self.area_matrix[row_i,col_i] = peak['area']
+                self.fwhh_matrix[row_i,col_i] = peak['fwhh']
+                self.rt_matrix[row_i,col_i] = peak['rt']
+                self.bounds_matrix[row_i,col_i] = (peak['left_bound'],peak['right_bound'])
+                self.height_matrix[row_i,col_i] = peak['height']
+                self.tailing_matrix[row_i,col_i] = peak['tailing_factor']
+                self.conv_matrix[row_i,col_i] = peak['conv']
+                self.sn_matrix[row_i,col_i] = peak['sn_ratio']

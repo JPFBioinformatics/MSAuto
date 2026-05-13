@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS samples (
 );
 
 CREATE TABLE IF NOT EXISTS molecules (
-    moleculeID              INTEGER PRIMARY KEY,
-    molecule_name           TEXT,
+    molecule_name           TEXT PRIMARY KEY,
     ion                     INTEGER,
     rt                      REAL,
     std                     TEXT,
@@ -20,16 +19,16 @@ CREATE TABLE IF NOT EXISTS molecules (
 
 CREATE TABLE IF NOT EXISTS features (
     featID                  INTEGER PRIMARY KEY,
-    imID                    INTEGER NOT NULL,
+    sample_name             TEXT NOT NULL,
     feat_rt                 REAL,
     collection_ion          INTEGER,
     identification          TEXT,
-    FOREIGN KEY (imID) REFERENCES intensity_matrices(imID)
+    confidence              REAL,
+    FOREIGN KEY (sample_name) REFERENCES intensity_matrices(sample_name)
 );
 
 CREATE TABLE IF NOT EXISTS intensity_matrices (
-    imID                    INTEGER PRIMARY KEY,
-    sample_name             TEXT NOT NULL,
+    sample_name             TEXT PRIMARY KEY,
     created_at              TEXT,
     sample_type             TEXT,
     noise_factor            REAL,
@@ -41,7 +40,7 @@ CREATE TABLE IF NOT EXISTS intensity_matrices (
 
 CREATE TABLE IF NOT EXISTS peaks (
     peakID                  INTEGER PRIMARY KEY,
-    imID                    INTEGER NOT NULL,
+    sample_name             TEXT NOT NULL,
     featID                  INTEGER NOT NULL,
     center                  INTEGER,
     left_bound              INTEGER,
@@ -51,6 +50,8 @@ CREATE TABLE IF NOT EXISTS peaks (
     area                    REAL,
     sn_ratio                REAL,
     ion                     INTEGER,
-    FOREIGN KEY (imID) REFERENCES intensity_matrices(imID),
+    fwhh                    REAL,
+    tailing_factor          REAL,
+    FOREIGN KEY (sample_name) REFERENCES intensity_matrices(sample_name),
     FOREIGN KEY (featID) REFERENCES features(featID)
 );

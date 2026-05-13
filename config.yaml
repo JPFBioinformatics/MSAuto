@@ -1,3 +1,6 @@
+# name of the project to store data in
+project_name: dev_test
+
 # name of this run of the pipeline
 run_name: Danica_SIM_test
 

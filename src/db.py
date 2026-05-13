@@ -41,11 +41,11 @@ def init_db(db_path: Path, schema_path: Path):
         conn.executescript(f.read())
     conn.close()
 
-def init_run(run_name: str, app_dir: Path):
+def init_run(run_name: str, project_name: str, app_dir: Path):
     """
     Initializes a run directory and prepares database
     """
-    run_dir = app_dir / "databases" / run_name
+    run_dir = app_dir / "databases" / project_name / run_name
     run_dir.mkdir(parents=True,exist_ok=True)
     db_path = run_dir / f"{run_name}.db"
     schema_path = app_dir / "GCMSdata.sql"
@@ -222,5 +222,23 @@ def get_im_feats(conn: sqlite3.Connection, imID: int):
         "SELECT * FROM features WHERE imID = ?", (imID,)
     )
     return cur.fetchall()
+
+def load_peak_data(conn: sqlite3.Connection):
+    """
+    Generates a peak_data dict sample: peak_list structure for recreating a datamatrix
+    from stored peak data
+    """
+    cur = conn.execute(
+        "SELECT * FROM peaks"
+    )
+    peak_rows = cur.fetchall()
+    peak_data = {}
+    for row in peak_rows:
+        sample = row['sample_name']
+        if sample not in peak_data:
+            peak_data[sample] = []
+        peak_data[sample].append(dict(row))
+    
+    return peak_data
 
 # endregion
