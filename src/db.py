@@ -6,6 +6,10 @@ from pathlib import Path
 from datetime import datetime
 import sqlite3
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 # region                 ---------- BASIC ----------
 
 def connect(db_path: Path):

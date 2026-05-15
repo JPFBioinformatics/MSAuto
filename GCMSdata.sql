@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS samples (
     norm_factor             REAL,
     norm_factor_type        TEXT,
     injection_order         INTEGER,
+    batch                   INTEGER,
 );
 
 CREATE TABLE IF NOT EXISTS molecules (
@@ -15,6 +16,7 @@ CREATE TABLE IF NOT EXISTS molecules (
     rt                      REAL,
     std                     TEXT,
     casNO                   TEXT,
+    std                     TEXT,
 );
 
 CREATE TABLE IF NOT EXISTS features (

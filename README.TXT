@@ -76,13 +76,6 @@ intensity_matrices:
         etc...
     etc...
 
-data_matrces:
-    data_matricx - matrix                           (however many matrices we want keyed on name)
-    sample_map - 2d array                           (sample_name, data_matrix idx)
-    mol_map - 2d array                              (mol_name, data_matrix idx)
-    norm_method - string                            how we normlaized, mass, volume, protein etc...
-    imputation_method_method - string               what we used to impute missing data
-
  ------------------------------------ SQL database  ------------------------------------
 
 
@@ -174,7 +167,7 @@ per sample
     %CV S/N
     injection order vs intensity
     % intensity outliers
-    % RT outliers
+    % RT_diff outliers
     avg/err RT
     avg FWHH
 
@@ -183,16 +176,3 @@ global
     RT drift vs inj order
     avg/err theoretical plates vs inj order
     % missing
-
-What each peak needs in peak_dict:
-    area                                            (trapz integration)
-    height                                          (baseline corrected)
-    FWHH
-    S/N ratio
-    RT
-    Symmetry
-    sharpness
-    left_bound
-    right_bound
-    center
-    flat_top

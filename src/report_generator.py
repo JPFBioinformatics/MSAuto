@@ -14,6 +14,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 # location of pipeline root dir
 root_dir = Path(__file__).resolve().parent.parent
 # tell python to look here for modules

@@ -6,6 +6,10 @@ import numpy as np
 import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 # location of pipeline root dir
 root_dir = Path(__file__).resolve().parent.parent
 # tell python to look here for modules

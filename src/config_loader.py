@@ -5,6 +5,10 @@ import pandas as pd
 import yaml, os
 from openpyxl import load_workbook
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 # endregion
 
 class ConfigLoader:

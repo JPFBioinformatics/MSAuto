@@ -1,5 +1,5 @@
 # region Imports
-import sys,datetime
+import sys,datetime,logging
 from pathlib import Path
 
 # location of pipeline root dir
@@ -11,19 +11,32 @@ from src.config_loader import ConfigLoader
 from src.intensity_matrix import IntensityMatrix as im
 from src.mzml_processor import MzMLProcessor as mp
 from src.report_generator import ReportGenerator as rg
-from src.utils import log_timestamp,delete_file,delete_directory
+from src.utils import get_app_dir,delete_file,delete_directory
 
 # endregion
 
+def setup_logging(log_dir: Path):
+    log_file = log_dir / "pipeline.log"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+
 def main():
+
     # get starting ts
     start_ts = datetime.datetime.now()
 
     # load configs
     cfg = ConfigLoader(root_dir / "config.yaml")
     indir = Path(cfg.get("input_dir"))
-    results = Path(cfg.get("results_dir"))
-    log_dir = indir / results
+    run_name = Path(cfg.get("run_name"))
+    appdir = get_app_dir()
+    log_dir = appdir / run_name
     log_dir.mkdir(parents=True,exist_ok=True)
     mol_data, smple_data = cfg.load_template()
     molecules = mol_data["molecules"]

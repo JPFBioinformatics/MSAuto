@@ -12,6 +12,10 @@ from scipy.signal import find_peaks
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 # location of pipeline root dir
 root_dir = Path(__file__).resolve()
 # tell python to look here for modules
@@ -887,9 +891,7 @@ class IntensityMatrix:
             peaks = self.peak_dict[row_idx]
 
         except Exception as e:
-            print(f"Error locating ion chromatogram for ion: {mz}\n{e}")
-            print(f"Unique mzs:\n {self.unique_mzs}")
-            return None
+            raise ValueError(f"Error locating ion chromatogram for ion: {mz}\n{e}\nUnique mzs:\n {self.unique_mzs}")
         
         # if no peaks are found raise error
         if len(peaks) == 0:

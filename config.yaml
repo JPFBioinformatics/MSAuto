@@ -10,17 +10,11 @@ template_file: Template.xlsx
 # full path to the imput directory where your files to be processed live
 input_dir: 'C:\Jack\Projects\Danica SD 2025\11_25_25 Plasma\Sims'
 
-# path to GCMSdata database
-db_dir: /
-
-# path relative to input dir where results will be stored
-results_dir: results/
-
 # name of the file containing mzML files to process
 mzml_dir: mzml_files/
 
 # true to keep mzml files, False to delete once main.py is done
-keep_mzml: True
+keep_mzml: False
 
 # thesholds
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged

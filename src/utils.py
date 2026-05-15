@@ -4,6 +4,10 @@ from pathlib import Path
 from openpyxl import load_workbook
 import pandas as pd
 
+# logging
+import logging
+logger = logging.getLogger(__name__)
+
 def log_subprocess(result: subprocess.CompletedProcess, log_dir: Path, id: str):
     """
     Collects logs produced by python subprocess and puts them in a text file for easy viewing
