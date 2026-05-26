@@ -1,5 +1,16 @@
 """
+
 Some useful functions for sql database managment
+
+Databasese are desinged so each project gets its own set of runs (batches) and project
+dbs are physically sepearated into different folders in the larger database directory.
+
+Generally speaking you would first pull all samples from a given run, then use the sampleIDs
+there to get all the intensity_matrices/features, and you can pull all peaks associated with
+these intensity matrices using imID to get all the data you need.  Also molecules table is
+associated with runs via run_name, so you can pull that too and you can get all data associated
+with a given run/batch.
+
 """
 
 from pathlib import Path
@@ -63,6 +74,7 @@ def init_run(run_name: str, project_name: str, app_dir: Path):
 
 def insert_sample(conn: sqlite3.Connection,
                   sample_name: str,
+                  run_name: str,
                   mouseID: str,
                   group_name: str,
                   sex: str,
@@ -73,31 +85,33 @@ def insert_sample(conn: sqlite3.Connection,
     Inserts into samples table
     """
     cur = conn.execute(
-        """ INSERT INTO samples (sample_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
+        """ INSERT INTO samples (sample_name, run_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (sample_name, run_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
     )
     conn.commit()
     return cur.lastrowid
 
 def insert_molecule(conn: sqlite3.Connection,
                     molecule_name: str,
+                    run_name: str,
                     ion: int,
                     rt: float,
-                    std: str):
+                    std: str,
+                    casNO: str):
     """
     Inserts into the molecules table
     """
     cur = conn.execute(
-        """ INSERT INTO molecules (molecule_name, ion, rt, std)
-            VALUES (?, ?, ?, ?)""",
-            (molecule_name, ion, rt, std)
+        """ INSERT INTO molecules (molecule_name, run_name, ion, rt, std, casNO)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            (molecule_name, run_name, ion, rt, std, casNO)
     )
     conn.commit()
     return cur.lastrowid
 
 def insert_feature(conn: sqlite3.Connection,
-                   sample_name: str,
+                   sampleID: int,
                    feat_rt: float,
                    collection_ion: int,
                    identification: str):
@@ -105,15 +119,16 @@ def insert_feature(conn: sqlite3.Connection,
     Inserts into the features table
     """
     cur = conn.execute(
-        """ INSERT INTO features (sample_name, feat_rt, collection_ion, identification)
+        """ INSERT INTO features (sampleID, feat_rt, collection_ion, identification)
             VALUES (?, ?, ?, ?)""",
-            (sample_name, feat_rt, collection_ion, identification)
+            (sampleID, feat_rt, collection_ion, identification)
     )
     conn.commit()
     return cur.lastrowid
 
 def insert_im(conn: sqlite3.Connection,
               sample_name: str,
+              run_name: str,
               sample_type: str,
               noise_factor: float,
               abundance_threshold: float,
@@ -124,9 +139,9 @@ def insert_im(conn: sqlite3.Connection,
     """
     created_at = datetime.now().isoformat()
     cur = conn.execute(
-        """ INSERT INTO intensity_matrices (sample_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
+        """ INSERT INTO intensity_matrices (sample_name, run_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (sample_name, run_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
     )
     conn.commit()
     return cur.lastrowid
@@ -141,24 +156,43 @@ def insert_peak(conn: sqlite3.Connection,
                 height: float,
                 area: float,
                 sn_ratio: float,
-                ion: float):
+                ion: float,
+                fwhh: float,
+                tailing_factor: float):
     """
     Inserts into peaks table
     """
     conn.execute(
-        """ INSERT INTO peaks (imID, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (imID, featID, center, left_bound, right_bound, rt, height, area, sn_ratio, ion)
+        """ INSERT INTO peaks (imID, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (imID, featID, center, left_bound, right_bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor)
     )
     conn.commit()
+
+def insert_run(conn: sqlite3.Connection,
+               run_name: str,
+               user: str,
+               method: str):
+    """
+    Inserts a run into runs table
+    """
+    if _run_exists(conn,run_name):
+        return ValueError(f"Run {run_name} already in database, choose unique run name")
+    created_at = datetime.now().isoformat()
+    cur = conn.execute(
+        """ INSERT INTO runs (run_name, created_at, user, method)
+            VALUES (?, ?, ?, ?)""",
+            (run_name, created_at, user, method)
+    )
+    return cur.lastrowid
 
 # endregion
 
 # region                 ---------- FETCH ----------
 
-def get_samples(conn: sqlite3.Connection):
+def get_proj_samples(conn: sqlite3.Connection):
     """
-    Gets rows for all samples associated with this run
+    Gets rows for all samples associated with this project
 
     Returns
     -------
@@ -169,43 +203,61 @@ def get_samples(conn: sqlite3.Connection):
     )
     return cur.fetchall()
 
-def get_sample(conn: sqlite3.Connection, sample_name: str):
+def get_sample(conn: sqlite3.Connection, sampleID: int):
     """
-    Gets row for a given sample_name
+    Gets row for a given sampleID
 
     Returns
     -------
     Row object for 'sample_name'
     """
     cur = conn.execute(
-        "SELECT * FROM samples WHERE sample_name = ?", (sample_name,)
+        "SELECT * FROM samples WHERE sampleID = ?", (sampleID,)
     )
     return cur.fetchone()
 
-def get_smaple_im(conn: sqlite3.Connection, sample_name: str):
+def get_run_samples(conn: sqlite3.Connection, run_name: str):
     """
-    Gets IM row for a given sample_name
+    Gets all samples associated with a given run
     """
     cur = conn.execute(
-        "SELECT * FROM intensity_matrices WHERE sample_name = ?", (sample_name,)
+        "SELECT * FROM samples WHERE run_name = ?", (run_name,)
+        )
+    return cur.fetchall
+
+def get_smaple_im(conn: sqlite3.Connection, sampleID: int):
+    """
+    Gets IM row for a given sampleID
+    """
+    cur = conn.execute(
+        "SELECT * FROM intensity_matrices WHERE sampleID = ?", (sampleID,)
     )
     return cur.fetchone()
 
-def get_molecules(conn: sqlite3.Connection):
+def get_proj_molecules(conn: sqlite3.Connection):
+    """
+    Gets all molecules for this project
+    """
+    cur = conn.execute(
+        "SELECT * FROM molecules"
+        )
+    return cur.fetchall
+
+def get_run_molecules(conn: sqlite3.Connection, run_name: str):
     """
     Gets all molecules for this run
     """
     cur = conn.execute(
-        "SELECT * FROM molecules"
+        "SELECT * FROM molecules WHERE run_name = ?", (run_name)
     )
     return cur.fetchall()
 
-def get_mol_by_name(conn: sqlite3.Connection, mol_name: str):
+def get_mol(conn: sqlite3.Connection, molID: str):
     """
-    Gets a molecule's row based on its name
+    Gets a molecule's row based on its ID
     """
     cur = conn.execute(
-        "SELECT * FROM molecules WHERE molecule_name = ?", (mol_name,)
+        "SELECT * FROM molecules WHERE molID = ?", (molID,)
     )
     return cur.fetchone()
 
@@ -227,13 +279,13 @@ def get_im_feats(conn: sqlite3.Connection, imID: int):
     )
     return cur.fetchall()
 
-def load_peak_data(conn: sqlite3.Connection):
+def load_run_peak_data(conn: sqlite3.Connection, run_name: str):
     """
     Generates a peak_data dict sample: peak_list structure for recreating a datamatrix
     from stored peak data
     """
     cur = conn.execute(
-        "SELECT * FROM peaks"
+        "SELECT * FROM peaks where run_name = ?", (run_name)
     )
     peak_rows = cur.fetchall()
     peak_data = {}
@@ -244,5 +296,16 @@ def load_peak_data(conn: sqlite3.Connection):
         peak_data[sample].append(dict(row))
     
     return peak_data
+
+# endregion
+
+# region                 ---------- UTILS ----------
+
+def _run_exists(conn: sqlite3.Connection, run_name: str):
+    """
+    Returns bool true if a run_name already exists in the databse, false if it does not
+    """
+    row = conn.execute("SELECT 1 FROM runs WHWERE run_name = ?", (run_name))
+    return row is not None
 
 # endregion

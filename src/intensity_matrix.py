@@ -17,13 +17,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # location of pipeline root dir
-root_dir = Path(__file__).resolve()
+root_dir = Path(__file__).parent.parent.resolve()
 # tell python to look here for modules
 sys.path.insert(0, str(root_dir))
 
 from src.config_loader import ConfigLoader
 from src.utils import get_app_dir
-from src.db import insert_im
+from src.db import insert_im, get_run_samples
 
 # endregion
 
@@ -1055,8 +1055,8 @@ class IntensityMatrix:
     # endregion
 
     # region Data Storage
-    
-    def save_sql_im(self, conn):
+
+    def save_sql_im(self, conn, run_name: str):
         """
         saves this intensity matrix object to the sql database
         
@@ -1064,15 +1064,17 @@ class IntensityMatrix:
         -------
         imID to use to query this object later
         """
+
         return insert_im(conn,
                          self.sample_name,
+                         run_name,
                          self.matrix_type,
                          self.noise_factor,
                          self.abundance_threshold,
                          self.intensity_matrix.shape[0],
                          self.intensity_matrix.shape[1])
 
-    def save_h5_object(self, proj_name: str):
+    def save_h5_object(self, proj_name: str, run_name: str):
         """
         Saves intensity matrix object to a .h5 file in the save_dir
         """
@@ -1080,7 +1082,7 @@ class IntensityMatrix:
         appdir = get_app_dir()
         db_dir = appdir / "databases" / proj_name
         db_dir.mkdir(exist_ok=True,parents=True)
-        h5_file = db_dir / "data.h5"
+        h5_file = db_dir / f"{run_name}.h5"
 
         with h5py.File(h5_file, 'a') as f:
 
@@ -1103,34 +1105,6 @@ class IntensityMatrix:
             grp.create_dataset('time_array', data = np.array(list(self.time_map.values())))
             grp.create_dataset('unique_mzs', data = np.array(self.unique_mzs))
 
-            # store peaks
-            peaks_group = grp.require_group('peaks')
-            for ion,peak_list in self.peak_dict.items():
-
-                if not peak_list:
-                    continue
-
-                # create lists and group to store values
-                centers, left_bounds, right_bounds, rts, heights, bl_slopes, bl_yints = [], [], [], [], [], [], []
-                ion_group = peaks_group.require_group(str(ion))
-
-                # store peak attributes
-                for p in peak_list:
-                    centers.append(p['center'])
-                    left_bounds.append(p['left_bound'])
-                    right_bounds.append(p['right_bound'])
-                    rts.append(p['rt'])
-                    heights.append(p['height'])
-                    bl_slopes.append(p['bl_slope'])
-                    bl_yints.append(p['bl_yint'])
-                ion_group.create_dataset('centers', data = np.array(centers,dtype=np.int32))
-                ion_group.create_dataset('left_bounds', data = np.array(left_bounds,dtype=np.int32))
-                ion_group.create_dataset('right_bounds', data = np.array(right_bounds,dtype=np.int32))
-                ion_group.create_dataset('rts', data = np.array(rts,dtype=np.float64))
-                ion_group.create_dataset('heights', data = np.array(heights,dtype=np.float64))
-                ion_group.create_dataset('bl_slopes', data = np.array(bl_slopes, dtype=np.float64))
-                ion_group.create_dataset('bl_yints', data = np.array(bl_yints, dtype=np.float64))
-    
     @staticmethod
     def load_h5_object(sample_name: str, proj_name: str, run_name: str):
         """
@@ -1146,8 +1120,8 @@ class IntensityMatrix:
         """
 
         appdir = get_app_dir()
-        db_dir = appdir / "databases" / proj_name / run_name
-        h5_file = db_dir / "data.h5"
+        db_dir = appdir / "databases" / proj_name
+        h5_file = db_dir / f"{run_name}.h5"
 
         if not db_dir.exists():
             raise FileNotFoundError(f"Database directory not found: {db_dir}")
@@ -1165,34 +1139,6 @@ class IntensityMatrix:
 
             # reconstruct time map
             time_map = {i:t for i,t in enumerate(time_array)}
-
-            # reconstruct peak_dict
-            peak_dict = {}
-            for ion_str, ion_group in grp['peaks'].items():
-                ion = int(ion_str)
-                centers = ion_group['centers'][:]
-                left_bounds = ion_group['left_bounds'][:]
-                right_bounds = ion_group['right_bounds'][:]
-                rts = ion_group['rts'][:]
-                heights = ion_group['heights'][:]
-                bl_slopes = ion_group['bl_slopes'][:]
-                bl_yints = ion_group['bl_yints'][:]
-
-                peak_list = []
-                for i in range(len(centers)):
-                    size = right_bounds[i] - left_bounds[i] + 1
-                    baseline = bl_slopes[i] * np.arange(size) + bl_yints[i]
-                    peak_list.append({
-                        'center': centers[i],
-                        'left_bound': left_bounds[i],
-                        'right_bound': right_bounds[i],
-                        'rt': rts[i],
-                        'height': heights[i],
-                        'baseline': baseline,
-                        'ion': ion,
-                        'valid': True
-                    })
-                peak_dict[ion] = peak_list
         
         im = IntensityMatrix(intensity_matrix=intensity_matrix,
                              unique_mzs=unique_mzs,
@@ -1201,5 +1147,5 @@ class IntensityMatrix:
         im.baseline_mask = baseline_mask
 
         return im
-    
+
     # endregion

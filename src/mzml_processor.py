@@ -22,7 +22,6 @@ from src.utils import log_subprocess,delete_file
 # endregion
 
 
-
 class MzMLProcessor:
     """
     Processes .d files from agilant GCMS and converts data to .mzML file for downstream processing

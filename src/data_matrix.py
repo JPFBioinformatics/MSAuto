@@ -48,6 +48,7 @@ class DataMatrix:
 
         self.sample_map = {row['sample_name']:i for i,row in enumerate(self.samples)}
         self.mol_map = {row['molecule_name']: i for i,row in enumerate(self.molecules)}
+        self.group_map = {row['group']: i for i,row in enumerate(self.samples)}
         self.n_samples = len(self.sample_map)
         self.n_molecules = len(self.mol_map)
 
@@ -197,11 +198,5 @@ class DataMatrix:
             return np.nan
         
         return (stdev / avg) * 100
-
-    # endregion
-
-    # region                 ---------- QC Plotting ----------
-
-
 
     # endregion
