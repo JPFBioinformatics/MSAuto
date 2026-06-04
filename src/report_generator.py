@@ -1,6 +1,8 @@
+
+
 # region Imports
 
-import sys, math
+import math
 from pathlib import Path
 from collections import defaultdict
 from matplotlib.backends.backend_pdf import PdfPages
@@ -13,17 +15,11 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from src.config_loader import ConfigLoader
 
 # logging
 import logging
 logger = logging.getLogger(__name__)
-
-# location of pipeline root dir
-root_dir = Path(__file__).resolve().parent.parent
-# tell python to look here for modules
-sys.path.insert(0, str(root_dir))
-
-from src.config_loader import ConfigLoader
 
 # endregion
 

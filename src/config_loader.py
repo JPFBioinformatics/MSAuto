@@ -1,8 +1,14 @@
+"""
+
+Basic methods for handling config.yaml loading/updating
+
+"""
+
 # region Imports
 
 from pathlib import Path
 import pandas as pd
-import yaml, os
+import yaml
 from openpyxl import load_workbook
 
 # logging

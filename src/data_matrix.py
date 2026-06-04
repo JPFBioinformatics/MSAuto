@@ -1,35 +1,29 @@
 """
 
 Class to hold the data matrix of identified peaks where each row is a sample and each column
-is a different measured intensity value
+is a different measured intensity value, used for analysis/QC
 
 """
+
 # region Imports
 
-import sys
 import numpy as np
-from pathlib import Path
+from src.config_loader import ConfigLoader
+from src.db import get_run_samples, get_run_molecules, connect
+from src.utils import get_app_dir
 
 # logging
 import logging
 logger = logging.getLogger(__name__)
 
-# location of pipeline root dir
-root_dir = Path(__file__).resolve().parent.parent
-# tell python to look here for modules
-sys.path.insert(0, str(root_dir))
-
-from src.config_loader import ConfigLoader
-from src.db import get_samples, get_molecules, connect
-from src.utils import get_app_dir
-
 # endregion
 
 class DataMatrix:
 
-    def __init__(self, cfg: ConfigLoader, peak_data: dict):
+    def __init__(self, cfg: ConfigLoader, peak_data: dict, collection_metric: str = 'area'):
 
         if not peak_data:
+            logger.warning("List of IntensityMatrix objects is empty")
             raise ValueError("List of IntensityMatrix objects is is empty")
 
         # config/attrs
@@ -41,14 +35,24 @@ class DataMatrix:
         self.db_path = db_path
         self.run_name = run_name
 
+        # sample/molecule tables
         conn = connect(db_path)
-        self.samples = get_samples(conn)
-        self.molecules = get_molecules(conn)
+        self.samples = {r['sample_name']: r for r in get_run_samples(conn)}
+        self.molecules = {r['molecule_name']: r for r in get_run_molecules(conn)}
         conn.close()
 
-        self.sample_map = {row['sample_name']:i for i,row in enumerate(self.samples)}
-        self.mol_map = {row['molecule_name']: i for i,row in enumerate(self.molecules)}
-        self.group_map = {row['group']: i for i,row in enumerate(self.samples)}
+        # maps
+        self.sample_map = {name: i for i,name in enumerate(self.samples)}
+        self.mol_map = {name: i for i,name in enumerate(self.molecules)}
+        self.group_map = {key: value['group_name'] for key, value in self.samples.items()}
+        self.group_indices = {}
+        for sample_name, group_name in self.group_map.items():
+            i = self.sample_map[sample_name]
+            if group_name not in self.group_indices:
+                self.group_indices[group_name] = []
+            self.group_indices[group_name].append(i)
+
+        # matrix shapes
         self.n_samples = len(self.sample_map)
         self.n_molecules = len(self.mol_map)
 
@@ -65,11 +69,12 @@ class DataMatrix:
             'tailing': float_empty(),
             'conv': float_empty(),
             'sn': float_empty(),
-            'tp': float_empty()
+            'tp': float_empty(),
+            'normalized': float_empty()
         }
         
         # outlier matrices (samples x features, rows x columns), 1/True if outlier
-        bool_empty = lambda: np.zeros((self.n_samples, self.n_molecules), dtype=np.bool)
+        bool_empty = lambda: np.zeros((self.n_samples, self.n_molecules), dtype=bool)
         self.outliers = {
             'area': bool_empty(),
             'fwhh': bool_empty(),
@@ -83,7 +88,14 @@ class DataMatrix:
 
         # missiness matrix (samples x features, rows x columns), 1/True if missing, looks only at
         # area matrix, not other QC calculations
-        self.missing = None
+        self.missing = bool_empty()
+
+        # save standards
+        self.standards = []
+        self.std_map = {}
+
+        # normalized data matrix metric
+        self.collection_metric = collection_metric
 
         # fill the matrices from peak data
         self.fill_matrices(peak_data)
@@ -122,6 +134,9 @@ class DataMatrix:
 
         # missingness matrix
         self.missing = np.isnan(self.data['area'])
+
+        # normalize matrix
+        self._normalize_matrix(self.collection_metric)
 
     def _theoretical_plates(self, rt: np.float64, fwhh: np.float64):
         """
@@ -198,5 +213,49 @@ class DataMatrix:
             return np.nan
         
         return (stdev / avg) * 100
+
+    # endregion
+
+    # region                 ---------- Normalization ----------
+
+    def _normalize_matrix(self, metric: str):
+        """
+        Takes a data matrix (area or height) and normalizes to norm factor and internal standards,
+        standards are kept in the normalized matrix and will just be a column of all 1's
+        """
+        # copy data matrix
+        matrix = self.data[metric].copy()
+
+        # normalize to norm factor        
+        norm_factors = np.zeros(self.n_samples)
+        for name,i in self.sample_map.items():
+            if self.samples[name]['norm_factor'] is None:
+                norm_factors[i] = 1
+            else:
+                norm_factors[i] = self.samples[name]['norm_factor']
+        matrix = matrix / norm_factors[:,np.newaxis]
+
+        # generate map of molecule to standard column
+        mol_std_map = {}
+        for key,value in self.molecules.items():
+            mol_i = self.mol_map[key]
+            if value['std'] is None:
+                continue
+            mol_std_map[mol_i] = self.mol_map[value['std']]
+
+        # normalize to istd
+        for mol_i,std_i in mol_std_map.items():
+            matrix[:,mol_i] = matrix[:,mol_i] / matrix[:,std_i]
+
+        # ensure normalization worked correctly
+        std_indices = set(mol_std_map.values())
+        for std_i in std_indices:
+            col = matrix[:,std_i]
+            if not np.allclose(col, 1.0, atol=1e-6):
+                logger.warning(f"ISTD did not normalize to 1.0, check normalization/ISTD")
+
+        # save data
+        self.data['normalized'] = matrix
+        self.collection_metric = metric
 
     # endregion

@@ -13,6 +13,8 @@ with a given run/batch.
 
 """
 
+# region Imports
+
 from pathlib import Path
 from datetime import datetime
 import sqlite3
@@ -20,6 +22,8 @@ import sqlite3
 # logging
 import logging
 logger = logging.getLogger(__name__)
+
+# endregion
 
 # region                 ---------- BASIC ----------
 
@@ -279,7 +283,7 @@ def get_im_feats(conn: sqlite3.Connection, imID: int):
     )
     return cur.fetchall()
 
-def load_run_peak_data(conn: sqlite3.Connection, run_name: str):
+def get_run_peaks(conn: sqlite3.Connection, run_name: str):
     """
     Generates a peak_data dict sample: peak_list structure for recreating a datamatrix
     from stored peak data

@@ -1,26 +1,25 @@
+"""
+
+Handles converting agilant .D directories to mzml files and then converting those into IntensityMatrix
+objects.
+
+"""
+
 # region Imports
 
-import subprocess, base64, zlib, sys
+import subprocess, base64, zlib
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
-import matplotlib.pyplot as plt
+from src.intensity_matrix import IntensityMatrix
+from src.config_loader import ConfigLoader
+from src.utils import log_subprocess,delete_file
 
 # logging
 import logging
 logger = logging.getLogger(__name__)
 
-# location of pipeline root dir
-root_dir = Path(__file__).resolve().parent.parent
-# tell python to look here for modules
-sys.path.insert(0, str(root_dir))
-
-from src.intensity_matrix import IntensityMatrix
-from src.config_loader import ConfigLoader
-from src.utils import log_subprocess,delete_file
-
 # endregion
-
 
 class MzMLProcessor:
     """

@@ -14,13 +14,12 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS samples (
     sample_name             TEXT NOT NULL,
     run_name                TEXT NOT NULL,
-    mouseID                 TEXT,
+    mouseID                 TEXT PRIMARY KEY,
     group_name              TEXT,
     sex                     TEXT,
     norm_factor             REAL,
     norm_factor_type        TEXT,
     injection_order         INTEGER,
-    PRIMARY KEY (sample_name, run_name)
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );
 

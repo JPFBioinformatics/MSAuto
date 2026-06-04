@@ -6,31 +6,24 @@ Class that stores an mzml file's data as a matrix for peak identification and se
 
 # region Imports
 
-import sys,h5py
+import h5py
 import numpy as np
 from scipy.signal import find_peaks
-from pathlib import Path
 import matplotlib.pyplot as plt
+from src.config_loader import ConfigLoader
+from src.utils import get_app_dir
+from src.db import insert_im
 
 # logging
 import logging
 logger = logging.getLogger(__name__)
-
-# location of pipeline root dir
-root_dir = Path(__file__).parent.parent.resolve()
-# tell python to look here for modules
-sys.path.insert(0, str(root_dir))
-
-from src.config_loader import ConfigLoader
-from src.utils import get_app_dir
-from src.db import insert_im, get_run_samples
 
 # endregion
 
 # Class for storage and cleaning of intensity matrix extracted by mzml_processor
 class IntensityMatrix:
 
-    def __init__(self, intensity_matrix: np.ndarray, unique_mzs: list, sample_name: str = None, time_map: dict = None, matrix_type: str = None, cfg: ConfigLoader = ConfigLoader(root_dir / "config.yaml")):
+    def __init__(self, intensity_matrix: np.ndarray, unique_mzs: list, cfg: ConfigLoader, sample_name: str = None, time_map: dict = None, matrix_type: str = None):
         self.intensity_matrix = intensity_matrix
         self.unique_mzs = unique_mzs
         self.time_map = time_map
@@ -50,7 +43,7 @@ class IntensityMatrix:
         # identify peaks in this intensity matrix
         self.identify_peaks(self.intensity_matrix)
 
-    # region Abundance Threshold
+    # region                 ---------- Abundance Threshold ----------
 
     # calculates At value to replace 0 values with
     def calculate_threshold(self):
@@ -144,7 +137,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region Noise Factor Calculation
+    # region                 ---------- Noise Factor Calculation ----------
 
     # calculates the noise factor (Nf) for the entire intensity_matrix
     def calculate_noise_factor(self):
@@ -246,7 +239,7 @@ class IntensityMatrix:
     
     # endregion
 
-    # region Finding Maxima
+    # region                 ---------- Finding Maxima ----------
 
     # finds the peaks (maxima and bounds) for each row of a given intensity matrix and the tic, last row is TIC
     def identify_peaks(self, matrix, prom=None):
@@ -812,7 +805,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region Baseline Calculation
+    # region                 ---------- Baseline Calculation ----------
 
     # calculates a tentative baseline for a percieved component (minutes not scans)
     def tentative_baseline(self,left_bound,right_bound,array):
@@ -869,7 +862,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region Data Collection
+    # region                 ---------- Data Collection ----------
 
     def closest_peak(self, mz: int, rt: float):
         """
@@ -1011,7 +1004,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region Data Visualization
+    # region                 ---------- Data Visualization ----------
 
     def width_histogram(self):
         widths = []
@@ -1054,7 +1047,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region Data Storage
+    # region                 ---------- Data Storage ----------
 
     def save_sql_im(self, conn, run_name: str):
         """

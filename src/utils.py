@@ -1,3 +1,11 @@
+"""
+
+miscelaneous utility functions for use across the project
+
+"""
+
+# region Imports
+
 import subprocess,json,shutil,sys
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +15,8 @@ import pandas as pd
 # logging
 import logging
 logger = logging.getLogger(__name__)
+
+# endregion
 
 def log_subprocess(result: subprocess.CompletedProcess, log_dir: Path, id: str):
     """
