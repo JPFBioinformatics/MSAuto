@@ -20,16 +20,15 @@ logger = logging.getLogger(__name__)
 
 class DataMatrix:
 
-    def __init__(self, cfg: ConfigLoader, peak_data: dict, collection_metric: str = 'area'):
+    def __init__(self, proj_name: str, run_name: str, peak_data: dict, collection_metric: str = 'area'):
 
         if not peak_data:
             logger.warning("List of IntensityMatrix objects is empty")
             raise ValueError("List of IntensityMatrix objects is is empty")
 
         # config/attrs
-        self.cfg = cfg
-        run_name = cfg.get("run_name")
-        project_name = cfg.get("proj_name")
+        run_name = run_name
+        project_name = proj_name
         appdir = get_app_dir()
         db_path = appdir / "databases" / project_name / run_name
         self.db_path = db_path

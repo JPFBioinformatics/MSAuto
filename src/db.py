@@ -181,7 +181,8 @@ def insert_run(conn: sqlite3.Connection,
     Inserts a run into runs table
     """
     if _run_exists(conn,run_name):
-        return ValueError(f"Run {run_name} already in database, choose unique run name")
+        logger.warning(f"Run {run_name} already in database")
+        raise ValueError(f"Run {run_name} already in database, choose unique run name")
     created_at = datetime.now().isoformat()
     cur = conn.execute(
         """ INSERT INTO runs (run_name, created_at, user, method)

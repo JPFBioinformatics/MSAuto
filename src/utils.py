@@ -6,7 +6,7 @@ miscelaneous utility functions for use across the project
 
 # region Imports
 
-import subprocess,json,shutil,sys
+import subprocess,json,shutil,sys,re
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -121,3 +121,11 @@ def get_app_dir():
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+def sanitize_name(name: str):
+    """
+    Replaces problematic characaters and spaces with "_"
+    """
+    name = name.strip()
+    name = re.sub(r'[\\/:*?"<>|]','_',name)
+    name = name.replace(" ", "_")
+    return name
