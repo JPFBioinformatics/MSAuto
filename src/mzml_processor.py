@@ -29,7 +29,7 @@ class MzMLProcessor:
     def __init__(self, cfg: ConfigLoader):
         self.cfg = cfg
 
-    def full_bulk_convert(self):
+    def full_bulk_convert(self, input_dir: Path):
         """
         Converts all compatible .d files in a directory to .mzml files and saves them to a directory in the input directory
         Returns:
@@ -65,15 +65,6 @@ class MzMLProcessor:
 
         if process:
 
-            # get log_dir
-            log_dir = input_dir / results
-
-            # find subprocess log file
-            sub_log = log_dir / "subprocess_log.jsonl"
-            # if it exists then delete it
-            if sub_log.exists():
-                delete_file(sub_log)
-
             # ensure mzml dir exists
             mzml_dir.mkdir(parents=True,exist_ok=True)
 
@@ -90,8 +81,6 @@ class MzMLProcessor:
 
                     result = subprocess.run(cmd,check=True,capture_output=True,text=True)
 
-                    log_subprocess(result,log_dir,sample_name)
-            
             # generate new list of valid mzml files
             mzml_files = list(mzml_dir.glob("*.mzML"))
     

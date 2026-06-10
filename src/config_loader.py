@@ -8,8 +8,9 @@ Basic methods for handling config.yaml loading/updating
 
 from pathlib import Path
 import pandas as pd
-import yaml
+import yaml, shutil
 from openpyxl import load_workbook
+from src.utils import get_app_dir
 
 # logging
 import logging
@@ -207,3 +208,31 @@ class ConfigLoader:
         ws["A2"] = header2
 
         wb.save(file)
+
+    def set(self, *keys: str, value):
+        """
+        Sets a value in the config dict by key path
+        """
+        d = self.config
+        for key in keys[:-1]:
+            if key not in d or not isinstance(d[key], dict):
+                d[key] = {}
+            d = d[key]
+        d[keys[-1]] = value
+
+    def save(self):
+        """
+        Writes current config dict back to yaml file
+        """
+        with open(self.config_path, 'w') as f:
+            yaml.dump(self.config, f, default_flow_style=False)
+
+    @staticmethod
+    def create_run_config(run_dir: Path):
+        """
+        copies default config to run directory as config.yaml
+        """
+        default = get_app_dir() / "default_config.yaml"
+        dest = run_dir / "config.yaml"
+        shutil.copy(default,dest)
+        return ConfigLoader(dest)

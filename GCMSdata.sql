@@ -1,24 +1,24 @@
-"""
-run_name is included in several tables where it breaks normal form, but it remains there
-in order to simplify querying for GUI
-"""
+-- run_name is included in several tables where it breaks normal form, but it remains there
+-- in order to simplify querying for GUI
+
 
 
 CREATE TABLE IF NOT EXISTS runs (
     run_name                TEXT PRIMARY KEY,
     created_at              TEXT,
     user                    TEXT,
-    method                  TEXT
+    method                  TEXT,
+    file_type               TEXT,
+    norm_type               TEXT
 );
 
 CREATE TABLE IF NOT EXISTS samples (
     sample_name             TEXT NOT NULL,
     run_name                TEXT NOT NULL,
-    mouseID                 TEXT PRIMARY KEY,
+    sampleID                TEXT PRIMARY KEY,
     group_name              TEXT,
     sex                     TEXT,
     norm_factor             REAL,
-    norm_factor_type        TEXT,
     injection_order         INTEGER,
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS intensity_matrices (
     abundance_threshold     REAL,
     n_ions                  INTEGER,
     n_timepoints            INTEGER,
-    FOREIGN KEY (sample_name, run_name) REFERENCES samples (sample_name, run_name)
+    FOREIGN KEY (sample_name, run_name) REFERENCES samples (sample_name, run_name),
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );
 

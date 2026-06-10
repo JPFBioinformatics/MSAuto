@@ -121,6 +121,9 @@ def get_app_dir():
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+def get_run_dir(run_name):
+    return get_app_dir() / 'databases' / 'projedcts' / run_name
+
 def sanitize_name(name: str):
     """
     Replaces problematic characaters and spaces with "_"

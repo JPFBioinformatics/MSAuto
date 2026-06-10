@@ -2,86 +2,32 @@
 
 Main starting point for the application, projectselect runselect then mainwindow
 
-ProjectSelect
--------------
-    two buttons: Load Project and New Project
+First we select/create the project, create the data directory in appdir / databases / projects / project_name
+project_name also saved to config.yaml here
 
-    Load Project:
-        pulls up a file explorer of self_get_app_dir() / databases / projects
-        allows selecting of project from here, open button to confirm
-        move on to main dashboard
-    
-    New Project:
-        pulls up a window with a textbox and submit button
-        name project, submit name
-        checks if the name is available, if it is then creates a directory for it, initializes
-        the project database
-        move on to main dashboard
-
-RunSelect
----------
-
-    two buttons: Load Run and New Run
-
-    Load Run:
-        queries sql database for names of all runs
-        select run name, Load button to confirm selection
-        Loads all run data to run_data object
-        takes you to main dashboard with run_data loaded
-
-    New Run:
-        oepns file explorer to select a directory of files to include in this run
-        once files are selected opens another window with tables to fill out 
-        Sample Table:
-            names already filled in from files in selected dir
-            fill in the rest of information needed in SQL samples table
-        Molecules Table:
-            fill in all information needed in SQL molecules table
-        Confirm/continue/save? button saves this informatino to samples/molecules tables
-        then program uses these tables to collect data from the files in the directory
-        saves data, loads it to a run_data object
-        takes you to main dashboard with run_data loaded
-
-MainDashboard
--------------
-
-    Entry point for run-based data inquiry
-    Tabs lead to other root/gui/ *.py files
-        File
-            Load Run
-            New Run
-            Export
-                Report
-                QC
-                Chromatogram
-                Peak
-                Spectrum
-            Exit
-                To Desktop
-                To Main Menu
-        Analysis
-        QC
-        Report
-        Info
-        Chromatogram
-        Peak
+Then we select/create the run, either loading data that is saved in the database or creating a new run
+where you must specify the run_name, and fill in sample and molecule tables which are all saved to 
+database right when it is created
+In this process you also specify input_dir and input_type which are saved to config.yaml along with run_name
 
 """
 
 # region Imports
 
 import sys
+from pathlib import Path
 
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget,
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget, QTabWidget, QTableWidget,
                              QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QLineEdit, QListWidget,
-                             QDialog, QFileDialog, QMessageBox,
-                             QApplication)
+                             QDialog, QFileDialog, QMessageBox, QComboBox,
+                             QApplication, QHeaderView, QSizePolicy, QTableWidgetItem)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from qt_material import apply_stylesheet
 
-from src.db import connect, get_run_samples, init_db
+from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
+                    insert_molecule, get_run_molecules)
 from src.run_data import RunData
 from src.config_loader import ConfigLoader
 from src.utils import get_app_dir, sanitize_name
@@ -92,23 +38,41 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.project_name = None
-        self.run_name = []
+        self.run_names = []
         self.run_data = []
         self.active_run_idx = 0
+        self.cfg = None
+
+        self.stack = QStackedWidget()
+        self.project_select = ProjectSelectWidget(self)
+        self.run_select = RunSelectWidget(self)
+        self.confirm_window = ConfirmConfigWidget(self)
+        self.dashboard = MainDashboard(self)
+
         self.setWindowTitle("MSAuto")
+        screen = QApplication.primaryScreen().geometry()
+        self.move(screen.center() - self.rect().center())
 
         self.initUI()
 
     def initUI(self):
+
+        self.stack.addWidget(self.project_select)
+        self.stack.addWidget(self.run_select)
+        self.stack.addWidget(self.confirm_window)
+        self.stack.addWidget(self.dashboard)
+        self.setCentralWidget(self.stack)
+
         return
 
+# region                 ---------- Project Select ----------
 
 class ProjectSelectWidget(QWidget):
     """
     Manages entry into app and selects project to work within
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         self.setWindowTitle("MSAuto")
 
@@ -154,14 +118,14 @@ class ProjectSelectWidget(QWidget):
     def new_clicked(self):
         dialog = NewProjectDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            self.parent().project_name = dialog.proj_name
-            self.parent().stack.setCurrentIndex(1)
+            self.window().project_name = dialog.project_name
+            self.window().stack.setCurrentIndex(1)
 
     def load_clicked(self):
         dialog = LoadProjectDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            self.parent().project_name = dialog.proj_name
-            self.parent().stack.setCurrentIndex(1)
+            self.window().project_name = dialog.project_name
+            self.window().stack.setCurrentIndex(1)
 
     def mng_clicked(self):
         self.mng_proj_btn.setText("Not done yet")
@@ -179,7 +143,7 @@ class NewProjectDialog(QDialog):
         self.submit_btn = QPushButton("Submit")
         self.back_btn = QPushButton("Back")
         self.title = QLabel("Enter Project Name:")
-        self.proj_name = None
+        self.project_name = None
 
         screen = QApplication.primaryScreen().geometry()
         self.move(screen.center() - self.rect().center())
@@ -223,30 +187,29 @@ class NewProjectDialog(QDialog):
         # get directoires
         appdir = get_app_dir()
         projects_dir = appdir / "databases" / "projects"
-        print(projects_dir)
         projects_dir.mkdir(exist_ok=True, parents=True)
 
         # check that project name is entered
-        proj_name = sanitize_name(self.name_input.text())
-        if not proj_name:
+        project_name = sanitize_name(self.name_input.text())
+        if not project_name:
             QMessageBox.warning(self, "Error", "Please Enter a project name")
             return
 
         projects = [p.name for p in projects_dir.iterdir() if p.is_dir()]
 
-        if proj_name not in projects:
+        if project_name not in projects:
             # create proj dir
-            project = projects_dir / proj_name
+            project = projects_dir / project_name
             project.mkdir(exist_ok=True, parents=True)
 
             # create sql database
-            init_db(project / f"{proj_name}.db", appdir / "GCMSdata.sql")
+            init_db(project / f"{project_name}.db", appdir / "GCMSdata.sql")
 
-            self.proj_name = proj_name
+            self.project_name = project_name
 
             self.accept()
         else:
-            QMessageBox.warning(self, "Error", f"Project name {proj_name} already exists, choose unique name")
+            QMessageBox.warning(self, "Error", f"Project name {project_name} already exists, choose unique name")
             return
         
         return
@@ -259,7 +222,7 @@ class LoadProjectDialog(QDialog):
         super().__init__(parent)
         self.setFixedSize(500,400)
         self.setWindowTitle("Load Project")
-        self.proj_name = None
+        self.project_name = None
 
         self.title = QLabel("Select Project:")
         self.back_btn = QPushButton("Back")
@@ -282,7 +245,7 @@ class LoadProjectDialog(QDialog):
         self.search_input.setPlaceholderText("Project Name...")
         self.search_input.setFixedSize(300, 50)
         self.search_input.setFont(QFont("Roboto", 12))
-        self.search_input.textChanged.connect(self.filter_list)
+        self.search_input.textChanged.connect(self.populate_list)
 
         self.proj_list.setFixedSize(300,100)
 
@@ -306,13 +269,13 @@ class LoadProjectDialog(QDialog):
         self.setLayout(layout)
         self.populate_list("")
 
-    def filter_list(self, text):
-        self.populate_list(text)
+    def populate_list(self):
+        text = self.search_input.text()
 
-    def populate_list(self, text):
         appdir = get_app_dir()
         projects_dir = appdir / "databases" / "projects"
         projects_dir.mkdir(exist_ok=True,parents=True)
+
         projects = sorted([p.name for p in projects_dir.iterdir() if p.is_dir()])
         self.proj_list.clear()
         for p in projects:
@@ -324,15 +287,672 @@ class LoadProjectDialog(QDialog):
         if not selected:
             QMessageBox.warning(self, "Error", "Please select a project")
             return
-        self.proj_name = selected.text()
+        self.project_name = selected.text()
         self.accept()
+
+# endregion
+
+# region                 ---------- Run Select ----------
 
 class RunSelectWidget(QWidget):
     """
     Manages which run to investigate within a project
     """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.project_name = self.window().project_name
+
+        self.setWindowTitle("MSAuto")
+        self.setFixedSize(800,500)
+
+        self.new_proj_btn = QPushButton("New Run")
+        self.load_proj_btn = QPushButton("Load Run")
+        self.mng_proj_btn = QPushButton("Manage Runs")
+        self.title = QLabel(f"Project: {self.project_name} - Run Select")
+
+        screen = QApplication.primaryScreen().geometry()
+        self.move(screen.center() - self.rect().center())
+
+        self.initUI()
+
+    def initUI(self):
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(25)
+
+        self.title.setAlignment(Qt.AlignCenter)
+        self.title.setFont(QFont("Roboto", 18, QFont.Bold))
+
+        self.new_proj_btn.setFixedSize(400,100)
+        self.new_proj_btn.setFont(QFont("Roboto", 12, QFont.Bold))
+        self.new_proj_btn.clicked.connect(self.new_clicked)
+
+        self.load_proj_btn.setFixedSize(400,100)
+        self.load_proj_btn.setFont(QFont("Roboto", 12, QFont.Bold))
+        self.load_proj_btn.clicked.connect(self.load_clicked)
+
+        self.mng_proj_btn.setFixedSize(400,100)
+        self.mng_proj_btn.setFont(QFont("Roboto", 12, QFont.Bold))
+        self.mng_proj_btn.clicked.connect(self.mng_clicked)
+
+        layout.addWidget(self.title)
+        layout.addWidget(self.new_proj_btn, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.load_proj_btn, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.mng_proj_btn, alignment=Qt.AlignHCenter)
+        self.setLayout(layout)
+
+    def show_event(self, event):
+        proj_name = self.window().project_name
+        if proj_name is not self.project_name:
+            self.project_name = proj_name
+        self.title.setText(f"Project: {proj_name} - Run Select")
+        super().showEvent(event)
+
+    def new_clicked(self):
+        dialog = NewRunDialog(self, self.project_name)
+        if dialog.exec_() == QDialog.Accepted:
+            self.window().run_names.append(dialog.run_name)
+            self.window().cfg = dialog.cfg
+            self.window().stack.setCurrentIndex(2)
+
+    def load_clicked(self):
+        dialog = LoadRunDialog(self, self.project_name)
+        if dialog.exec_() == QDialog.Accepted:
+            self.window().run_names.append(dialog.run_name)
+            self.window().cfg = dialog.cfg
+            self.window().stack.setCurrentIndex(2)
+
+    def mng_clicked(self):
+        self.mng_proj_btn.setText("Not done yet")
+
+class NewRunDialog(QDialog):
+    """
+    handles creation of a new run
+    """
+    def __init__(self, parent=None, project_name = None):
+        super().__init__(parent)
+        self.setWindowTitle("New Run")
+        self.setFixedSize(600,400)
+
+        self.name_input = QLineEdit()
+        self.submit_btn = QPushButton("Submit")
+        self.back_btn = QPushButton("Back")
+        self.title = QLabel("Enter File Type, Run Dir, and Run Name")
+        self.browse_btn = QPushButton("Browse")
+        self.path_input =QLineEdit()
+        self.file_type_combo = QComboBox()
+        self.file_type_label = QLabel("File Type:")
+
+        self.sample_dir = None
+        self.project_name = project_name
+        self.run_name = None
+        self.cfg = None
+
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignHCenter)
+        layout.setSpacing(10)
+
+        header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignTop)
+
+        path_layout = QHBoxLayout()
+
+        file_layout = QHBoxLayout()
+
+        self.title.setFont(QFont("Roboto", 12, QFont.Bold))
+
+        self.path_input.setPlaceholderText("Sample dir path...")
+        self.path_input.setFixedSize(290,50)
+        self.browse_btn.clicked.connect(self.browse_clicked)
+        self.browse_btn.setFixedSize(100,50)
+
+        self.name_input.setPlaceholderText("Run Name...")
+        self.name_input.setFixedSize(400, 50)
+        self.name_input.setFont(QFont("Roboto", 12))
+
+        self.submit_btn.setFixedSize(400,50)
+        self.submit_btn.setFont(QFont("Roboto", 12))
+        self.submit_btn.clicked.connect(self.submit_clicked)
+
+        self.back_btn.setFixedSize(60,30)
+        self.back_btn.clicked.connect(self.reject)
+
+        self.file_type_combo.addItems([".D",".mzML"])
+        self.file_type_combo.setCurrentText(".D")
+        self.file_type_combo.setFixedSize(200,50)
+        self.file_type_label.setFont(QFont("Roboto", 12))
+        
+        file_layout.addStretch()
+        file_layout.addWidget(self.file_type_label)
+        file_layout.addWidget(self.file_type_combo)
+        file_layout.addStretch()
+
+        path_layout.addStretch()
+        path_layout.addWidget(self.path_input)
+        path_layout.addWidget(self.browse_btn)
+        path_layout.addStretch()
+
+        header_layout.addWidget(self.back_btn, alignment=Qt.AlignTop)
+        header_layout.addStretch()
+        header_layout.addWidget(self.title)
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        layout.addLayout(file_layout)
+        layout.addLayout(path_layout)
+        layout.addWidget(self.name_input, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.submit_btn, alignment=Qt.AlignHCenter)
+        layout.addSpacing(50)
+
+        self.setLayout(layout)
+
+    def submit_clicked(self):
+        
+        # get directoires
+        appdir = get_app_dir()
+        projects_dir = appdir / "databases" / "projects"
+        projects_dir.mkdir(exist_ok=True, parents=True)
+
+        # save sample directory
+        self.sample_dir = Path(self.path_input.text().strip())
+        if not self.sample_dir.exists():
+            QMessageBox.warning(self, "Error", "Directory does not exist, please reselect")
+            return
+
+        # get project name
+        project_name = self.project_name
+        if not project_name:
+            QMessageBox.warning(self, "Error", "No project name, please return to project manager")
+            return
+
+        # get run name
+        run_name = sanitize_name(self.name_input.text())
+        if not run_name:
+            QMessageBox.warning(self, "Error", "Please enter a run name")
+            return
+
+        # make sure DB exists
+        db_path = projects_dir / project_name / f"{project_name}.db"
+        try:
+            conn = connect(db_path)
+        except FileNotFoundError as e:
+            QMessageBox.warning(self, "Error", "No database found, please return to project manager")
+            return
+
+        # make sure run is uniquely named
+        if run_exists(conn, run_name):
+            QMessageBox.warning(self, "Error", "Run already exists, choose a unique name")
+            return
+        
+        # save run name and add to db
+        self.run_name = run_name
+        insert_run(conn, run_name)
+        run_dir = projects_dir / project_name / run_name
+        run_dir.mkdir(parents=True,exist_ok=True)
+
+        # copy relevant data to config.yaml
+        file_type = self.file_type_combo.currentText()
+        cfg = ConfigLoader.create_run_config(run_dir)
+        cfg.set("run_name", run_name)
+        cfg.set("input_dir", str(self.sample_dir))
+        cfg.set("project_name", self.project_name)
+        cfg.set("input_type", file_type)
+        cfg.save()
+        self.cfg = cfg
+
+        
+        # handle adding all samples/molecules to db
+        sample_dialog = SampleTableDialog(self, self.project_name, self.sample_dir)
+        if sample_dialog.exec_() != QDialog.Accepted:
+            conn.close()
+            return
+        mol_dialog = MoleculeTableDialog(self, self.project_name)
+        if mol_dialog.exec_() != QDialog.Accepted:
+            conn.close()
+            return
+        # update samples/molecules tables in SQL db
+        try:
+            for row in sample_dialog.data:
+                insert_sample(conn,
+                                row['sample_name'],
+                                run_name,
+                                row['sample_ID'],
+                                row['group'],
+                                row['sex'],
+                                row['norm_factor'],
+                                row['injection_order'])
+            for row in mol_dialog.data:
+                insert_molecule(conn,
+                                row['molecule_name'],
+                                run_name,
+                                row['ion'],
+                                row['rt'],
+                                row['std'],
+                                row['casNo'])
+        finally:
+            conn.close()
+        
+        self.accept()
+
+    def browse_clicked(self):
+        selected = QFileDialog.getExistingDirectory(self, "Select Sample Directory")
+        if selected:
+            self.path_input.setText(selected)
+
+class SampleTableDialog(QDialog):
+    """
+    Handles entry of sample metadata
+    """
+    def __init__(self, parent=None, project_name = None, sample_dir = None):
+        super().__init__(parent)
+        self.setWindowTitle("Sample Metadata")
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.resize(800,500)
+
+        self.project_name = project_name
+        self.sample_dir = sample_dir
+
+        self.title = QLabel("Sample Metadata")
+        self.table = QTableWidget()
+        self.back_btn = QPushButton("Back")
+        self.submit_btn = QPushButton("Submit")
+        self.paste_btn = QPushButton("Paste")
+        self.add_row_btn = QPushButton("Add Row")
+        self.remove_row_btn = QPushButton("Remove Row")
+
+        self.data = []                      # list of dicts with header:value for each entry/row
+        
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignTop)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.setAlignment(Qt.AlignBottom)
+
+        columns = ['sample_name', 'sampleID', 'group', 'sex', 'norm_factor', 'injection_order']
+        self.table.setColumnCount(len(columns))
+        self.table.setHorizontalHeaderLabels(columns)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.setRowCount(20)
+
+        self.title.setFont(QFont("Roboto", 12, QFont.Bold))
+
+        self.paste_btn.clicked.connect(self.paste_clicked)
+        self.submit_btn.clicked.connect(self.submit_clicked)
+        self.add_row_btn.clicked.connect(self.add_row_clicked)
+        self.remove_row_btn.clicked.connect(self.remove_row_clicked)
+        self.back_btn.setFixedSize(60,30)
+        self.back_btn.clicked.connect(self.reject)
+
+        header_layout.addWidget(self.back_btn)
+        header_layout.addStretch()
+        header_layout.addWidget(self.title, alignment=Qt.AlignHCenter)
+        header_layout.addStretch()
+
+        footer_layout.addWidget(self.paste_btn)
+        footer_layout.addWidget(self.submit_btn)
+        footer_layout.addWidget(self.add_row_btn)
+        footer_layout.addWidget(self.remove_row_btn)
+        footer_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        layout.addWidget(self.table)
+        layout.addLayout(footer_layout)
+
+        self._populate_samples()
+
+        self.setLayout(layout)
+
+    def paste_clicked(self):
+        clipboard = QApplication.clipboard().text()
+        rows = clipboard.strip().split('\n')
+        self.table.setRowCount(len(rows))
+        for i,row in enumerate(rows):
+            cells = row.split('\t')
+            for j,cell in enumerate(cells):
+                if j < self.table.columnCount():
+                    self.table.setItem(i,j,QTableWidgetItem(cell.strip()))
+
+    def submit_clicked(self):
+        for i in range(self.table.rowCount()):
+            item = self.table.item(i,0)
+            if not item or not item.text().strip():
+                continue
+            row = {}
+            for j in range(self.table.columnCount()):
+                cell = self.table.item(i,j)
+                row[self.table.horizontalHeaderItem(j).text()] = cell.text().strip() if cell else ''
+            self.data.append(row)
+        if not self.data:
+            QMessageBox.warning(self, "Error", "No Data Entered")
+        self.accept()
+
+    def remove_row_clicked(self):
+        selected = self.table.currentRow()
+        if selected >= 0:
+            self.table.removeRow(selected)
+        else:
+            self.table.removeRow(self.table.rowCount() - 1)
+
+    def add_row_clicked(self):
+        self.table.insertRow(self.table.rowCount())
+
+    def _populate_samples(self):
+        if not self.sample_dir:
+            QMessageBox.warning(self, "Error", "No sample directory specified, return to Run Select")
+            return
+        files = sorted(Path(self.sample_dir).glob(".D"))
+        #mzml_files = sorted(Path(self.sample_dir).glob(".mzML"))
+        self.table.setRowCount(len(files))
+        for i,f in enumerate(files):
+            self.table.setitem(i,0,QTableWidgetItem(f.stem))
+
+class MoleculeTableDialog(QDialog):
+    """
+    Handles entry of molecule metadata
+    """
+    def __init__(self, parent=None, project_name=None):
+        super().__init__(parent)
+
+        self.project_name = project_name
+
+        self.setWindowTitle("Molecule Metadata")
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.resize(800,500)
+
+        self.title = QLabel("Molecule Metadata")
+        self.table = QTableWidget()
+        self.back_btn = QPushButton("Back")
+        self.submit_btn = QPushButton("Submit")
+        self.paste_btn = QPushButton("Paste")
+        self.add_row_btn = QPushButton("Add Row")
+        self.remove_row_btn = QPushButton("Remove Row")
+        self.search_input = QLineEdit()
+        self.run_list = QListWidget()
+        self.load_btn = QPushButton("Load Table")
+
+        self.data = []                      # list of dicts with header:value for each entry/row
+        
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignTop)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.setAlignment(Qt.AlignBottom)
+
+        columns = ['molecule_name', 'ion', 'rt', 'std', 'casNo']
+        self.table.setColumnCount(len(columns))
+        self.table.setHorizontalHeaderLabels(columns)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.setRowCount(20)
+        
+
+        self.title.setFont(QFont("Roboto", 12, QFont.Bold))
+
+        self.paste_btn.clicked.connect(self.paste_clicked)
+        self.submit_btn.clicked.connect(self.submit_clicked)
+        self.add_row_btn.clicked.connect(self.add_row_clicked)
+        self.remove_row_btn.clicked.connect(self.remove_row_clicked)
+        self.back_btn.setFixedSize(60,30)
+        self.back_btn.clicked.connect(self.reject)
+        self.load_btn.clicked.connect(self.load_clicked)
+
+        header_layout.addWidget(self.back_btn)
+        header_layout.addStretch()
+        header_layout.addWidget(self.title, alignment=Qt.AlignHCenter)
+        header_layout.addStretch()
+        header_layout.addWidget(self.search_input)
+        header_layout.addWidget(self.load_btn)
+
+        footer_layout.addWidget(self.paste_btn)
+        footer_layout.addWidget(self.submit_btn)
+        footer_layout.addWidget(self.add_row_btn)
+        footer_layout.addWidget(self.remove_row_btn)
+        footer_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        layout.addWidget(self.table)
+        layout.addLayout(footer_layout)
+
+        self.setLayout(layout)
+
+    def paste_clicked(self):
+        clipboard = QApplication.clipboard().text()
+        rows = clipboard.strip().split('\n')
+        self.table.setRowCount(len(rows))
+        for i,row in enumerate(rows):
+            cells = row.split('\t')
+            for j,cell in enumerate(cells):
+                if j < self.table.columnCount():
+                    self.table.setItem(i,j,QTableWidgetItem(cell.strip()))
+
+    def submit_clicked(self):
+        for i in range(self.table.rowCount()):
+            item = self.table.item(i,0)
+            if not item or not item.text().strip():
+                continue
+            row = {}
+            for j in range(self.table.columnCount()):
+                cell = self.table.item(i,j)
+                row[self.table.horizontalHeaderItem(j).text()] = cell.text().strip() if cell else ''
+            self.data.append(row)
+        if not self.data:
+            QMessageBox.warning(self, "Error", "No Data Entered")
+        self.accept()
+
+    def remove_row_clicked(self):
+        selected = self.table.currentRow()
+        if selected >= 0:
+            self.table.removeRow(selected)
+        else:
+            self.table.removeRow(self.table.rowCount() - 1)
+
+    def add_row_clicked(self):
+        self.table.insertRow(self.table.rowCount())
+    
+    def load_clicked(self):
+        selected = self.run_list.currentItem()
+        if not selected:
+            QMessageBox.warning(self, "Error", "Please select a run")
+            return
+
+        run_name = selected.text()
+        appdir = get_app_dir()
+        project_name = self.project_name
+        project_dir = appdir / 'databases' / 'projects'
+        db_path = project_dir / f'{project_name}.db'
+        conn = connect(db_path)
+        rows = get_run_molecules(conn, run_name)
+        self.table.setRowCount(len(rows))
+        columns = [self.table.horizontalHeaderItem(j).lower() for j in range(self.table.columnCount())]
+        for i,row in enumerate(rows):
+            for key in row.keys():
+                if key.lower() in columns:
+                    j = columns.index(key.lower())
+                    val = row[key]
+                    self.table.setItem(i,j,QTableWidgetItem(str(val) if val is not None else '')) 
+
+class LoadRunDialog(QDialog):
+    """
+    handles loading a run
+    """
+    def __init__(self, parent=None, project_name=None):
+        super().__init__(parent)
+        self.setFixedSize(500,400)
+        self.setWindowTitle("Load Run")
+        self.project_name = project_name
+        self.run_name = None
+        self.cfg = None
+
+        self.title = QLabel("Select Run:")
+        self.back_btn = QPushButton("Back")
+        self.search_input = QLineEdit()
+        self.run_list = QListWidget()
+        self.submit_btn = QPushButton("Submit")
+
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignHCenter)
+        layout.setSpacing(10)
+
+        header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignTop)
+
+        self.title.setFont(QFont("Roboto", 12, QFont.Bold))
+
+        self.search_input.setPlaceholderText("Run Name...")
+        self.search_input.setFixedSize(300, 50)
+        self.search_input.setFont(QFont("Roboto", 12))
+        self.search_input.textChanged.connect(self.populate_list)
+
+        self.run_list.setFixedSize(300,100)
+
+        self.back_btn.setFixedSize(60,30)
+        self.back_btn.clicked.connect(self.reject)
+
+        self.submit_btn.setFixedSize(300,50)
+        self.submit_btn.setFont(QFont("Roboto", 12, QFont.Bold))
+        self.submit_btn.clicked.connect(self.submit_clicked)
+
+        header_layout.addWidget(self.back_btn)
+        header_layout.addStretch()
+
+        layout.addLayout(header_layout)
+        layout.addWidget(self.title, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.search_input, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.run_list, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.submit_btn, alignment=Qt.AlignHCenter)
+        layout.addSpacing(50)
+
+        self.setLayout(layout)
+        self.populate_list("")
+
+    def populate_list(self, text):
+        appdir = get_app_dir()
+        projects_dir = appdir / "databases" / "projects"
+        projects_dir.mkdir(exist_ok=True,parents=True)
+        project_name = self.window().project_name
+
+        db_path = projects_dir / project_name / f"{project_name}.db"
+        try:
+            conn = connect(db_path)
+        except FileNotFoundError as e:
+            QMessageBox.warning(self, "Error", "No database found, please return to project manager")
+            return
+        
+        run_names = sorted(get_run_names(conn))
+        self.run_list.clear()
+        for r in run_names:
+            if text.lower() in r.lower():
+                self.run_list.addItem(r)
+
+        conn.close()
+ 
+    def submit_clicked(self):
+        selected = self.run_list.currentItem()
+        if not selected:
+            QMessageBox.warning(self, "Error", "Please select a run")
+            return
+        run_name = selected.text()
+        run_dir = get_app_dir() / 'databases' / 'projects' / self.project_name / run_name
+        cfg = ConfigLoader(run_dir)
+        self.run_name = run_name
+        self.cfg = cfg
+        self.accept()
+
+# endregion
+
+# region                 ---------- Confirm Data ----------
+
+class ConfirmConfigWidget(QWidget):
+    """
+    displays all input data for confirmation before processing
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Confrim Data")
+        self.resize(800,500)
+
+        self.tabs = QTabWidget()
+
+        self.config_tab = QWidget()
+        self.samples_tab = QWidget()
+        self.molecules_tab = QWidget()
+
+        self.config_table = QTableWidget()
+        self.samples_table = QTableWidget()
+        self.molecules_table = QTableWidget()
+
+        self.back_btn = QPushButton("Back")
+        self.confirm_btn = QPushButton("Confirm")
+
+        screen = QApplication.primaryScreen().geometry()
+        self.move(screen.center() - self.rect().center())
+
+        self.initUI()
+
+    def initUI(self):
+        
+        # config tab
+        config_layout = QVBoxLayout()
+        self.config_table.setColumnCount(2)
+        self.config_table.setHorizontalHeaderLabels(['Key','Value'])
+
+    def showEvent(self,event):
+        self._populate_config()
+        self._populate_samples()
+        self._populate_molecules()
+        super().showEvent(event)
+
+    def _populate_config():
+        pass
+
+    def _populate_samples():
+        pass
+
+    def _populate_molecules():
+        pass
 
 
+
+# endregion
+
+# region                 ---------- Main Dashboard ----------
+
+class MainDashboard(QWidget):
+    """
+    Entry point for analysis/visualization
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.tabs = QTabWidget()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.tabs)
+        self.setLayout(layout)
+
+# endregion
 
 # testing block
 if __name__ == "__main__":
@@ -340,8 +960,10 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     apply_stylesheet(app, theme="dark_teal.xml", extra={"density_scale": "-2", "font_size": "12px"})
 
-    w = ProjectSelectWidget()
+    w = MainWindow()
     #w = NewProjectDialog()
+    #w = SampleTableDialog()
+    w = NewRunDialog()
     w.show()
 
     sys.exit(app.exec_())

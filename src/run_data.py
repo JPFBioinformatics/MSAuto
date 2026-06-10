@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # endregion
 
 class RunData:
-    def __init__(self, run_name: str, proj_name: str, cfg: ConfigLoader):
+    def __init__(self, run_name: str, proj_name: str):
 
         self.proj_name = proj_name
         self.run_name = run_name

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # region                 ---------- BASIC ----------
 
-def connect(db_path: Path):
+def connect(db_path: Path, create:bool = False):
     """
     Connects to db
     
@@ -39,7 +39,8 @@ def connect(db_path: Path):
     -------
     conn                    connection to db
     """
-
+    if not create and not Path(db_path).exists():
+        raise FileNotFoundError(f"Database not found: {db_path}")
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
@@ -55,7 +56,7 @@ def init_db(db_path: Path, schema_path: Path):
     schema_path             path to .sql schema file
     """
 
-    conn = connect(db_path)
+    conn = connect(db_path, create=True)
     with open(schema_path) as f:
         conn.executescript(f.read())
     conn.close()
@@ -79,7 +80,7 @@ def init_run(run_name: str, project_name: str, app_dir: Path):
 def insert_sample(conn: sqlite3.Connection,
                   sample_name: str,
                   run_name: str,
-                  mouseID: str,
+                  sampleID: str,
                   group_name: str,
                   sex: str,
                   norm_factor: float,
@@ -89,9 +90,9 @@ def insert_sample(conn: sqlite3.Connection,
     Inserts into samples table
     """
     cur = conn.execute(
-        """ INSERT INTO samples (sample_name, run_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
+        """ INSERT INTO samples (sample_name, run_name, sampleID, group_name, sex, norm_factor, injection_order)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, run_name, mouseID, group_name, sex, norm_factor, norm_factor_type, injection_order)
+            (sample_name, run_name, sampleID, group_name, sex, norm_factor, norm_factor_type, injection_order)
     )
     conn.commit()
     return cur.lastrowid
@@ -175,12 +176,12 @@ def insert_peak(conn: sqlite3.Connection,
 
 def insert_run(conn: sqlite3.Connection,
                run_name: str,
-               user: str,
-               method: str):
+               user: str = 'default',
+               method: str = 'default'):
     """
     Inserts a run into runs table
     """
-    if _run_exists(conn,run_name):
+    if run_exists(conn,run_name):
         logger.warning(f"Run {run_name} already in database")
         raise ValueError(f"Run {run_name} already in database, choose unique run name")
     created_at = datetime.now().isoformat()
@@ -302,11 +303,20 @@ def get_run_peaks(conn: sqlite3.Connection, run_name: str):
     
     return peak_data
 
+def get_run_names(conn: sqlite3.Connection):
+    """
+    Returns a list of all run names from database
+    """
+    cur = conn.execute(
+        " SELECT run_name FROM runs"
+    )
+    return [row['run_name'] for row in cur.fetchall()]
+
 # endregion
 
 # region                 ---------- UTILS ----------
 
-def _run_exists(conn: sqlite3.Connection, run_name: str):
+def run_exists(conn: sqlite3.Connection, run_name: str):
     """
     Returns bool true if a run_name already exists in the databse, false if it does not
     """

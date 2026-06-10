@@ -1,22 +1,16 @@
-# name of the project to store data in
-project_name: dev_test
+# Configs for running the pipeline, saved as default 
 
-# name of this run of the pipeline
-run_name: Danica_SIM_test
-
-# name of the excel template file that contains molecule name/id, mz list, and rt list to collect
-template_file: Template.xlsx
+# name of the project and run you are working on
+project_name: proj_name
+run_name: run_name
 
 # full path to the imput directory where your files to be processed live
-input_dir: 'C:\Jack\Projects\Danica SD 2025\11_25_25 Plasma\Sims'
+input_dir: C:/input/path
 
-# name of the file containing mzML files to process
-mzml_dir: mzml_files/
+# type of file to process, .D or .mzML
+iput_type: .D
 
-# true to keep mzml files, False to delete once main.py is done
-keep_mzml: False
-
-# thesholds
+# thesholds/analysis parameters
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged
 endpoint_threshold: 10              # max difference between endpoint heights (as a percent of max height of peak) for peak to be flagged
 variance_threshold: 1e-6            # minimum variance to be included in PCA plot
