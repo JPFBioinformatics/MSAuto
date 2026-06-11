@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS peaks (
     tailing_factor          REAL,
     bl_slope                REAL,
     bl_yint                 REAL,
+    conv                    REAL,
+    valley_ratio            REAL,
     FOREIGN KEY (imID) REFERENCES intensity_matrices (imID),
     FOREIGN KEY (featID) REFERENCES features (featID),
     FOREIGN KEY (run_name) REFERENCES runs (run_name)

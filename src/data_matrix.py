@@ -139,7 +139,7 @@ class DataMatrix:
 
     def _theoretical_plates(self, rt: np.float64, fwhh: np.float64):
         """
-        Calculates theroretical plates for the entire data matrix and saves to tp_matrix
+        Calculates theroretical plates for a peak
 
         Params
         ------

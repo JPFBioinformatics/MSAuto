@@ -30,6 +30,7 @@ class IntensityMatrix:
         self.noise_factor = None
         self.abundance_threshold = None
         self.peak_dict = None
+        self.collected_peaks = None
         self.baseline_mask = None
         self.cfg = cfg
         self.sample_name = sample_name
@@ -565,7 +566,7 @@ class IntensityMatrix:
             valid_peaks = [p for p in maxima if p.get('valid', True)]
             count_valid = len(valid_peaks)
             count_invalid = len(maxima) - count_valid
-            print(f"{ion} row peaks picked, {count_valid} valid peaks, {count_invalid} invalid peaks")
+            logger.log(f"{ion} row peaks picked, {count_valid} valid peaks, {count_invalid} invalid peaks")
 
         return valid_peaks, row_nm
 
@@ -1059,13 +1060,13 @@ class IntensityMatrix:
         """
 
         return insert_im(conn,
-                         self.sample_name,
-                         run_name,
-                         self.matrix_type,
-                         self.noise_factor,
-                         self.abundance_threshold,
-                         self.intensity_matrix.shape[0],
-                         self.intensity_matrix.shape[1])
+                    self.sample_name,
+                    run_name,
+                    self.matrix_type,
+                    self.noise_factor,
+                    self.abundance_threshold,
+                    self.intensity_matrix.shape[0],
+                    self.intensity_matrix.shape[1])
 
     def save_h5_object(self, proj_name: str, run_name: str):
         """

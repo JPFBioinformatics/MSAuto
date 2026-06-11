@@ -12,7 +12,7 @@ from src.intensity_matrix import IntensityMatrix as IM
 from src.config_loader import ConfigLoader
 from src.data_matrix import DataMatrix as DM
 from src.db import connect
-from src.utils import get_app_dir
+from src.utils import get_proj_db
 
 # logging
 import logging
@@ -26,18 +26,18 @@ class RunData:
         self.proj_name = proj_name
         self.run_name = run_name
         
-        appdir = get_app_dir()
-        db_path = appdir / "databases" / proj_name / f"{run_name}.db"
-        conn = connect(db_path)
+        db_path = get_proj_db(proj_name)
+        try:
+            conn = connect(db_path)
+            self.samples = {r['sample_name']: dict(r) for r in get_run_samples(conn, run_name)}             # dict sample_name: row_dict
+            self.molecules = {r["molecule_name"]: dict(r) for r in get_run_molecules(conn, run_name)}       # dict of mol_name: row_dict
+            peaks = get_run_peaks(conn, run_name)
+        finally:
+            conn.close()
 
-        self.samples = {r['sample_name']: dict(r) for r in get_run_samples(conn, run_name)}             # dict sample_name: row_dict
-        self.molecules = {r["molecule_name"]: dict(r) for r in get_run_molecules(conn, run_name)}       # dict of mol_name: row_dict
-        
         self.intensity_matrices = {}
         for sample_name in self.samples:
             self.intensity_matrices[sample_name] = IM.load_h5_object(sample_name, proj_name, run_name)
-
-        peaks = get_run_peaks(conn, run_name)
 
         self.data_matrix = DM(proj_name, run_name, peaks)
 

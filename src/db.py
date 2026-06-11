@@ -153,7 +153,6 @@ def insert_im(conn: sqlite3.Connection,
 
 def insert_peak(conn: sqlite3.Connection,
                 imID: int,
-                featID: int,
                 center: int,
                 left_bound: int,
                 right_bound: int,
@@ -163,14 +162,19 @@ def insert_peak(conn: sqlite3.Connection,
                 sn_ratio: float,
                 ion: float,
                 fwhh: float,
-                tailing_factor: float):
+                tailing_factor: float,
+                bl_slope: float,
+                bl_yint: float,
+                conv: float,
+                valley_ratio:float,
+                featID: int = 0):
     """
     Inserts into peaks table
     """
     conn.execute(
-        """ INSERT INTO peaks (imID, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (imID, featID, center, left_bound, right_bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor)
+        """ INSERT INTO peaks (imID, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (imID, featID, center, left_bound, right_bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
     )
     conn.commit()
 
@@ -320,7 +324,7 @@ def run_exists(conn: sqlite3.Connection, run_name: str):
     """
     Returns bool true if a run_name already exists in the databse, false if it does not
     """
-    row = conn.execute("SELECT 1 FROM runs WHWERE run_name = ?", (run_name))
+    row = conn.execute("SELECT 1 FROM runs WHERE run_name = ?", (run_name,)).fetchone()
     return row is not None
 
 # endregion

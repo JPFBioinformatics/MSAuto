@@ -14,7 +14,8 @@ In this process you also specify input_dir and input_type which are saved to con
 
 # region Imports
 
-import sys
+import sys, shutil
+from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget, QTabWidget, QTableWidget,
@@ -27,10 +28,12 @@ from PyQt5.QtGui import QFont
 from qt_material import apply_stylesheet
 
 from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
-                    insert_molecule, get_run_molecules)
-from src.run_data import RunData
+                    insert_molecule, get_run_molecules, insert_peak)
 from src.config_loader import ConfigLoader
-from src.utils import get_app_dir, sanitize_name
+from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path
+from src.mzml_processor import full_bulk_convert
+from src.intensity_matrix import IntensityMatrix as IM
+from src.run_data import RunData as RD
 
 # endregion
 
@@ -42,6 +45,8 @@ class MainWindow(QMainWindow):
         self.run_data = []
         self.active_run_idx = 0
         self.cfg = None
+        self.sample_data = None
+        self.mol_data = None
 
         self.stack = QStackedWidget()
         self.project_select = ProjectSelectWidget(self)
@@ -74,7 +79,7 @@ class ProjectSelectWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("MSAuto")
+        self.setWindowTitle("MSAuto > Project")
 
         self.new_proj_btn = QPushButton("New Project")
         self.load_proj_btn = QPushButton("Load Project")
@@ -269,8 +274,7 @@ class LoadProjectDialog(QDialog):
         self.setLayout(layout)
         self.populate_list("")
 
-    def populate_list(self):
-        text = self.search_input.text()
+    def populate_list(self, text=""):
 
         appdir = get_app_dir()
         projects_dir = appdir / "databases" / "projects"
@@ -303,12 +307,13 @@ class RunSelectWidget(QWidget):
 
         self.project_name = self.window().project_name
 
-        self.setWindowTitle("MSAuto")
-        self.setFixedSize(800,500)
+        self.setWindowTitle("MSAuto > Project > Run")
+        self.setFixedSize(850,525)
 
         self.new_proj_btn = QPushButton("New Run")
         self.load_proj_btn = QPushButton("Load Run")
         self.mng_proj_btn = QPushButton("Manage Runs")
+        self.back_btn = QPushButton("Back")
         self.title = QLabel(f"Project: {self.project_name} - Run Select")
 
         screen = QApplication.primaryScreen().geometry()
@@ -343,7 +348,7 @@ class RunSelectWidget(QWidget):
         layout.addWidget(self.mng_proj_btn, alignment=Qt.AlignHCenter)
         self.setLayout(layout)
 
-    def show_event(self, event):
+    def showEvent(self, event):
         proj_name = self.window().project_name
         if proj_name is not self.project_name:
             self.project_name = proj_name
@@ -355,6 +360,8 @@ class RunSelectWidget(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             self.window().run_names.append(dialog.run_name)
             self.window().cfg = dialog.cfg
+            self.window().sample_data = dialog.sample_data
+            self.window().mol_data = dialog.mol_data
             self.window().stack.setCurrentIndex(2)
 
     def load_clicked(self):
@@ -362,7 +369,8 @@ class RunSelectWidget(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             self.window().run_names.append(dialog.run_name)
             self.window().cfg = dialog.cfg
-            self.window().stack.setCurrentIndex(2)
+            self.window().run_data.append(dialog.run_data)
+            self.window().stack.setCurrentIndex(3)
 
     def mng_clicked(self):
         self.mng_proj_btn.setText("Not done yet")
@@ -389,6 +397,9 @@ class NewRunDialog(QDialog):
         self.project_name = project_name
         self.run_name = None
         self.cfg = None
+        self.sample_data = None
+        self.mol_data = None
+        self.input_type = None
 
         self.initUI()
 
@@ -454,8 +465,7 @@ class NewRunDialog(QDialog):
     def submit_clicked(self):
         
         # get directoires
-        appdir = get_app_dir()
-        projects_dir = appdir / "databases" / "projects"
+        projects_dir = get_proj_dir(self.project_name)
         projects_dir.mkdir(exist_ok=True, parents=True)
 
         # save sample directory
@@ -471,72 +481,54 @@ class NewRunDialog(QDialog):
             return
 
         # get run name
-        run_name = sanitize_name(self.name_input.text())
-        if not run_name:
+        given_name = sanitize_name(self.name_input.text())
+        if not given_name:
             QMessageBox.warning(self, "Error", "Please enter a run name")
             return
+        run_name = f"{datetime.now().strftime('%Y_%m_%d')}_{given_name}"
 
         # make sure DB exists
-        db_path = projects_dir / project_name / f"{project_name}.db"
+        db_path = projects_dir / f"{project_name}.db"
         try:
             conn = connect(db_path)
         except FileNotFoundError as e:
             QMessageBox.warning(self, "Error", "No database found, please return to project manager")
             return
-
+        
         # make sure run is uniquely named
         if run_exists(conn, run_name):
+            conn.close()
             QMessageBox.warning(self, "Error", "Run already exists, choose a unique name")
             return
         
-        # save run name and add to db
+        # save run name
         self.run_name = run_name
-        insert_run(conn, run_name)
-        run_dir = projects_dir / project_name / run_name
+        run_dir = get_run_dir(self.project_name, run_name)
         run_dir.mkdir(parents=True,exist_ok=True)
 
         # copy relevant data to config.yaml
         file_type = self.file_type_combo.currentText()
+        self.input_type = file_type
         cfg = ConfigLoader.create_run_config(run_dir)
-        cfg.set("run_name", run_name)
-        cfg.set("input_dir", str(self.sample_dir))
-        cfg.set("project_name", self.project_name)
-        cfg.set("input_type", file_type)
+        cfg.set("run_name", value=run_name)
+        cfg.set("input_dir", value=str(self.sample_dir))
+        cfg.set("project_name", value=self.project_name)
+        cfg.set("input_type", value=file_type)
         cfg.save()
         self.cfg = cfg
 
-        
-        # handle adding all samples/molecules to db
+        # save sample and molecule data
         sample_dialog = SampleTableDialog(self, self.project_name, self.sample_dir)
         if sample_dialog.exec_() != QDialog.Accepted:
-            conn.close()
+            QMessageBox.warning(self, "Error", "No Sample Data Saved")
             return
         mol_dialog = MoleculeTableDialog(self, self.project_name)
         if mol_dialog.exec_() != QDialog.Accepted:
-            conn.close()
+            QMessageBox.warning(self, "Error", "No Molecule Data Saved")
             return
-        # update samples/molecules tables in SQL db
-        try:
-            for row in sample_dialog.data:
-                insert_sample(conn,
-                                row['sample_name'],
-                                run_name,
-                                row['sample_ID'],
-                                row['group'],
-                                row['sex'],
-                                row['norm_factor'],
-                                row['injection_order'])
-            for row in mol_dialog.data:
-                insert_molecule(conn,
-                                row['molecule_name'],
-                                run_name,
-                                row['ion'],
-                                row['rt'],
-                                row['std'],
-                                row['casNo'])
-        finally:
-            conn.close()
         
+        self.sample_data = sample_dialog.data
+        self.mol_data = mol_dialog.data
         self.accept()
 
     def browse_clicked(self):
@@ -552,10 +544,11 @@ class SampleTableDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Sample Metadata")
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
-        self.resize(800,500)
+        self.resize(900,500)
 
         self.project_name = project_name
         self.sample_dir = sample_dir
+        self.input_type = self.parent().input_type
 
         self.title = QLabel("Sample Metadata")
         self.table = QTableWidget()
@@ -583,7 +576,6 @@ class SampleTableDialog(QDialog):
         self.table.setHorizontalHeaderLabels(columns)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.table.setRowCount(20)
 
         self.title.setFont(QFont("Roboto", 12, QFont.Bold))
 
@@ -614,14 +606,29 @@ class SampleTableDialog(QDialog):
         self.setLayout(layout)
 
     def paste_clicked(self):
+
         clipboard = QApplication.clipboard().text()
         rows = clipboard.strip().split('\n')
-        self.table.setRowCount(len(rows))
+
+        start_row = self.table.currentRow()
+        if start_row < 0:
+            start_row = 0
+        rows_needed = start_row + len(rows)
+        if rows_needed > self.table.rowCount():
+            self.table.setRowCount(rows_needed)
+
+        start_col = self.table.currentColumn()
+        if start_col < 0:
+            start_col = 0
+        if len(rows[0].split('\t')) + start_col > self.table.columnCount():
+            QMessageBox.warning(self,"Error", "Pasting too many columns, check copied values")
+            return
+        
         for i,row in enumerate(rows):
             cells = row.split('\t')
             for j,cell in enumerate(cells):
                 if j < self.table.columnCount():
-                    self.table.setItem(i,j,QTableWidgetItem(cell.strip()))
+                    self.table.setItem(i+start_row,j+start_col,QTableWidgetItem(cell.strip()))
 
     def submit_clicked(self):
         for i in range(self.table.rowCount()):
@@ -651,11 +658,13 @@ class SampleTableDialog(QDialog):
         if not self.sample_dir:
             QMessageBox.warning(self, "Error", "No sample directory specified, return to Run Select")
             return
-        files = sorted(Path(self.sample_dir).glob(".D"))
-        #mzml_files = sorted(Path(self.sample_dir).glob(".mzML"))
+        if not self.input_type:
+            QMessageBox.warning(self, "Erro", "No file type specified, return to New Run")
+            return
+        files = sorted(Path(self.sample_dir).glob(f"*{self.input_type}"))
         self.table.setRowCount(len(files))
         for i,f in enumerate(files):
-            self.table.setitem(i,0,QTableWidgetItem(f.stem))
+            self.table.setItem(i,0,QTableWidgetItem(f.stem))
 
 class MoleculeTableDialog(QDialog):
     """
@@ -732,14 +741,29 @@ class MoleculeTableDialog(QDialog):
         self.setLayout(layout)
 
     def paste_clicked(self):
+
         clipboard = QApplication.clipboard().text()
         rows = clipboard.strip().split('\n')
-        self.table.setRowCount(len(rows))
+
+        start_row = self.table.currentRow()
+        if start_row < 0:
+            start_row = 0
+        rows_needed = start_row + len(rows)
+        if rows_needed > self.table.rowCount():
+            self.table.setRowCount(rows_needed)
+
+        start_col = self.table.currentColumn()
+        if start_col < 0:
+            start_col = 0
+        if len(rows[0].split('\t')) + start_col > self.table.columnCount():
+            QMessageBox.warning(self,"Error", "Pasting too many columns, check copied values")
+            return
+        
         for i,row in enumerate(rows):
             cells = row.split('\t')
             for j,cell in enumerate(cells):
                 if j < self.table.columnCount():
-                    self.table.setItem(i,j,QTableWidgetItem(cell.strip()))
+                    self.table.setItem(i+start_row,j+start_col,QTableWidgetItem(cell.strip()))
 
     def submit_clicked(self):
         for i in range(self.table.rowCount()):
@@ -772,14 +796,13 @@ class MoleculeTableDialog(QDialog):
             return
 
         run_name = selected.text()
-        appdir = get_app_dir()
         project_name = self.project_name
-        project_dir = appdir / 'databases' / 'projects'
+        project_dir = get_proj_dir(project_name)
         db_path = project_dir / f'{project_name}.db'
         conn = connect(db_path)
         rows = get_run_molecules(conn, run_name)
         self.table.setRowCount(len(rows))
-        columns = [self.table.horizontalHeaderItem(j).lower() for j in range(self.table.columnCount())]
+        columns = [self.table.horizontalHeaderItem(j).text().lower() for j in range(self.table.columnCount())]
         for i,row in enumerate(rows):
             for key in row.keys():
                 if key.lower() in columns:
@@ -798,6 +821,7 @@ class LoadRunDialog(QDialog):
         self.project_name = project_name
         self.run_name = None
         self.cfg = None
+        self.run_data = None
 
         self.title = QLabel("Select Run:")
         self.back_btn = QPushButton("Back")
@@ -844,13 +868,12 @@ class LoadRunDialog(QDialog):
         self.setLayout(layout)
         self.populate_list("")
 
-    def populate_list(self, text):
-        appdir = get_app_dir()
-        projects_dir = appdir / "databases" / "projects"
+    def populate_list(self, text=""):
+        project_name = self.project_name
+        projects_dir = get_proj_dir(project_name)
         projects_dir.mkdir(exist_ok=True,parents=True)
-        project_name = self.window().project_name
 
-        db_path = projects_dir / project_name / f"{project_name}.db"
+        db_path = projects_dir / f"{project_name}.db"
         try:
             conn = connect(db_path)
         except FileNotFoundError as e:
@@ -871,10 +894,10 @@ class LoadRunDialog(QDialog):
             QMessageBox.warning(self, "Error", "Please select a run")
             return
         run_name = selected.text()
-        run_dir = get_app_dir() / 'databases' / 'projects' / self.project_name / run_name
-        cfg = ConfigLoader(run_dir)
+        cfg = ConfigLoader(get_run_cfg_path(self.project_name, run_name))
         self.run_name = run_name
         self.cfg = cfg
+        self.run_data = RD(run_name, self.project_name)
         self.accept()
 
 # endregion
@@ -915,6 +938,54 @@ class ConfirmConfigWidget(QWidget):
         config_layout = QVBoxLayout()
         self.config_table.setColumnCount(2)
         self.config_table.setHorizontalHeaderLabels(['Key','Value'])
+        self.config_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        config_layout.addWidget(self.config_table)
+        self.config_tab.setLayout(config_layout)
+
+        # samples tab
+        samples_layout = QVBoxLayout()
+        sample_columns = ['sample_name', 'sampleID', 'group', 'sex', 'norm_factor', 'injection_order']
+        self.samples_table.setColumnCount(len(sample_columns))
+        self.samples_table.setHorizontalHeaderLabels(sample_columns)
+        self.samples_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.samples_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        samples_layout.addWidget(self.samples_table)
+        self.samples_tab.setLayout(samples_layout)
+
+        # molecules tab
+        molecules_layout = QVBoxLayout()
+        mol_columns = ['molecule_name', 'ion', 'rt', 'std', 'casNo']
+        self.molecules_table.setColumnCount(len(mol_columns))
+        self.molecules_table.setHorizontalHeaderLabels(mol_columns)
+        self.molecules_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.molecules_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        molecules_layout.addWidget(self.molecules_table)
+        self.molecules_tab.setLayout(molecules_layout)
+
+        # add tabs
+        self.tabs.addTab(self.config_tab, "Config")
+        self.tabs.addTab(self.samples_tab, "Samples")
+        self.tabs.addTab(self.molecules_tab, "Molecules")
+
+        # header for all tabs
+        header = QHBoxLayout()
+        self.back_btn.setFixedSize(60,30)
+        self.back_btn.clicked.connect(self.back_clicked)
+        header.addWidget(self.back_btn)
+        header.addStretch()
+        
+        # footer for all tabs
+        footer = QHBoxLayout()
+        self.confirm_btn.setFixedSize(120,40)
+        self.confirm_btn.clicked.connect(self.confirm_clicked)
+        footer.addStretch()
+        footer.addWidget(self.confirm_btn)
+
+        layout = QVBoxLayout()
+        layout.addLayout(header)
+        layout.addWidget(self.tabs)
+        layout.addLayout(footer)
+        self.setLayout(layout)
 
     def showEvent(self,event):
         self._populate_config()
@@ -922,16 +993,120 @@ class ConfirmConfigWidget(QWidget):
         self._populate_molecules()
         super().showEvent(event)
 
-    def _populate_config():
-        pass
+    def _populate_config(self):
+        config = self.window().cfg.config
+        self.config_table.setRowCount(len(config))
+        for i,(key,value) in enumerate(config.items()):
+            self.config_table.setItem(i,0,QTableWidgetItem(str(key)))
+            self.config_table.setItem(i,1,QTableWidgetItem(str(value)))
 
-    def _populate_samples():
-        pass
+    def _populate_samples(self):
+        sample_data = self.window().sample_data
+        self.samples_table.setRowCount(len(sample_data))
+        for i,row in enumerate(sample_data):
+            self.samples_table.setItem(i,0,QTableWidgetItem(str(row['sample_name'])))
+            self.samples_table.setItem(i,1,QTableWidgetItem(str(row['sampleID'])))
+            self.samples_table.setItem(i,2,QTableWidgetItem(str(row['group'])))
+            self.samples_table.setItem(i,3,QTableWidgetItem(str(row['sex'])))
+            self.samples_table.setItem(i,4,QTableWidgetItem(str(row['norm_factor'])))
+            self.samples_table.setItem(i,5,QTableWidgetItem(str(row['injection_order'])))
 
-    def _populate_molecules():
-        pass
+    def _populate_molecules(self):
+        mol_data = self.window().mol_data
+        self.molecules_table.setRowCount(len(mol_data))
+        for i,row in enumerate(mol_data):
+            self.molecules_table.setItem(i,0,QTableWidget(str(row['molecule_name'])))
+            self.molecules_table.setItem(i,1,QTableWidget(str(row['ion'])))
+            self.molecules_table.setItem(i,2,QTableWidget(str(row['rt'])))
+            self.molecules_table.setItem(i,3,QTableWidget(str(row['std'])))
+            self.molecules_table.setItem(i,4,QTableWidget(str(row['casNo'])))
 
+    def back_clicked(self):
+        run_dir = get_run_dir(self.window().project_name, self.window.run_names[-1])
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
+        self.window().run_names.pop()
+        self.window().cfg = None
+        self.window().stack.setCurrentIndex(1)
 
+    def confirm_clicked(self):
+        sample_data = self.window().sample_data
+        mol_data = self.window().mol_data
+        project_name = self.window().project_name
+        run_name = self.window().run_names[self.window().active_run_idx]
+        cfg = self.window().cfg
+        input_dir = cfg.get("input_dir")
+        input_type = cfg.get("input_type")
+
+        conn = connect(get_proj_db(project_name))
+        mols = []
+        mzs = []
+        rts = []
+        try:
+            # insert sample/molecule data to DB
+            for row in sample_data:
+                insert_sample(conn,
+                                row['sample_name'],
+                                run_name,
+                                row['sampleID'],
+                                row['group'],
+                                row['sex'],
+                                row['norm_factor'],
+                                row['injection_order'])
+
+            for row in mol_data:
+                mols.append(row['molecule_name'])
+                mzs.append(row['ion'])
+                rts.append(row['rt'])
+                insert_molecule(conn,
+                                row['molecule_name'],
+                                run_name,
+                                row['ion'],
+                                row['rt'],
+                                row['std'],
+                                row['casNo'])
+            
+            # insert run to table
+            insert_run(conn,run_name)
+
+            # generate intensity mtrices, save, collect data and save
+            ims = full_bulk_convert(input_dir,input_type)
+            id_map = {}
+            for im in ims:
+                #save intensityMatrix objects
+                imID = im.save_sql_im(conn,run_name)
+                im.save_h5_object(project_name,run_name)
+                id_map[im.sample_name] = imID
+
+            peak_data = IM.collect_data(ims, mols, mzs, rts)
+            for im_name, peak_list in peak_data:
+                for peak in peak_list:
+                    insert_peak(conn,
+                                id_map[im_name],
+                                peak['center'],
+                                peak['left_bound'],
+                                peak['right_bound'],
+                                peak['rt'],
+                                peak['height'],
+                                peak['area'],
+                                peak['sn_ratio'],
+                                peak['ion'],
+                                peak['fwhh'],
+                                peak['tailing_factor'],
+                                peak['bl_slope'],
+                                peak['bl_yint'],
+                                peak['conv'],
+                                peak['valley_ratio']
+                                )
+                    
+        finally:
+            conn.close()
+
+        self.window().sample_data = None
+        self.window().mol_data = None
+        rd = RD(run_name, project_name)
+        self.window().run_data.append(rd)
+        self.window().stack.setCurrentIndex(3)
 
 # endregion
 
@@ -958,12 +1133,16 @@ class MainDashboard(QWidget):
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
-    apply_stylesheet(app, theme="dark_teal.xml", extra={"density_scale": "-2", "font_size": "12px"})
+
+    with open("style.css", "r") as f:
+        app.setStyleSheet(f.read())
+
+    #apply_stylesheet(app, theme="dark_blue.xml", extra={"density_scale": "-2", "font_size": "12px"})
 
     w = MainWindow()
     #w = NewProjectDialog()
     #w = SampleTableDialog()
-    w = NewRunDialog()
+    #w = NewRunDialog()
     w.show()
 
     sys.exit(app.exec_())

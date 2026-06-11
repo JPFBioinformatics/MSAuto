@@ -39,6 +39,7 @@ coverage.xml
 *.ipynb
 
 # Data files (optional but common)
+databases/
 *.csv
 *.tsv
 *.xlsx

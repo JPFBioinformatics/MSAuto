@@ -116,13 +116,21 @@ def get_app_dir():
     -------
     path to the application directory (root or .exe)
     """
-
     if getattr(sys,'frozen',False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
-def get_run_dir(run_name):
-    return get_app_dir() / 'databases' / 'projedcts' / run_name
+def get_run_dir(proj_name, run_name):
+    return get_app_dir() / 'databases' / 'projects' / proj_name / run_name
+
+def get_proj_db(proj_name):
+    return get_app_dir() / 'databases' / 'projects' / proj_name / f"{proj_name}.db"
+
+def get_proj_dir(proj_name):
+    return get_app_dir() / 'databases' / 'projects' / proj_name
+
+def get_run_cfg_path(proj_name, run_name):
+    return get_run_dir(proj_name, run_name) / 'config.yaml'
 
 def sanitize_name(name: str):
     """
