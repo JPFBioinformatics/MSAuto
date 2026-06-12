@@ -80,21 +80,19 @@ def init_run(run_name: str, project_name: str, app_dir: Path):
 def insert_sample(conn: sqlite3.Connection,
                   sample_name: str,
                   run_name: str,
-                  sampleID: str,
+                  modelID: str,
                   group_name: str,
                   sex: str,
                   norm_factor: float,
-                  norm_factor_type: str,
                   injection_order: int):
     """
     Inserts into samples table
     """
     cur = conn.execute(
-        """ INSERT INTO samples (sample_name, run_name, sampleID, group_name, sex, norm_factor, injection_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, run_name, sampleID, group_name, sex, norm_factor, norm_factor_type, injection_order)
+        """ INSERT INTO samples (sample_name, run_name, modelID, group_name, sex, norm_factor, injection_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (sample_name, run_name, modelID, group_name, sex, norm_factor, injection_order)
     )
-    conn.commit()
     return cur.lastrowid
 
 def insert_molecule(conn: sqlite3.Connection,
@@ -112,7 +110,6 @@ def insert_molecule(conn: sqlite3.Connection,
             VALUES (?, ?, ?, ?, ?, ?)""",
             (molecule_name, run_name, ion, rt, std, casNO)
     )
-    conn.commit()
     return cur.lastrowid
 
 def insert_feature(conn: sqlite3.Connection,
@@ -128,7 +125,6 @@ def insert_feature(conn: sqlite3.Connection,
             VALUES (?, ?, ?, ?)""",
             (sampleID, feat_rt, collection_ion, identification)
     )
-    conn.commit()
     return cur.lastrowid
 
 def insert_im(conn: sqlite3.Connection,
@@ -136,7 +132,6 @@ def insert_im(conn: sqlite3.Connection,
               run_name: str,
               sample_type: str,
               noise_factor: float,
-              abundance_threshold: float,
               n_ions: int,
               n_timepoints: int):
     """
@@ -144,15 +139,16 @@ def insert_im(conn: sqlite3.Connection,
     """
     created_at = datetime.now().isoformat()
     cur = conn.execute(
-        """ INSERT INTO intensity_matrices (sample_name, run_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, run_name, created_at, sample_type, noise_factor, abundance_threshold, n_ions, n_timepoints)
+        """ INSERT INTO intensity_matrices (sample_name, run_name, created_at, sample_type, noise_factor, n_ions, n_timepoints)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (sample_name, run_name, created_at, sample_type, noise_factor, n_ions, n_timepoints)
     )
-    conn.commit()
     return cur.lastrowid
 
 def insert_peak(conn: sqlite3.Connection,
                 imID: int,
+                run_name: str,
+                molecule: str,
                 center: int,
                 left_bound: int,
                 right_bound: int,
@@ -167,16 +163,15 @@ def insert_peak(conn: sqlite3.Connection,
                 bl_yint: float,
                 conv: float,
                 valley_ratio:float,
-                featID: int = 0):
+                featID: int = None):
     """
     Inserts into peaks table
     """
     conn.execute(
-        """ INSERT INTO peaks (imID, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (imID, featID, center, left_bound, right_bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
+        """ INSERT INTO peaks (run_name, imID, molecule, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(run_name), str(imID), str(molecule), featID, int(center), int(left_bound), int(right_bound), rt, float(height), float(area), float(sn_ratio), int(ion), float(fwhh), float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio)
     )
-    conn.commit()
 
 def insert_run(conn: sqlite3.Connection,
                run_name: str,
@@ -233,7 +228,7 @@ def get_run_samples(conn: sqlite3.Connection, run_name: str):
     cur = conn.execute(
         "SELECT * FROM samples WHERE run_name = ?", (run_name,)
         )
-    return cur.fetchall
+    return cur.fetchall()
 
 def get_smaple_im(conn: sqlite3.Connection, sampleID: int):
     """
@@ -251,14 +246,14 @@ def get_proj_molecules(conn: sqlite3.Connection):
     cur = conn.execute(
         "SELECT * FROM molecules"
         )
-    return cur.fetchall
+    return cur.fetchall()
 
 def get_run_molecules(conn: sqlite3.Connection, run_name: str):
     """
     Gets all molecules for this run
     """
     cur = conn.execute(
-        "SELECT * FROM molecules WHERE run_name = ?", (run_name)
+        "SELECT * FROM molecules WHERE run_name = ?", (run_name,)
     )
     return cur.fetchall()
 
@@ -295,7 +290,9 @@ def get_run_peaks(conn: sqlite3.Connection, run_name: str):
     from stored peak data
     """
     cur = conn.execute(
-        "SELECT * FROM peaks where run_name = ?", (run_name)
+        """SELECT peaks.*, intensity_matrices.sample_name
+        FROM peaks join intensity_matrices ON peaks.imID = intensity_matrices.imID
+        WHERE peaks.run_name = ?""", (run_name,)
     )
     peak_rows = cur.fetchall()
     peak_data = {}

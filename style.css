@@ -9,8 +9,8 @@
 * {
   color: #ffffff;
   font-family: Roboto;
-  font-size: 13px;
-  line-height: 13px;
+  font-size: 12px;
+  line-height: 12px;
   selection-background-color: #83b9ff;
   selection-color: #ffffff;
 }
@@ -325,6 +325,10 @@ QPushButton {
   
     border-radius: 4px;
   
+}
+
+QPushButton#smallBtn {
+    padding: 2px 6px;
 }
 
 QPushButton:checked,

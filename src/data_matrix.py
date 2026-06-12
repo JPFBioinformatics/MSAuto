@@ -10,7 +10,7 @@ is a different measured intensity value, used for analysis/QC
 import numpy as np
 from src.config_loader import ConfigLoader
 from src.db import get_run_samples, get_run_molecules, connect
-from src.utils import get_app_dir
+from src.utils import get_run_dir, get_proj_db
 
 # logging
 import logging
@@ -27,17 +27,17 @@ class DataMatrix:
             raise ValueError("List of IntensityMatrix objects is is empty")
 
         # config/attrs
-        run_name = run_name
-        project_name = proj_name
-        appdir = get_app_dir()
-        db_path = appdir / "databases" / project_name / run_name
-        self.db_path = db_path
+        self.run_name = run_name
+        self.project_name = proj_name
+        rundir = get_run_dir(proj_name,run_name)
+        self.cfg = ConfigLoader(rundir / 'config.yaml')
+        self.db_path = get_proj_db(proj_name)
         self.run_name = run_name
 
         # sample/molecule tables
-        conn = connect(db_path)
-        self.samples = {r['sample_name']: r for r in get_run_samples(conn)}
-        self.molecules = {r['molecule_name']: r for r in get_run_molecules(conn)}
+        conn = connect(self.db_path)
+        self.samples = {r['sample_name']: r for r in get_run_samples(conn, run_name)}
+        self.molecules = {r['molecule_name']: r for r in get_run_molecules(conn, run_name)}
         conn.close()
 
         # maps
@@ -172,6 +172,9 @@ class DataMatrix:
         median/MAD based outlier detection, returns boolean mask array where outliers are
         1 and normal entries are 0
         """
+        if np.all(np.isnan(array)):
+            return np.zeros(len(array), dtype=bool)
+        
         median = np.nanmedian(array)
         mad = np.nanmedian(np.abs(array - median))
 

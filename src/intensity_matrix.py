@@ -11,7 +11,7 @@ import numpy as np
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 from src.config_loader import ConfigLoader
-from src.utils import get_app_dir
+from src.utils import get_run_dir, get_proj_dir, get_run_cfg_path
 from src.db import insert_im
 
 # logging
@@ -23,7 +23,12 @@ logger = logging.getLogger(__name__)
 # Class for storage and cleaning of intensity matrix extracted by mzml_processor
 class IntensityMatrix:
 
-    def __init__(self, intensity_matrix: np.ndarray, unique_mzs: list, cfg: ConfigLoader, sample_name: str = None, time_map: dict = None, matrix_type: str = None):
+    def __init__(self, intensity_matrix: np.ndarray,
+                 unique_mzs: list,
+                 cfg: ConfigLoader,
+                 sample_name: str = None,
+                 time_map: dict = None,
+                 matrix_type: str = None):
         self.intensity_matrix = intensity_matrix
         self.unique_mzs = unique_mzs
         self.time_map = time_map
@@ -184,7 +189,7 @@ class IntensityMatrix:
 
         # fallback if no noise factors calculated:
         if len(noise_factors) == 0:
-            self.noise_factor = None
+            self.noise_factor = np.nan
         else:
             self.noise_factor = np.median(noise_factors)
     
@@ -261,99 +266,6 @@ class IntensityMatrix:
 
         return peaks
 
-    # finds local maxima and bounds of peaks for a given 1D array
-    def find_maxima_old(self, array, ion, prom = None):
-
-        # set prominance
-        if prom == None:
-            # handle nan/0 noise factors (SIM files have this a lot)
-            if np.isnan(self.noise_factor) or self.noise_factor == 0:
-                # set based on median and mad (3*MAD is a common noise threshold hueristic)
-                prom = np.median(array) + 3 * np.median(np.abs(array-np.median(array)))
-            else:
-                prom = self.noise_factor*100
-            
-        # Excludes the first and last 12 points from the search to prevent bounding errors
-        range = array[12:-12]
-
-        # finds the local maxima of the given array, stores their index
-        max_idxs, _ = find_peaks(range, prominence=prom)
-
-        # Shifts indices found in the range for use in the original array
-        max_idxs += 12
-
-        # list to hold dictionary entries containing left_bound, right_bound and center for each maxima
-        maxima = []
-
-        # go through each maxima in list, find its deconvolution window and check if sinal is high enough to be included
-        for peak_max in max_idxs:
-
-            # find the left bound of the deconvolution window
-            left_bound_scan = self.find_bound(array,peak_max,-1)
-            # find the right bound of the deconvolution window
-            right_bound_scan = self.find_bound(array,peak_max,1)
-            
-            # width filter, skip peak if peak has less than 3 scans on either side of the peak
-            if right_bound_scan - peak_max < 3 or peak_max - left_bound_scan < 3:
-                continue
-            
-            # calculate baseline
-            baseline = self.tentative_baseline(left_bound_scan, right_bound_scan, array)
-
-            # calcluate quadratic fit for peak
-            fit = self.quadratic_fit(array,peak_max)
-
-            # grab the precise location and height of the peak
-            precise_max_location = fit['x_values'][1]
-            precise_max_height = fit['y_values'][1] - (baseline['slope']*precise_max_location + baseline['y_int'])
-            precise_max_abundance = fit['y_values'][1]
-            
-            # finds the bin (0.1 of a scan) that the precise max is located within by truncating at 1 decimal point
-            max_bin = int(precise_max_location*10) / 10
-
-            # calculate convolution value for this peak
-            conv = self.convolution_value(array,peak_max)
-            
-            max_info = {
-                'left_bound' : left_bound_scan,
-                'right_bound' : right_bound_scan,
-                'center' : peak_max,
-                'precise_max_location' : precise_max_location,
-                'precise_max_height' : precise_max_height,
-                'max_abundance' : precise_max_abundance,
-                'bin' : max_bin,
-                'conv_value' : conv,
-                'ion' : ion,
-                'tentative_baseline': baseline
-            }
-
-            # add width flag
-            width = right_bound_scan - left_bound_scan
-            max_info["width"] = width
-            if width < 5:
-                max_info["width_flag"] = "small"
-            elif width < 10:
-                max_info["width_flag"] = "ideal"
-            elif width < 25:
-                max_info["width_flag"] = "normal"
-            else:
-                max_info["width_flag"] = "overloaded"
-
-            # add baseline/flat top flag
-            top_values = array[peak_max-1:peak_max+2]
-            ft = (np.max(top_values) - np.min(top_values)) / np.max(top_values)
-            if ft < 0.01:
-                max_info["flat_top"] = True
-            else:
-                max_info["flat_top"] = False
-
-            # accept peak if it passes threshold check
-            if self.threshold_check(array,peak_max,precise_max_height):
-                maxima.append(max_info)
-
-        # returns list of dictionary entries containing maxima information
-        return maxima
-
     def find_maxima(self, array, ion, prom=None, vr=0.5):
         """
         Uses a 2 pass appraoch to determine bounds and peak features for each detected maxima point, defines
@@ -369,6 +281,7 @@ class IntensityMatrix:
         -------
         maxima                          list of peaks for this ion's row array
         """
+        sn_threshold = self.cfg.get('sn_threshold')
 
         # set prominance
         if prom is None:
@@ -398,7 +311,6 @@ class IntensityMatrix:
             left_bound = self.find_bound(array, peak_max, -1)
             right_bound = self.find_bound(array, peak_max, 1)
             fit = self.quadratic_fit(array, peak_max)
-            sn_ratio = self.calculate_sn(peak_max, ion)
 
             # detect flat top peaks
             max_val = array[peak_max]
@@ -484,7 +396,6 @@ class IntensityMatrix:
 
             # handle cluster value assignments
             cluster_peaks = maxima[i:j+1]
-            bl_start = 0
             for entry in cluster_peaks:
 
                 # assign valley ratio
@@ -499,12 +410,13 @@ class IntensityMatrix:
                     entry['cluster'] = n_clusters
 
                 # assign baseline array
-                size = entry['right_bound'] - entry['left_bound'] + 1
-                bl = bl_array[bl_start:bl_start+size]
+                bl_start = entry['left_bound'] - l_anchor
+                bl_end = entry['right_bound'] - l_anchor +1
+                bl = bl_array[bl_start:bl_end]
                 entry['baseline'] = bl
                 entry['bl_slope'] = (bl[-1] - bl[0]) / (len(bl) - 1) if len(bl) > 1 else 0.0
                 entry['bl_yint'] = bl[0]
-                bl_start += size
+
 
                 # find which two scans the percise max lives between
                 center = entry['center']
@@ -550,11 +462,10 @@ class IntensityMatrix:
                 entry['tailing_factor'] = tailing
 
                 # apply threshold check
-                if nf == 0 or np.isnan(nf):
-                    peak['valid'] = True
+                if entry['sn_ratio'] < sn_threshold or np.isnan(entry['sn_ratio']):
+                    peak['valid'] = False
                 else:
-                    threshold = 4 * nf * entry['raw_height']**0.5
-                    entry['valid'] = entry['height'] >= threshold
+                    peak['valid'] = True
                 
                 entry['processed'] = True
 
@@ -562,12 +473,12 @@ class IntensityMatrix:
             if j > i:
                 n_clusters += 1
 
-            # filter valid/invalid peaks, return only valid peaks and count for logs
-            valid_peaks = [p for p in maxima if p.get('valid', True)]
-            count_valid = len(valid_peaks)
-            count_invalid = len(maxima) - count_valid
-            logger.log(f"{ion} row peaks picked, {count_valid} valid peaks, {count_invalid} invalid peaks")
-
+        # filter valid/invalid peaks, return only valid peaks and count for logs
+        valid_peaks = [p for p in maxima if p.get('valid', True)]
+        count_valid = len(valid_peaks)
+        count_invalid = len(maxima) - count_valid
+        if self.sample_name == 'SC9 TMS' and len(valid_peaks) == 0 or len(maxima) == 0 or ion == 73:
+            logger.debug(f"Sample: {self.sample_name} | Ion: {ion} | Valid: {count_valid} | Invalid: {count_invalid} | Total: {len(maxima)}")
         return valid_peaks, row_nm
 
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
@@ -717,9 +628,6 @@ class IntensityMatrix:
         -------
         sn_ratio                        signal to noise ratio for this peak
         """
-
-        if not self.baseline_mask:
-            raise ValueError(f"No baseline mask calculated")
         
         center = peak['center']
 
@@ -877,29 +785,30 @@ class IntensityMatrix:
 
         cfg = self.cfg
         threshold = cfg.get("rt_threshold")
+        mz = np.int64(mz)
+        rt = float(rt)
 
         try:
-            # get indx value of this m/z chromatogram
-            row_idx = self.unique_mzs.index(mz)
             # get the peak list for this row
-            peaks = self.peak_dict[row_idx]
+            peaks = self.peak_dict[mz]
 
         except Exception as e:
             raise ValueError(f"Error locating ion chromatogram for ion: {mz}\n{e}\nUnique mzs:\n {self.unique_mzs}")
         
         # if no peaks are found raise error
         if len(peaks) == 0:
-            raise ValueError(f"No peaks found for {self.sample_name}")
+            logger.debug(f"No peaks found for {self.sample_name} Ion {mz}")
+            return None
         
         # find the peak closest to specified RT
         try:
             closest_peak = min(
                 peaks,
-                key = lambda p: abs(p['rt'] - rt)
+                key = lambda p: abs(float(p['rt']) - rt)
             )
         except Exception as e:
-            print(f"No peaks availbe in ion chromatogram for ion: {mz}\n{e}")
-            print(len(peaks))
+            logger.debug(f"No peaks availbe in ion chromatogram for ion: {mz}\n{e}")
+            return None
 
         # find rt difference (positive if RT > real value negative if RT < real value)
         if  np.isnan(closest_peak['rt']):
@@ -988,17 +897,22 @@ class IntensityMatrix:
         output = {}
 
         for matrix in matrices:
-            name = matrix.spectra_name
+            name = matrix.sample_name
             peaks = []
+            logger.info(f"--------------------Processing Sample {name}--------------------")
 
             for idx,molecule in enumerate(molecules):
                 if np.isnan(matrix.noise_factor):
-                    raise ValueError(f"Spectra {matrix.spectra_name} NF error\nNF: {matrix.noise_factor}")
+                    raise ValueError(f"Spectra {name} NF error\nNF: {matrix.noise_factor}")
                 peak = matrix.closest_peak(mzs[idx],rts[idx])
+                if peak is None:
+                    logger.info(f"Skipped {molecule} peak in {name} sample")
+                    continue
                 peak["molecule"] = molecule
                 matrix.integrate_peak(peak)
                 peaks.append(peak)
 
+            logger.info(f"Molecules Queried: {len(molecules)} | Peaks Found: {len(peaks)} | Pct Found {(100 * (len(peaks)/len(molecules)))}")
             output[name] = peaks
 
         return output
@@ -1064,7 +978,6 @@ class IntensityMatrix:
                     run_name,
                     self.matrix_type,
                     self.noise_factor,
-                    self.abundance_threshold,
                     self.intensity_matrix.shape[0],
                     self.intensity_matrix.shape[1])
 
@@ -1073,10 +986,9 @@ class IntensityMatrix:
         Saves intensity matrix object to a .h5 file in the save_dir
         """
 
-        appdir = get_app_dir()
-        db_dir = appdir / "databases" / proj_name
-        db_dir.mkdir(exist_ok=True,parents=True)
-        h5_file = db_dir / f"{run_name}.h5"
+        rundir = get_run_dir(proj_name, run_name)
+        rundir.mkdir(exist_ok=True,parents=True)
+        h5_file = rundir / f"{run_name}.h5"
 
         with h5py.File(h5_file, 'a') as f:
 
@@ -1112,10 +1024,11 @@ class IntensityMatrix:
         -------
         im                              rebuilt IntensityMatrix obj
         """
-
-        appdir = get_app_dir()
-        db_dir = appdir / "databases" / proj_name
+        proj_dir = get_proj_dir(proj_name)
+        db_dir = proj_dir / run_name
         h5_file = db_dir / f"{run_name}.h5"
+        cfg_path = get_run_cfg_path(proj_name,run_name)
+        cfg = ConfigLoader(cfg_path)
 
         if not db_dir.exists():
             raise FileNotFoundError(f"Database directory not found: {db_dir}")
@@ -1136,6 +1049,7 @@ class IntensityMatrix:
         
         im = IntensityMatrix(intensity_matrix=intensity_matrix,
                              unique_mzs=unique_mzs,
+                             cfg=cfg,
                              sample_name=sample_name,
                              time_map=time_map,)
         im.baseline_mask = baseline_mask

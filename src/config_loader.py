@@ -23,7 +23,7 @@ class ConfigLoader:
     loads config.yaml and gives easy access to useful information
     """
 
-    def __init__(self, config_file: Path):
+    def __init__(self, config_file: Path, config: dict = None):
         """
         Loads yaml file nd stores it as a dictionary as self.config
         params:
@@ -31,11 +31,14 @@ class ConfigLoader:
         """
         self.config_path = Path(config_file)
 
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file at {config_file} not found")
-        
-        with open(self.config_path, "r") as f:
-            self.config = yaml.safe_load(f)
+        if config:
+            self.config = config
+        else:
+            if not self.config_path.exists():
+                raise FileNotFoundError(f"Config file at {config_file} not found")
+            
+            with open(self.config_path, "r") as f:
+                self.config = yaml.safe_load(f)
 
     def get(self, *keys: str, default=None):
         """
@@ -236,3 +239,10 @@ class ConfigLoader:
         dest = run_dir / "config.yaml"
         shutil.copy(default,dest)
         return ConfigLoader(dest)
+    
+    @classmethod
+    def load_default_config(cls, dest_path):
+        default = get_app_dir() / 'default_config.yaml'
+        with open(default, 'r') as f:
+            config = yaml.safe_load(f)
+        return cls(dest_path, config=config)

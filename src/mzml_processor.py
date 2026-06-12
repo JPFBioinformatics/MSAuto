@@ -21,17 +21,18 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-def full_bulk_convert(input_dir: Path, file_type: str):
+def full_bulk_convert(input_dir: Path, file_type: str, cfg):
     """
     Converts all compatible .d files in a directory to .mzml files and saves them to a directory in the input directory
     Returns:
         mzml_dir                        location of mzml dir
         matrices                        list of intensitymatrix objects created from all files in mzml
     """
+    input_dir = Path(input_dir)
 
     # check to see if mzml files are already converted
     if file_type == '.D':
-        raw_files = list(Path(input_dir.glob("*.D")))
+        raw_files = list(input_dir.glob("*.D"))
         tmpdir = input_dir / 'temp'
         for raw_file in raw_files:
             if raw_file.is_dir():
@@ -50,7 +51,7 @@ def full_bulk_convert(input_dir: Path, file_type: str):
     files = sorted(files, key=lambda f: f.stem)
     matrices = []
     for file in files:
-        matrix = create_intensity_matrix(file)
+        matrix = create_intensity_matrix(file, cfg)
         matrices.append(matrix)
 
     return matrices
@@ -102,7 +103,7 @@ def bin_masses(unique_mzs, intensity_matrix):
 
     return list(binned_mzs), binned_matrix 
 
-def create_scan_matrix(mzml_path):
+def create_scan_matrix(mzml_path, cfg):
     """
     Extracts spectra metadata and builds a matrix where each spectrum is
     represented by a column and each unique m/z is represented by a row from a SCAN file
@@ -118,7 +119,7 @@ def create_scan_matrix(mzml_path):
         '': 'http://psi.hupo.org/ms/mzml'
     }
 
-    spectra_metadata = {}
+    time_map = {}
     intensity_list = []
     unique_mzs = set()
     skipped = 0
@@ -181,7 +182,7 @@ def create_scan_matrix(mzml_path):
             continue
 
         # Save metadata for the spectrum in the list
-        spectra_metadata[len(intensity_list)] = float(scan_start_time)
+        time_map[len(intensity_list)] = float(scan_start_time)
         
         # ensure consistent lengths before zipping
         if len(mz_array) != len(intensity_array):
@@ -228,11 +229,16 @@ def create_scan_matrix(mzml_path):
     binned_mzs.append(9999)
 
     # create intensity matrix object
-    output_matrix = IntensityMatrix(intensity_matrix=final_matrix,unique_mzs=binned_mzs,spectra_name=name,spectra_metadata=spectra_metadata,matrix_type="SCAN")
+    output_matrix = IntensityMatrix(intensity_matrix=final_matrix,
+                                    unique_mzs=binned_mzs,
+                                    cfg=cfg,
+                                    sample_name=name,
+                                    time_map=time_map,
+                                    matrix_type="SCAN")
 
     return output_matrix
 
-def create_sim_matrix(mzml_path):
+def create_sim_matrix(mzml_path, cfg):
     """
     Extracts spectra metadata and builds a matrix where each spectrum is
     represented by a column and each unique m/z is represented by a row, from a SIM file
@@ -326,10 +332,15 @@ def create_sim_matrix(mzml_path):
     # get row varainces for time matrix and see if it looks good
 
     # create intensity matrix object and return
-    output_matrix = IntensityMatrix(intensity_matrix=matrix,unique_mzs=mzs,spectra_name=file_name,spectra_metadata=time_map,matrix_type="SIM")
+    output_matrix = IntensityMatrix(intensity_matrix=matrix,
+                                    unique_mzs=mzs,
+                                    cfg=cfg,
+                                    sample_name=file_name,
+                                    time_map=time_map,
+                                    matrix_type="SIM")
     return output_matrix
 
-def create_intensity_matrix(mzml_path):
+def create_intensity_matrix(mzml_path, cfg):
     """
     Generatews intensity matrix from mzml object, automatically detecting if it is SCAN or SIM
     Params:
@@ -337,12 +348,12 @@ def create_intensity_matrix(mzml_path):
     """
 
     # get aquisition type (SCAN or SIM)
-    aq_type = aq_type(mzml_path)
+    type = aq_type(mzml_path)
 
-    if aq_type == "SIM":
-        matrix = create_sim_matrix(mzml_path)
-    elif aq_type == "SCAN":
-        matrix = create_scan_matrix(mzml_path)
+    if type == "SIM":
+        matrix = create_sim_matrix(mzml_path, cfg)
+    elif type == "SCAN":
+        matrix = create_scan_matrix(mzml_path, cfg)
 
     return matrix
 

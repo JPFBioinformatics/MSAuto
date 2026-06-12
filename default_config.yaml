@@ -8,7 +8,7 @@ run_name: run_name
 input_dir: C:/input/path
 
 # type of file to process, .D or .mzML
-iput_type: .D
+input_type: .D
 
 # thesholds/analysis parameters
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged
@@ -16,3 +16,4 @@ endpoint_threshold: 10              # max difference between endpoint heights (a
 variance_threshold: 1e-6            # minimum variance to be included in PCA plot
 width_threshold: 25                 # maximum width of a peak before it is flagged as overloaded
 pca_var: 0.8                        # decimal percent of how much variance accounted for by plotted pca, 0.8 means plot all pcs that in sum account for 80% of variance
+sn_threshold: 3.0                   # signal to noise threshold for peak picking, 3 is standard for detection 10 for quantitation
