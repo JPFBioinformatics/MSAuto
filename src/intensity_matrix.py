@@ -37,6 +37,7 @@ class IntensityMatrix:
         self.peak_dict = None
         self.collected_peaks = None
         self.baseline_mask = None
+        self.molecule_map = None
         self.cfg = cfg
         self.sample_name = sample_name
         self.matrix_type = matrix_type
@@ -284,6 +285,12 @@ class IntensityMatrix:
         sn_threshold = self.cfg.get('sn_threshold')
 
         # set prominance
+        median = np.median(array)
+        mad = np.median(np.abs(array - median))
+        prom = (median +  mad)/2
+
+        """
+        # set prominance
         if prom is None:
             # handle nan/0 noise factors (SIM files have this a lot)
             if np.isnan(self.noise_factor) or self.noise_factor == 0:
@@ -291,6 +298,7 @@ class IntensityMatrix:
                 prom = np.median(array) + 3 * np.median(np.abs(array-np.median(array)))
             else:
                 prom = self.noise_factor*100
+        """
             
         # Excludes the first and last 12 points from the search to prevent bounding errors
         array_range = array[12:-12]
@@ -344,7 +352,9 @@ class IntensityMatrix:
                 'baseline': None,
                 'bl_slope': np.nan,
                 'bl_yint': np.nan,
-                'conv': np.nan
+                'conv': np.nan,
+                'peak_idx': np.nan,
+                'molecule': None
             })
 
         # get noise mask for this row
@@ -353,7 +363,6 @@ class IntensityMatrix:
         # second pass, finds baseline and other relevant features
         n_clusters = 1
         time_map = self.time_map
-        nf = self.noise_factor
         for i,peak in enumerate(maxima):
 
             # if baseline already set then skip this peak, it's already been handled
@@ -417,7 +426,6 @@ class IntensityMatrix:
                 entry['bl_slope'] = (bl[-1] - bl[0]) / (len(bl) - 1) if len(bl) > 1 else 0.0
                 entry['bl_yint'] = bl[0]
 
-
                 # find which two scans the percise max lives between
                 center = entry['center']
                 rt = entry['rt']
@@ -461,7 +469,7 @@ class IntensityMatrix:
                 tailing = self.calculate_tailing(entry, array)
                 entry['tailing_factor'] = tailing
 
-                # apply threshold check
+                # S/N check
                 if entry['sn_ratio'] < sn_threshold or np.isnan(entry['sn_ratio']):
                     peak['valid'] = False
                 else:
@@ -474,12 +482,24 @@ class IntensityMatrix:
                 n_clusters += 1
 
         # filter valid/invalid peaks, return only valid peaks and count for logs
-        valid_peaks = [p for p in maxima if p.get('valid', True)]
-        count_valid = len(valid_peaks)
-        count_invalid = len(maxima) - count_valid
-        if self.sample_name == 'SC9 TMS' and len(valid_peaks) == 0 or len(maxima) == 0 or ion == 73:
+        valid_peaks = []
+        for peak in maxima:
+            if peak.get('valid', True):
+                self.integrate_peak(peak)
+                valid_peaks.append(peak)
+                
+        # get peak indices
+        for idx, peak in enumerate(valid_peaks):
+            peak['peak_idx'] = idx
+        # reccalculate noise mask based on valid peaks
+        valid_nm = self.noise_mask(valid_peaks)
+
+        if len(valid_peaks) == 0 or len(maxima) == 0:
+            count_valid = len(valid_peaks)
+            count_invalid = len(maxima) - count_valid
             logger.debug(f"Sample: {self.sample_name} | Ion: {ion} | Valid: {count_valid} | Invalid: {count_invalid} | Total: {len(maxima)}")
-        return valid_peaks, row_nm
+        
+        return valid_peaks, valid_nm
 
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
     def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25):
@@ -773,6 +793,31 @@ class IntensityMatrix:
 
     # region                 ---------- Data Collection ----------
 
+    def generate_spectra(self, peak: dict, label: str = "Unknown"):
+        """
+        Generates a spectra for a given peak, takes signal from all ions at the peak's center scan, subtracts
+        local noise and generates a spectra.  Spectra is then normalized to relative abundance, and any peaks
+        less than 1% of the largest peak are dropped
+        """
+        center = peak['center']
+
+        if peak is None:
+            return None, None
+
+        if np.isnan(center):
+            logger.info(f"Sample {self.sample_name} peak {label} not found for spectra geneartion")
+            return
+        
+        raw_vals = self.intensity_matrix[:,center]
+        max_val = np.nanmax(raw_vals)
+
+        rel_vals = 100 * raw_vals / max_val
+        rel_vals[rel_vals < 1] = 0
+
+        mzs = np.array(self.unique_mzs)
+
+        return mzs, rel_vals
+
     def closest_peak(self, mz: int, rt: float):
         """
         finds the peak closest to the given retention time (rt) value in a given ion chromatogram for ion mz
@@ -834,11 +879,11 @@ class IntensityMatrix:
             peak                    dict entry for the peak to be integrated
         """
         # check to see if it is flat-top, if it is do not integrate
-        if peak["flat_top"]:
+        if peak.get("flat_top", False):
             peak["area"] = 0
             return None
         # check if peak is out of bounds for valid RT, if so then do not integrate
-        if not peak["rt_valid"]:
+        if not peak.get("rt_valid", True):
             peak["area"] = 0
 
         # get symmetry threshold
@@ -897,6 +942,7 @@ class IntensityMatrix:
         output = {}
 
         for matrix in matrices:
+            molecule_map = {}
             name = matrix.sample_name
             peaks = []
             logger.info(f"--------------------Processing Sample {name}--------------------")
@@ -911,6 +957,9 @@ class IntensityMatrix:
                 peak["molecule"] = molecule
                 matrix.integrate_peak(peak)
                 peaks.append(peak)
+
+                molecule_map[molecule] = peak['peak_idx']
+                matrix.molecule_map = molecule_map
 
             logger.info(f"Molecules Queried: {len(molecules)} | Peaks Found: {len(peaks)} | Pct Found {(100 * (len(peaks)/len(molecules)))}")
             output[name] = peaks
@@ -1007,7 +1056,7 @@ class IntensityMatrix:
                                compression = 'gzip',
                                compression_opts = 4,
                                chunks = True)
-            # store time and molecule maps as well as group atts
+            # store time and ion maps as well as group atts
             grp.create_dataset('time_array', data = np.array(list(self.time_map.values())))
             grp.create_dataset('unique_mzs', data = np.array(self.unique_mzs))
 

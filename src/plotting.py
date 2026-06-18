@@ -37,6 +37,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import ListedColormap
+from matplotlib.axes import Axes
 from scipy.cluster.hierarchy import dendrogram
 
 import logging
@@ -522,10 +523,12 @@ def plot_confusion_matrix(cv_result: dict, group_names: list,
 def plot_chromatogram(time_array: np.ndarray, intensity_array: np.ndarray,
                       peaks: list = None, title: str = "",
                       xlabel: str = "Retention Time (min)",
-                      ylabel: str = "Intensity"):
+                      ylabel: str = "Intensity",
+                      ax: Axes = None):
     """
     Single ion chromatogram trace with optional peak bound overlays.
-    Peak regions are shaded orange, bounds marked with dashed lines, apex with a red vertical line.
+    Peak regions are shaded blue, bounds marked with points, apex with a red v at the top of the plot, 
+    baseline with a red dotted horizontal line
 
     Params
     ------
@@ -534,7 +537,12 @@ def plot_chromatogram(time_array: np.ndarray, intensity_array: np.ndarray,
     peaks               list of peak dicts with 'left_bound', 'right_bound', 'center' (scan indices)
                         and optionally 'molecule' for annotation labels
     """
-    fig, ax = plt.subplots(figsize=(10, 4))
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    else:
+        fig = ax.figure
+
     ax.plot(time_array, intensity_array, color='steelblue', linewidth=1.0)
 
     if peaks:
@@ -542,29 +550,36 @@ def plot_chromatogram(time_array: np.ndarray, intensity_array: np.ndarray,
             lb = peak.get('left_bound')
             rb = peak.get('right_bound')
             center = peak.get('center')
-            if lb is not None and rb is not None:
-                ax.axvspan(time_array[lb], time_array[rb], alpha=0.15, color='orange')
-                ax.axvline(time_array[lb], color='grey', linewidth=0.7, linestyle='--')
-                ax.axvline(time_array[rb], color='grey', linewidth=0.7, linestyle='--')
-            if center is not None:
-                ax.axvline(time_array[center], color='crimson', linewidth=0.8)
-                mol = peak.get('molecule')
-                if mol:
-                    ax.annotate(mol, xy=(time_array[center], intensity_array[center]),
-                                fontsize=6, ha='center', va='bottom',
-                                xytext=(0, 4), textcoords='offset points')
+            rt = peak.get('rt')
+            bl_slope = peak.get('bl_slope')
+            bl_yint = peak.get('bl_yint')
+
+            if lb and rb :
+                ax.fill_between(time_array[lb:rb+1], intensity_array[lb:rb+1], alpha=0.15, color='lightblue')
+                ax.scatter(time_array[lb], intensity_array[lb], color='crimson')
+                ax.scatter(time_array[rb], intensity_array[rb], color='crimson')
+
+            if bl_slope and bl_yint:
+                x = np.array(time_array[lb], time_array[rb])
+                y = bl_slope * x + bl_yint
+                ax.plot(x, y, color = 'crimson', linestyle='--')
+
+            if center:
+                ax.scatter(time_array[center], intensity_array[center], marker= '|', color='crimson')
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     fig.tight_layout()
+
+    apply_dark_theme(fig,ax)
+
     return fig
 
 def plot_peak(time_array: np.ndarray, intensity_array: np.ndarray, peak: dict,
-              title: str = "", ylabel: str = "Intensity"):
+              title: str = "", ax: Axes = None):
     """
-    Zoomed view of a single peak with reconstructed baseline and key metrics annotated.
-    Baseline is reconstructed from the stored slope/y-intercept.
+    Zoomed view of a single peak
 
     Params
     ------
@@ -577,36 +592,88 @@ def plot_peak(time_array: np.ndarray, intensity_array: np.ndarray, peak: dict,
     rb = peak['right_bound']
     center = peak['center']
 
-    pad = max(5, (rb - lb))
+    pad = max(3, (rb - lb)//2)
     view_l = max(0, lb - pad)
     view_r = min(len(time_array) - 1, rb + pad)
 
     t = time_array[view_l:view_r + 1]
     y = intensity_array[view_l:view_r + 1]
     scan_indices = np.arange(view_l, view_r + 1)
-    baseline = peak['bl_slope'] * scan_indices + peak['bl_yint']
+    baseline = peak['bl_slope'] * (scan_indices-lb) + peak['bl_yint']
 
     rel_lb = lb - view_l
     rel_rb = rb - view_l
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(t, y, color='steelblue', linewidth=1.2, label='Signal')
-    ax.plot(t, baseline, color='grey', linewidth=0.8, linestyle='--', label='Baseline')
-    ax.fill_between(t[rel_lb:rel_rb + 1], baseline[rel_lb:rel_rb + 1],
-                    y[rel_lb:rel_rb + 1], alpha=0.2, color='steelblue')
-    ax.axvline(time_array[lb], color='grey', linewidth=0.7, linestyle=':')
-    ax.axvline(time_array[rb], color='grey', linewidth=0.7, linestyle=':')
-    ax.axvline(time_array[center], color='crimson', linewidth=0.8, linestyle='--')
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+    else:
+        fig = ax.figure
 
-    info = (f"RT={peak.get('rt', float('nan')):.3f}  "
-            f"Area={peak.get('area', float('nan')):.0f}  "
-            f"FWHH={peak.get('fwhh', float('nan')):.4f}  "
-            f"S/N={peak.get('sn_ratio', float('nan')):.1f}")
-    ax.set_xlabel(f"Retention Time (min)\n{info}")
-    ax.set_ylabel(ylabel)
+    # signal and baseline
+    ax.plot(t, y, color='black', linewidth=1.2, label='Signal')
+    ax.plot(t, baseline, color='crimson', linewidth=0.8, linestyle='--', label='Baseline')
+    ax.fill_between(t[rel_lb:rel_rb + 1], baseline[rel_lb:rel_rb + 1],
+                    y[rel_lb:rel_rb + 1], alpha=0.15, color='lightblue')
+    
+    # endpoints
+    ax.scatter(time_array[lb], intensity_array[lb], color='crimson')
+    ax.scatter(time_array[rb], intensity_array[rb], color='crimson')
+
+    # center
+    ax.scatter(time_array[center], intensity_array[center], color='crimson', marker='|')
+
+    ax.set_xlabel(f"Retention Time (min)")
+    ax.set_ylabel("Intensity")
     ax.set_title(title or peak.get('molecule', 'Peak'))
     ax.legend(fontsize=8)
     fig.tight_layout()
+
+    apply_dark_theme(fig, ax)
+
     return fig
+
+def plot_spectrum(mzs: np.ndarray, abundances: np.ndarray, ax: Axes = None):
+    """
+    Plots a spectra from a given mz and abundance array
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    else:
+        fig = ax.figure
+
+    if mzs is None or abundances is None:
+        ax.text(0.5, 0.5, 'No Spectrum Available0', ha='center', va='center', 
+                transform=ax.transAxes, color='white', fontsize=12)
+    else:
+        ax.bar(mzs, abundances, width=0.5, color='steelblue', edgecolor='none')
+        ax.set_xlim(mzs.min() -5, mzs.max() +5)
+        ax.set_ylim(0,110)
+        ax.set_xlabel("m/z")
+        ax.set_ylabel("Realtive Abundance")
+
+    fig.tight_layout()
+    apply_dark_theme(fig,ax)
+
+    return fig
+
+# endregion
+
+# region                 ---------- Theme ----------
+
+def apply_dark_theme(fig, ax):
+    """
+    Applies dark theme that matches the app color scheme to figures
+    """
+
+    fig.patch.set_facecolor('#31363b')
+    ax.set_facecolor('#232629')
+    ax.tick_params(colors='white')
+    ax.xaxis.label.set_color('white')
+    ax.yaxis.label.set_color('white')
+    ax.title.set_color('white')
+    ax.spines['bottom'].set_color('#4f5b62')
+    ax.spines['left'].set_color('#4f5b62')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
 # endregion

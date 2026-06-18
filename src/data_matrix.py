@@ -69,6 +69,7 @@ class DataMatrix:
             'conv': float_empty(),
             'sn': float_empty(),
             'tp': float_empty(),
+            'peak_idx': int_empty(),
             'normalized': float_empty()
         }
         
@@ -126,6 +127,7 @@ class DataMatrix:
                 self.data['conv'][row_i,col_i] = peak['conv']
                 self.data['sn'][row_i,col_i] = peak['sn_ratio']
                 self.data['tp'][row_i,col_i] = self._theoretical_plates(peak['rt'],peak['fwhh'])
+                self.data['peak_idx'][row_i][col_i] = peak['peak_idx']
 
         # outlier matrix
         for metric in self.outliers:

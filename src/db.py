@@ -146,8 +146,8 @@ def insert_im(conn: sqlite3.Connection,
     return cur.lastrowid
 
 def insert_peak(conn: sqlite3.Connection,
-                imID: int,
                 run_name: str,
+                sample_name: str,
                 molecule: str,
                 center: int,
                 left_bound: int,
@@ -163,14 +163,15 @@ def insert_peak(conn: sqlite3.Connection,
                 bl_yint: float,
                 conv: float,
                 valley_ratio:float,
+                peak_idx: int,
                 featID: int = None):
     """
     Inserts into peaks table
     """
     conn.execute(
-        """ INSERT INTO peaks (run_name, imID, molecule, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (str(run_name), str(imID), str(molecule), featID, int(center), int(left_bound), int(right_bound), rt, float(height), float(area), float(sn_ratio), int(ion), float(fwhh), float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio)
+        """ INSERT INTO peaks (run_name, sample_name, molecule, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio, peak_idx)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(run_name), str(sample_name), str(molecule), featID, int(center), int(left_bound), int(right_bound), rt, float(height), float(area), float(sn_ratio), str(ion), float(fwhh), float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio, peak_idx)
     )
 
 def insert_run(conn: sqlite3.Connection,
@@ -290,8 +291,9 @@ def get_run_peaks(conn: sqlite3.Connection, run_name: str):
     from stored peak data
     """
     cur = conn.execute(
-        """SELECT peaks.*, intensity_matrices.sample_name
-        FROM peaks join intensity_matrices ON peaks.imID = intensity_matrices.imID
+        """SELECT *
+        FROM peaks join intensity_matrices ON peaks.sample_name = intensity_matrices.sample_name
+        AND peaks.run_name = intensity_matrices.run_name
         WHERE peaks.run_name = ?""", (run_name,)
     )
     peak_rows = cur.fetchall()
@@ -323,5 +325,30 @@ def run_exists(conn: sqlite3.Connection, run_name: str):
     """
     row = conn.execute("SELECT 1 FROM runs WHERE run_name = ?", (run_name,)).fetchone()
     return row is not None
+
+# endregion
+
+# region                 ---------- REPLACE ----------
+
+def replace_peak(conn: sqlite3.Connection,
+                 run_name: str,
+                 sample_name: str,
+                 molecule: str,
+                 peak: dict):
+    """
+    Replaces a given peak in the db with a new peak
+    """
+    conn.execute(
+        """
+        UPDATE peaks SET
+        center = ? AND left_bound = ? AND right_bound = ? AND rt = ? AND height = ? AND area = ? AND
+        sn_ratio = ? AND ion = ? AND fwhh = ? AND tailing_factor = ? AND bl_slope = ? AND bl_yint = ? AND
+        conv = ? AND valley_ratio = ? AND peak_idx = ?
+        WHERE run_name = ?, sample_name = ?, molecule = ?
+        """,
+        (int(peak['center']), int(peak['left_bound']), int(peak['right_bound']), float(peak['rt']), float(peak['height']), float(peak['area']),
+         float(peak['sn_ratio']), int(peak['ion']), float(peak['fwhh']), float(peak['tailing_factor']), float(peak['bl_slope']), float(peak['bl_yint']),
+         float(peak['conv']), float(peak['valley_ratio']), int(peak['peak_idx']), run_name, sample_name, molecule)
+    )
 
 # endregion

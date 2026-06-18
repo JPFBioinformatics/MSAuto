@@ -27,12 +27,13 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
-                    insert_molecule, get_run_molecules, insert_peak)
+                    insert_molecule, get_run_molecules, insert_peak, insert_im)
 from src.config_loader import ConfigLoader
 from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path
 from src.mzml_processor import full_bulk_convert
 from src.intensity_matrix import IntensityMatrix as IM
 from src.run_data import RunData as RD
+from src.gui.tab_chromatogram import ChromatogramTab
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1193,34 +1194,39 @@ class ProcessingWorker(QThread):
 
                 # generate intensity mtrices, save, collect data and save
                 ims = full_bulk_convert(self.input_dir,self.input_type,self.cfg)
-                id_map = {}
                 for im in ims:
-                    #save intensityMatrix objects
-                    imID = im.save_sql_im(conn,self.run_name)
-                    id_map[im.sample_name] = imID
+                    insert_im(conn,
+                              im.sample_name,
+                              self.run_name,
+                              im.matrix_type,
+                              im.noise_factor,
+                              im.intensity_matrix.shape[0],
+                              im.intensity_matrix.shape[1])
 
                 peak_data = IM.collect_data(ims, mols, mzs, rts)
                 for im_name, peak_list in peak_data.items():
                     for peak in peak_list:
-                        insert_peak(conn,
-                                    id_map[im_name],
-                                    self.run_name,
-                                    peak['molecule'],
-                                    peak['center'],
-                                    peak['left_bound'],
-                                    peak['right_bound'],
-                                    peak['rt'],
-                                    peak['height'],
-                                    peak['area'],
-                                    peak['sn_ratio'],
-                                    peak['ion'],
-                                    peak['fwhh'],
-                                    peak['tailing_factor'],
-                                    peak['bl_slope'],
-                                    peak['bl_yint'],
-                                    peak['conv'],
-                                    peak['valley_ratio']
-                                    )
+                        if peak['rt_valid']:
+                            insert_peak(conn,
+                                        self.run_name,
+                                        im_name,
+                                        peak['molecule'],
+                                        peak['center'],
+                                        peak['left_bound'],
+                                        peak['right_bound'],
+                                        peak['rt'],
+                                        peak['height'],
+                                        peak['area'],
+                                        peak['sn_ratio'],
+                                        peak['ion'],
+                                        peak['fwhh'],
+                                        peak['tailing_factor'],
+                                        peak['bl_slope'],
+                                        peak['bl_yint'],
+                                        peak['conv'],
+                                        peak['valley_ratio'],
+                                        peak['peak_idx']
+                                        )
 
             for im in ims:
                 im.save_h5_object(self.project_name,self.run_name)
@@ -1247,15 +1253,24 @@ class MainDashboard(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        
         self.tabs = QTabWidget()
         self.title = QLabel("Main Dashboard")
+
         self.initUI()
 
     def initUI(self):
+
         layout = QVBoxLayout()
         layout.addWidget(self.title)
         layout.addWidget(self.tabs)
         self.setLayout(layout)
+
+    def showEvent(self, event):
+        self.tabs.clear()
+        run_data = self.window().run_data[-1]
+        self.tabs.addTab(ChromatogramTab(run_data, self), "Chromatogram")
+        super().showEvent(event)
 
 # endregion
 

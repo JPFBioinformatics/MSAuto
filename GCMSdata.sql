@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS features (
 );
 
 CREATE TABLE IF NOT EXISTS intensity_matrices (
-    imID                    INTEGER PRIMARY KEY,
     run_name                TEXT NOT NULL,
     sample_name             TEXT NOT NULL,
     created_at              TEXT,
@@ -56,6 +55,7 @@ CREATE TABLE IF NOT EXISTS intensity_matrices (
     noise_factor            REAL,
     n_ions                  INTEGER,
     n_timepoints            INTEGER,
+    PRIMARY KEY (run_name, sample_name),
     FOREIGN KEY (sample_name, run_name) REFERENCES samples (sample_name, run_name),
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS intensity_matrices (
 CREATE TABLE IF NOT EXISTS peaks (
     peakID                  INTEGER PRIMARY KEY,
     run_name                TEXT NOT NULL,
-    imID                    INTEGER NOT NULL,
+    sample_name             TEXT NOT NULL,
     molecule                TEXT,
     featID                  INTEGER,
     center                  INTEGER,
@@ -73,14 +73,15 @@ CREATE TABLE IF NOT EXISTS peaks (
     height                  REAL,
     area                    REAL,
     sn_ratio                REAL,
-    ion                     INTEGER,
+    ion                     TEXT,
     fwhh                    REAL,
     tailing_factor          REAL,
     bl_slope                REAL,
     bl_yint                 REAL,
     conv                    REAL,
     valley_ratio            REAL,
-    FOREIGN KEY (imID) REFERENCES intensity_matrices (imID),
+    peak_idx                INTEGER,
+    FOREIGN KEY (run_name, sample_name) REFERENCES intensity_matrices (run_name, sample_name),
     FOREIGN KEY (featID) REFERENCES features (featID),
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );
