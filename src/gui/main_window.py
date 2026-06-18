@@ -27,7 +27,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
-                    insert_molecule, get_run_molecules, insert_peak, insert_im)
+                    insert_molecule, get_run_molecules, insert_peak, insert_im, insert_peak_batch)
 from src.config_loader import ConfigLoader
 from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path
 from src.mzml_processor import full_bulk_convert
@@ -40,6 +40,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     filename="debug.log"
 )
+logger = logging.getLogger(__name__)
 
 # endregion
 
@@ -263,6 +264,7 @@ class LoadProjectDialog(QDialog):
         self.search_input.textChanged.connect(self.populate_list)
 
         self.proj_list.setFixedSize(300,100)
+        self.proj_list.itemClicked.connect(self.on_item_changed)
 
         self.back_btn.setFixedSize(60,30)
         self.back_btn.clicked.connect(self.reject)
@@ -296,12 +298,16 @@ class LoadProjectDialog(QDialog):
             if text.lower() in p.lower():
                 self.proj_list.addItem(p)
         
+    def on_item_changed(self, item):
+        text = item.text()
+        self.search_input.setText(text)
+
     def submit_clicked(self):
-        selected = self.proj_list.currentItem()
+        selected = self.search_input.text()
         if not selected:
             QMessageBox.warning(self, "Error", "Please select a project")
             return
-        self.project_name = selected.text()
+        self.project_name = selected
         self.accept()
 
 # endregion
@@ -857,6 +863,7 @@ class LoadRunDialog(QDialog):
         self.search_input.textChanged.connect(self.populate_list)
 
         self.run_list.setFixedSize(300,100)
+        self.run_list.itemClicked.connect(self.on_item_changed)
 
         self.back_btn.setFixedSize(60,30)
         self.back_btn.clicked.connect(self.reject)
@@ -897,13 +904,18 @@ class LoadRunDialog(QDialog):
                 self.run_list.addItem(r)
 
         conn.close()
- 
+    
+    def on_item_changed(self, item):
+        text = item.text()
+        self.search_input.setText(text)
+
     def submit_clicked(self):
-        selected = self.run_list.currentItem()
+        selected = self.search_input.text()
         if not selected:
             QMessageBox.warning(self, "Error", "Please select a run")
             return
-        run_name = selected.text()
+        
+        run_name = selected
         cfg = ConfigLoader(get_run_cfg_path(self.project_name, run_name))
         self.run_name = run_name
         self.cfg = cfg
@@ -1109,6 +1121,24 @@ class ConfirmConfigWidget(QWidget):
 
     def confirm_clicked(self):
 
+        # save config
+        for i in range(self.config_table.rowCount()):
+            key = self.config_table.item(i,0).text()
+            raw = self.config_table.item(i,1).text()
+            existing = self.cfg.get(key)
+            try:
+                if isinstance(existing, bool):
+                    val = raw.lower() in ('true','1','yes')
+                elif isinstance(existing, int):
+                    val = int(raw)
+                elif isinstance(existing, float):
+                    val = float(raw)
+                else:
+                    val = raw
+            except Exception as e:
+                logger.warning(e)
+            self.cfg.set(key,value=val)
+
         self.progress = QProgressDialog("Processing...",None,0,0,self)
         self.progress.setWindowTitle("Please Wait")
         self.progress.setWindowModality(Qt.WindowModal)
@@ -1194,6 +1224,7 @@ class ProcessingWorker(QThread):
 
                 # generate intensity mtrices, save, collect data and save
                 ims = full_bulk_convert(self.input_dir,self.input_type,self.cfg)
+                peak_data = {}
                 for im in ims:
                     insert_im(conn,
                               im.sample_name,
@@ -1202,34 +1233,9 @@ class ProcessingWorker(QThread):
                               im.noise_factor,
                               im.intensity_matrix.shape[0],
                               im.intensity_matrix.shape[1])
-
-                peak_data = IM.collect_data(ims, mols, mzs, rts)
-                for im_name, peak_list in peak_data.items():
-                    for peak in peak_list:
-                        if peak['rt_valid']:
-                            insert_peak(conn,
-                                        self.run_name,
-                                        im_name,
-                                        peak['molecule'],
-                                        peak['center'],
-                                        peak['left_bound'],
-                                        peak['right_bound'],
-                                        peak['rt'],
-                                        peak['height'],
-                                        peak['area'],
-                                        peak['sn_ratio'],
-                                        peak['ion'],
-                                        peak['fwhh'],
-                                        peak['tailing_factor'],
-                                        peak['bl_slope'],
-                                        peak['bl_yint'],
-                                        peak['conv'],
-                                        peak['valley_ratio'],
-                                        peak['peak_idx']
-                                        )
-
-            for im in ims:
-                im.save_h5_object(self.project_name,self.run_name)
+                    im.collect_data(mols,mzs,rts)
+                    insert_peak_batch(conn, im, self.run_name)
+                    im.save_h5_object(self.project_name, self.run_name)
 
             rd = RD(self.run_name, self.project_name)
             self.run_data.emit(rd)
@@ -1237,6 +1243,9 @@ class ProcessingWorker(QThread):
 
         except Exception as e:
             traceback.print_exc()
+            h5_file = get_run_dir(self.project_name, self.run_name) / f"{self.run_name}.h5"
+            if h5_file.exists():
+                h5_file.unlink()
             self.error.emit(str(e))
 
         finally:
@@ -1255,18 +1264,17 @@ class MainDashboard(QWidget):
         super().__init__(parent)
         
         self.tabs = QTabWidget()
-        self.title = QLabel("Main Dashboard")
 
         self.initUI()
 
     def initUI(self):
 
         layout = QVBoxLayout()
-        layout.addWidget(self.title)
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
     def showEvent(self, event):
+        self.window().showMaximized()
         self.tabs.clear()
         run_data = self.window().run_data[-1]
         self.tabs.addTab(ChromatogramTab(run_data, self), "Chromatogram")

@@ -6,7 +6,7 @@ Data container for loading a given run from database to feed to GUI, used for vi
 
 # region Imports
 
-import sqlite3
+import numpy as np
 from src.db import get_run_samples, get_run_molecules, get_run_peaks
 from src.intensity_matrix import IntensityMatrix as IM
 from src.config_loader import ConfigLoader
@@ -41,4 +41,23 @@ class RunData:
 
         self.data_matrix = DM(proj_name, run_name, peaks)
 
+        # reassign detected molecules
+        sample_names = {v:k for k,v in self.data_matrix.sample_map.items()}
+        mol_names = {v:k for k,v in self.data_matrix.mol_map.items()}
+        for i in range(self.data_matrix.data['peak_idx'].shape[0]):         # rows/samples
+            for j in range(self.data_matrix.data['peak_idx'].shape[1]):     # cols/molecules
+                
+                peak_idx = self.data_matrix.data['peak_idx'][i][j]
+                if peak_idx == -1:
+                    continue
 
+                name = sample_names[i]
+                molecule = mol_names[j]
+
+                im = self.intensity_matrices[name]
+                ion = np.int64(self.molecules[molecule]['ion'])
+
+                peak_list = im.peak_dict[ion]
+                peak = peak_list[peak_idx]
+
+                peak['molecule'] = molecule

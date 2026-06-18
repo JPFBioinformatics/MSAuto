@@ -39,3 +39,157 @@
 2026-06-18 12:17:20,476 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
 2026-06-18 12:17:20,477 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
 2026-06-18 12:18:03,308 [WARNING] src.data_matrix: ISTD did not normalize to 1.0, check normalization/ISTD
+2026-06-18 12:37:38,754 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 12:37:38,755 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,755 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 12:37:38,756 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,756 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 12:37:38,757 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,757 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 12:37:38,758 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,758 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 12:37:38,758 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,758 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 12:37:38,759 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,759 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 12:37:38,760 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,760 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 12:37:38,760 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,760 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 12:37:38,761 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:37:38,761 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 12:37:38,762 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:38:48,221 [WARNING] src.data_matrix: ISTD did not normalize to 1.0, check normalization/ISTD
+2026-06-18 12:50:47,471 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 12:50:47,472 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,472 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 12:50:47,473 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,473 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 12:50:47,474 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,474 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 12:50:47,475 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,475 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 12:50:47,475 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,475 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 12:50:47,476 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,476 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 12:50:47,477 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,477 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 12:50:47,477 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,478 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 12:50:47,478 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:50:47,478 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 12:50:47,479 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:51:30,064 [WARNING] src.data_matrix: ISTD did not normalize to 1.0, check normalization/ISTD
+2026-06-18 12:54:06,954 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 12:54:06,955 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,955 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 12:54:06,956 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,956 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 12:54:06,957 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,957 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 12:54:06,958 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,958 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 12:54:06,959 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,959 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 12:54:06,960 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,960 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 12:54:06,960 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,960 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 12:54:06,961 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,961 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 12:54:06,962 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:06,962 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 12:54:06,962 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:54:48,921 [WARNING] src.data_matrix: ISTD did not normalize to 1.0, check normalization/ISTD
+2026-06-18 12:57:10,239 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 12:57:10,240 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,240 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 12:57:10,241 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,241 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 12:57:10,243 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,243 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 12:57:10,244 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,244 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 12:57:10,245 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,245 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 12:57:10,246 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,246 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 12:57:10,247 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,247 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 12:57:10,248 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,248 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 12:57:10,249 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:10,249 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 12:57:10,250 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 12:57:54,032 [WARNING] src.data_matrix: ISTD did not normalize to 1.0, check normalization/ISTD
+2026-06-18 13:52:41,253 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 13:52:41,254 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,254 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 13:52:41,255 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,256 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 13:52:41,257 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,257 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 13:52:41,258 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,258 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 13:52:41,260 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,260 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 13:52:41,260 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,260 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 13:52:41,261 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,261 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 13:52:41,262 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,262 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 13:52:41,263 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 13:52:41,263 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 13:52:41,264 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:13:05,499 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:13:05,500 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:16:02,893 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:16:02,894 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:19:38,781 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:19:38,782 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:22:12,068 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:22:12,069 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:25:24,413 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:25:24,414 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:41,128 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:28:41,129 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:41,299 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 18:28:41,300 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:41,555 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 18:28:41,556 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:41,813 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 18:28:41,814 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,025 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 18:28:42,026 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,218 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 18:28:42,219 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,382 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 18:28:42,383 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,554 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 18:28:42,554 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,709 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 18:28:42,709 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:28:42,864 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 18:28:42,865 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:30,350 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-18 18:31:30,351 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:30,520 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-18 18:31:30,521 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:30,775 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-18 18:31:30,776 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,027 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-18 18:31:31,028 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,233 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-18 18:31:31,234 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,425 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-18 18:31:31,425 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,590 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-18 18:31:31,591 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,760 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-18 18:31:31,761 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:31,917 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-18 18:31:31,917 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-18 18:31:32,072 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-18 18:31:32,073 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0

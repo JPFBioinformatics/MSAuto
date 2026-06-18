@@ -353,8 +353,9 @@ class IntensityMatrix:
                 'bl_slope': np.nan,
                 'bl_yint': np.nan,
                 'conv': np.nan,
-                'peak_idx': np.nan,
-                'molecule': None
+                'peak_idx': -1,
+                'molecule': None,
+                'cluster': None
             })
 
         # get noise mask for this row
@@ -471,9 +472,9 @@ class IntensityMatrix:
 
                 # S/N check
                 if entry['sn_ratio'] < sn_threshold or np.isnan(entry['sn_ratio']):
-                    peak['valid'] = False
+                    entry['valid'] = False
                 else:
-                    peak['valid'] = True
+                    entry['valid'] = True
                 
                 entry['processed'] = True
 
@@ -488,9 +489,11 @@ class IntensityMatrix:
                 self.integrate_peak(peak)
                 valid_peaks.append(peak)
                 
-        # get peak indices
+        # get peak indices and finish analysis
         for idx, peak in enumerate(valid_peaks):
             peak['peak_idx'] = idx
+            peak['feature'] = None
+
         # reccalculate noise mask based on valid peaks
         valid_nm = self.noise_mask(valid_peaks)
 
@@ -653,6 +656,7 @@ class IntensityMatrix:
 
         bl_indices = np.where(row_nm)[0]
 
+        # determine n_closest points from baseline mask on either side of our peak
         left_bl = bl_indices[bl_indices < center][-n_closest:]
         right_bl = bl_indices[bl_indices > center][:n_closest]
         local_bl = np.concatenate([left_bl,right_bl])
@@ -660,9 +664,15 @@ class IntensityMatrix:
         if len(local_bl) == 0:
             return np.nan
         
-        # calculate RMS noise
-        noise = np.sqrt(np.mean(row_array[local_bl]**2))
-        return peak['height'] / noise if noise > 0 else np.nan
+        # calculate RMS deviation
+        bl_signal = row_array[local_bl]
+        noise = np.std(bl_signal)
+
+        # fallback if baseline for noise has no variation
+        if noise == 0:
+            noise = 1.0
+
+        return peak['height'] / noise
 
     def calculate_fwhh(self, peak: dict, row_array: np.ndarray):
         """
@@ -793,7 +803,7 @@ class IntensityMatrix:
 
     # region                 ---------- Data Collection ----------
 
-    def generate_spectra(self, peak: dict, label: str = "Unknown"):
+    def generate_spectra(self, peak: dict, label: str = "Unknown", n_closest: int = 10):
         """
         Generates a spectra for a given peak, takes signal from all ions at the peak's center scan, subtracts
         local noise and generates a spectra.  Spectra is then normalized to relative abundance, and any peaks
@@ -807,14 +817,37 @@ class IntensityMatrix:
         if np.isnan(center):
             logger.info(f"Sample {self.sample_name} peak {label} not found for spectra geneartion")
             return
-        
-        raw_vals = self.intensity_matrix[:,center]
-        max_val = np.nanmax(raw_vals)
 
+        # exclude TIC from spectrum
+        mask = np.ones(len(self.unique_mzs), dtype=bool)
+        tic_idx = self.unique_mzs.index(9999)
+        mask[tic_idx] = False
+        
+        # build raw values for spectra, removing baseline with noise mask
+        raw_vals = []
+        real_indices = np.where(mask)[0]
+        for row_idx in real_indices:
+            row = self.intensity_matrix[row_idx]
+            row_nm = self.baseline_mask[row_idx]
+            bl_indices = np.where(row_nm)[0]
+
+            left = bl_indices[bl_indices < center][-n_closest:]
+            right = bl_indices[bl_indices > center][:n_closest]
+            local_bl = np.concatenate([left,right])
+
+            mean_noise = np.mean(row[local_bl]) if len(local_bl) > 0 else 0
+
+            raw_vals.append(max(0, row[center] - mean_noise))
+        raw_vals = np.array(raw_vals)
+
+        # convert to relative abundance
+        max_val = np.nanmax(raw_vals)
         rel_vals = 100 * raw_vals / max_val
+
+        # filter peaks less than 1% rel abundance
         rel_vals[rel_vals < 1] = 0
 
-        mzs = np.array(self.unique_mzs)
+        mzs = np.array(self.unique_mzs)[mask]
 
         return mzs, rel_vals
 
@@ -929,8 +962,7 @@ class IntensityMatrix:
         peak_area = np.trapezoid(net)
         peak["area"] = peak_area
     
-    @staticmethod
-    def collect_data(matrices: list, molecules: list, mzs: list, rts: list):
+    def collect_data(self, molecules: list, mzs: list, rts: list):
         """
         Collects all peaks from a given list of matrices that corrospond to molecule/mz/rt gropuing specified
         Params:
@@ -939,32 +971,25 @@ class IntensityMatrix:
         Returns:
             output                              dict of sample_name: peak list values
         """
-        output = {}
+        samlpe_name = self.sample_name
+        logger.info(f"--------------------Processing Sample {samlpe_name}--------------------")
+        
+        molecule_map = {}
+        peaks = []
+        for idx,molecule in enumerate(molecules):
+            peak = self.closest_peak(mzs[idx],rts[idx])
+            if peak is None:
+                logger.info(f"Skipped {molecule} peak in {samlpe_name} sample")
+                continue
+            peak["molecule"] = molecule
+            peaks.append(peak)
 
-        for matrix in matrices:
-            molecule_map = {}
-            name = matrix.sample_name
-            peaks = []
-            logger.info(f"--------------------Processing Sample {name}--------------------")
+            molecule_map[molecule] = (peak['ion'], peak['peak_idx'])
+            self.molecule_map = molecule_map
 
-            for idx,molecule in enumerate(molecules):
-                if np.isnan(matrix.noise_factor):
-                    raise ValueError(f"Spectra {name} NF error\nNF: {matrix.noise_factor}")
-                peak = matrix.closest_peak(mzs[idx],rts[idx])
-                if peak is None:
-                    logger.info(f"Skipped {molecule} peak in {name} sample")
-                    continue
-                peak["molecule"] = molecule
-                matrix.integrate_peak(peak)
-                peaks.append(peak)
+        logger.info(f"Molecules Queried: {len(molecules)} | Peaks Found: {len(peaks)} | Pct Found {(100 * (len(peaks)/len(molecules)))}")
 
-                molecule_map[molecule] = peak['peak_idx']
-                matrix.molecule_map = molecule_map
-
-            logger.info(f"Molecules Queried: {len(molecules)} | Peaks Found: {len(peaks)} | Pct Found {(100 * (len(peaks)/len(molecules)))}")
-            output[name] = peaks
-
-        return output
+        return peaks
 
     # endregion
 
@@ -1095,6 +1120,7 @@ class IntensityMatrix:
 
             # reconstruct time map
             time_map = {i:t for i,t in enumerate(time_array)}
+
         
         im = IntensityMatrix(intensity_matrix=intensity_matrix,
                              unique_mzs=unique_mzs,
@@ -1102,6 +1128,7 @@ class IntensityMatrix:
                              sample_name=sample_name,
                              time_map=time_map,)
         im.baseline_mask = baseline_mask
+
 
         return im
 

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS molecules (
 );
 
 CREATE TABLE IF NOT EXISTS features (
-    featID                  INTEGER PRIMARY KEY,
+    feature                 TEXT NOT NULL,
     sample_name             TEXT NOT NULL,
     run_name                TEXT NOT NULL,
     feat_rt                 REAL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS peaks (
     run_name                TEXT NOT NULL,
     sample_name             TEXT NOT NULL,
     molecule                TEXT,
-    featID                  INTEGER,
+    feature                 TEXT,
     center                  INTEGER,
     left_bound              INTEGER,
     right_bound             INTEGER,
@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS peaks (
     conv                    REAL,
     valley_ratio            REAL,
     peak_idx                INTEGER,
+    cluster                 INTEGER,
     FOREIGN KEY (run_name, sample_name) REFERENCES intensity_matrices (run_name, sample_name),
-    FOREIGN KEY (featID) REFERENCES features (featID),
+    FOREIGN KEY (feature, sample_name, run_name) REFERENCES features (feature, sample_name, run_name),
     FOREIGN KEY (run_name) REFERENCES runs (run_name)
 );

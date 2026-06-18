@@ -42,7 +42,7 @@ def connect(db_path: Path, create:bool = False):
     if not create and not Path(db_path).exists():
         raise FileNotFoundError(f"Database not found: {db_path}")
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
+    #conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -164,14 +164,50 @@ def insert_peak(conn: sqlite3.Connection,
                 conv: float,
                 valley_ratio:float,
                 peak_idx: int,
+                cluster: int,
                 featID: int = None):
     """
     Inserts into peaks table
     """
     conn.execute(
-        """ INSERT INTO peaks (run_name, sample_name, molecule, featID, center, left_bound, right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio, peak_idx)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (str(run_name), str(sample_name), str(molecule), featID, int(center), int(left_bound), int(right_bound), rt, float(height), float(area), float(sn_ratio), str(ion), float(fwhh), float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio, peak_idx)
+        """ INSERT INTO peaks (run_name, sample_name, molecule, featID, center, left_bound, 
+        right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, 
+        conv, valley_ratio, peak_idx, cluster)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(run_name), str(sample_name), str(molecule), featID, int(center), int(left_bound), 
+            int(right_bound), rt, float(height), float(area), float(sn_ratio), str(ion), float(fwhh),
+            float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio, peak_idx,
+            cluster)
+    )
+
+def insert_peak_batch(conn: sqlite3.Connection, im, run_name):
+    """
+    Converts peak dict to a list of tuples, then inserts in bulk
+    
+    Params
+    ------
+        conn                        sqlite connection
+        im                          IntensityMatrix object to insert peaks for
+        run_name                    name of this run
+    """
+    rows = []
+    sample_name = im.sample_name
+    for _, peak_list in im.peak_dict.items():
+        for peak in peak_list:
+            rows.append((
+                run_name, sample_name, peak['molecule'], peak['feature'], int(peak['center']), 
+                int(peak['left_bound']), int(peak['right_bound']), peak['rt'], peak['height'], peak['area'], 
+                peak['sn_ratio'],peak['ion'], peak['fwhh'], peak['tailing_factor'], peak['bl_slope'],
+                peak['bl_yint'], peak['conv'], peak['valley_ratio'], peak['peak_idx'], peak['cluster']
+            ))
+
+    conn.executemany(
+        """
+        INSERT INTO peaks (run_name, sample_name, molecule, feature, center, left_bound, right_bound,
+        rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio,
+        peak_idx, cluster)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, rows
     )
 
 def insert_run(conn: sqlite3.Connection,
@@ -294,7 +330,8 @@ def get_run_peaks(conn: sqlite3.Connection, run_name: str):
         """SELECT *
         FROM peaks join intensity_matrices ON peaks.sample_name = intensity_matrices.sample_name
         AND peaks.run_name = intensity_matrices.run_name
-        WHERE peaks.run_name = ?""", (run_name,)
+        WHERE molecule IS NOT NULL 
+        AND peaks.run_name = ?""", (run_name,)
     )
     peak_rows = cur.fetchall()
     peak_data = {}

@@ -645,8 +645,9 @@ def plot_spectrum(mzs: np.ndarray, abundances: np.ndarray, ax: Axes = None):
         ax.text(0.5, 0.5, 'No Spectrum Available0', ha='center', va='center', 
                 transform=ax.transAxes, color='white', fontsize=12)
     else:
+        nonzero_mzs = mzs[abundances > 0]
         ax.bar(mzs, abundances, width=0.5, color='steelblue', edgecolor='none')
-        ax.set_xlim(mzs.min() -5, mzs.max() +5)
+        ax.set_xlim(nonzero_mzs.min() - 5, nonzero_mzs.max() + 5)
         ax.set_ylim(0,110)
         ax.set_xlabel("m/z")
         ax.set_ylabel("Realtive Abundance")

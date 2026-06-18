@@ -8,7 +8,7 @@ over the region given for the are of the peak
 Peaks can be selected and their QC metrics displayed, along with their Mass Spectrum so a user
 can manually look through and determine if the peak was collected correctly.
 
-Functionalities:
+Functionalities (not done):
     1.  Manual baseline redrawing, allows user to select two points to draw a linear baseline
         through, recalculates peak metrics based on this baseline and overrides saved values.
         Users can hit a "reset" button to fall back to origonal baseline
@@ -23,7 +23,7 @@ Functionalities:
 import sys, logging
 import numpy as np
 
-from PyQt5.QtWidgets import (QWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QWidget, QTableWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                              QLabel, QPushButton, QMessageBox, QComboBox, QApplication, 
                              QHeaderView, QSizePolicy, QTableWidgetItem, QFrame)
 from PyQt5.QtCore import Qt
@@ -40,6 +40,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     filename="debug.log"
 )
+logger = logging.getLogger(__name__)
 
 # endregion
 
@@ -57,7 +58,7 @@ class ChromatogramTab(QWidget):
         self.sample = self.sample_list[0]
 
         self.molecule_list = list(run_data.molecules.keys())
-        self.molecule_list.append("None")
+        self.molecule_list.insert(0, "None")
         self.molecule = "None"
 
         self.intensity_matrix = self.run_data.intensity_matrices[self.sample]
@@ -78,6 +79,10 @@ class ChromatogramTab(QWidget):
 
         self.mol_label = QLabel("Molecule:")
         self.mol_dropdown = QComboBox()
+        self.next_mol = QPushButton("Next")
+        self.prev_mol = QPushButton("Prev")
+
+        self.peak_btn_label = QLabel("Peak:")
         self.next_peak = QPushButton("Next")
         self.prev_peak = QPushButton("Prev")
 
@@ -105,6 +110,8 @@ class ChromatogramTab(QWidget):
         self.mol_dropdown.setCurrentIndex(self.molecule_list.index(self.molecule))
         self.mol_dropdown.blockSignals(False)
         self.mol_dropdown.currentTextChanged.connect(self.on_mol_changed)
+        self.next_mol.clicked.connect(self.next_mol_clicked)
+        self.prev_mol.clicked.connect(self.prev_mol_clicked)
 
         # sample selection
         self.sample_dropdown.addItems(self.sample_list)
@@ -125,22 +132,29 @@ class ChromatogramTab(QWidget):
         toolbar_layout.addWidget(self.ion_label)
         toolbar_layout.addWidget(self.ion_dropdown)
         toolbar_layout.addStretch()
+        toolbar_layout.addWidget(self.peak_btn_label)
         toolbar_layout.addWidget(self.prev_peak)
         toolbar_layout.addWidget(self.next_peak)
         toolbar_layout.addWidget(self.mol_label)
+        toolbar_layout.addWidget(self.prev_mol)
+        toolbar_layout.addWidget(self.next_mol)
         toolbar_layout.addWidget(self.mol_dropdown)
 
         chrom_spectra_layout = QVBoxLayout()
         chrom_spectra_layout.addWidget(self.trace_view)
         chrom_spectra_layout.addWidget(self.spectrum_view)
 
-        view_layout = QHBoxLayout()
-        view_layout.addLayout(chrom_spectra_layout)
-        view_layout.addWidget(self.peak_view)
+        splitter = QSplitter(Qt.Horizontal)
+        chrom_spectra_widget = QWidget()
+        chrom_spectra_widget.setLayout(chrom_spectra_layout)
+        splitter.addWidget(chrom_spectra_widget)
+        splitter.addWidget(self.peak_view)
+        splitter.setStretchFactor(0,3)
+        splitter.setStretchFactor(1,2)
 
         layout = QVBoxLayout()
         layout.addLayout(toolbar_layout)
-        layout.addLayout(view_layout)
+        layout.addWidget(splitter)
 
         self.setLayout(layout)
 
@@ -159,13 +173,13 @@ class ChromatogramTab(QWidget):
         # reset to first peak in this trace
         self.peak_idx = 0
         if ion != 'TIC':
-            peak_list = self.intensity_matrix.peak_dict[np.int64(self.ion)]
+            self.peak_list = self.intensity_matrix.peak_dict[np.int64(self.ion)]
         else:
-            peak_list = self.intensity_matrix.peak_dict[9999]
+            self.peak_list = self.intensity_matrix.peak_dict[9999]
         
         # get peak list
-        if peak_list:
-            self.peak = peak_list[self.peak_idx]
+        if self.peak_list:
+            self.peak = self.peak_list[self.peak_idx]
         else:
             self.peak = None
 
@@ -206,18 +220,18 @@ class ChromatogramTab(QWidget):
         # update ion list
         self.ion_list = [str(x) for x in self.intensity_matrix.unique_mzs]
         self.ion_list[-1] = 'TIC'
+        self.ion = 'TIC'
+        self.ion_dropdown.blockSignals(True)
+        self.ion_dropdown.clear()
+        self.ion_dropdown.addItems(self.ion_list)
+        self.ion_dropdown.setCurrentIndex(self.ion_dropdown.count() - 1)
+        self.ion_dropdown.blockSignals(False)
         
         # reset to no molecule
         self.molecule = 'None'
         self.mol_dropdown.blockSignals(True)
         self.mol_dropdown.setCurrentIndex(self.molecule_list.index('None'))
         self.mol_dropdown.blockSignals(False)
-
-        # display TIC
-        self.ion = 'TIC'
-        self.ion_dropdown.blockSignals(True)
-        self.ion_dropdown.setCurrentIndex(self.ion_dropdown.count() - 1)
-        self.ion_dropdown.blockSignals(False)
 
         # take first peak of TIC
         self.peak_idx = 0
@@ -245,26 +259,35 @@ class ChromatogramTab(QWidget):
             return 0
 
     def next_clicked(self):
-        try:
+        if self.peak_idx + 1 < len(self.peak_list):
             self.peak_idx += 1
             self.peak = self.peak_list[self.peak_idx]
             self.peak_view.update(self.peak)
-        except Exception as e:
-            QMessageBox(self, "Error", "No Next Peak")
+            self.spectrum_view.update(self.intensity_matrix, self.peak)
     
     def prev_clicked(self):
-        try:
+        if self.peak_idx - 1 >= 0:
             self.peak_idx -= 1
             self.peak = self.peak_list[self.peak_idx]
             self.peak_view.update(self.peak)
-        except Exception as e:
-            QMessageBox(self, "Error", "No Previous Peak")
+            self.spectrum_view.update(self.intensity_matrix, self.peak)
+
+    def next_mol_clicked(self):
+        mol_idx = self.mol_dropdown.currentIndex() + 1
+        if mol_idx < self.mol_dropdown.count():
+            self.mol_dropdown.setCurrentIndex(mol_idx)
+
+    def prev_mol_clicked(self):
+        mol_idx = self.mol_dropdown.currentIndex() - 1
+        if mol_idx >= 0:
+            self.mol_dropdown.setCurrentIndex(mol_idx)
 
 class TraceViewWidget(QWidget):
     def __init__(self, time_array, int_array, ion, peak_list, parent=None):
         super().__init__(parent)
 
         # data
+        self.tab = parent
         self.time_array = time_array
         self.int_array = int_array
         self.peak_list = peak_list
@@ -282,11 +305,13 @@ class TraceViewWidget(QWidget):
         self.initUI()
 
     def initUI(self):
-        
+
+        self.toolbar.set_message = lambda msg: None
+
         frame = QFrame()
         frame_layout = QVBoxLayout()
         frame_layout.addStretch()
-        frame_layout.addWidget(self.toolbar)
+        frame_layout.addWidget(self.toolbar, alignment=Qt.AlignCenter)
         frame_layout.addWidget(self.canvas)
         frame_layout.addStretch()
         frame.setLayout(frame_layout)
@@ -305,7 +330,7 @@ class TraceViewWidget(QWidget):
         self.canvas.draw()
 
     def update(self, ion):
-        im = self.parent().intensity_matrix
+        im = self.tab.intensity_matrix
         self.ion = ion
         if ion != 'TIC':
             ion_idx = im.unique_mzs.index(int(ion))
@@ -325,6 +350,7 @@ class PeakViewWidget(QWidget):
     def __init__(self, time_array, int_array, peak, parent=None):
         super().__init__(parent)
 
+        self.tab = parent
         self.peak = peak
         self.time_array = time_array
         self.int_array = int_array
@@ -347,6 +373,7 @@ class PeakViewWidget(QWidget):
         self.table.setColumnCount(1)
         self.table.setVerticalHeaderLabels(table_rows)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setVisible(False)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -374,7 +401,7 @@ class PeakViewWidget(QWidget):
 
         self.peak = peak
         self.title = f"Peak {peak['peak_idx']}"
-        im = self.parent().intensity_matrix
+        im = self.tab.intensity_matrix
         ion_idx = im.unique_mzs.index(peak['ion'])
         self.int_array = im.intensity_matrix[ion_idx]
         self.plot()
@@ -415,6 +442,7 @@ class SpectrumViewWidget(QWidget):
     def __init__(self, intensity_matrix, peak, parent = None):
         super().__init__(parent)
 
+        self.tab = parent
         mzs, abundances = intensity_matrix.generate_spectra(peak)
         self.peak = peak
         self.mzs = mzs
@@ -422,14 +450,40 @@ class SpectrumViewWidget(QWidget):
 
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
+        self.toolbar = NavigationToolbar(self.canvas,self)
+        self.table = QTableWidget()
 
         self.initUI()
 
     def initUI(self):
 
+        self.toolbar.set_message = lambda msg: None
+        
+        top_idxs = np.argsort(self.abundances)[-10:]
+        top_masses = self.mzs[top_idxs][::-1]
+        top_masses = [str(x) for x in top_masses]
+        top_abundances = self.abundances[top_idxs][::-1]
+        top_abundances = [str(int(x)) for x in top_abundances]
+        self.table.setColumnCount(1)
+        self.table.setRowCount(len(top_idxs))
+        self.table.setVerticalHeaderLabels(top_masses)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setVisible(False)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        for i,val in enumerate(top_abundances):
+            self.table.setItem(i,0,QTableWidgetItem(val))
+
         frame = QFrame()
+
+        inner_layout = QHBoxLayout()
+        inner_layout.addWidget(self.canvas)
+        inner_layout.addWidget(self.table)
+        inner_layout.setStretch(0,4)
+        inner_layout.setStretch(1,1)
+
         frame_layout = QVBoxLayout()
-        frame_layout.addWidget(self.canvas)
+        frame_layout.addWidget(self.toolbar, alignment=Qt.AlignCenter)
+        frame_layout.addLayout(inner_layout)
         frame.setLayout(frame_layout)
 
         layout = QVBoxLayout()
