@@ -170,6 +170,7 @@ per sample
     % RT_diff outliers
     avg/err RT
     avg FWHH
+    z-score relative to group mean
 
 global
     ISTD %CV

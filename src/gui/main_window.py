@@ -34,6 +34,7 @@ from src.mzml_processor import full_bulk_convert
 from src.intensity_matrix import IntensityMatrix as IM
 from src.run_data import RunData as RD
 from src.gui.tab_chromatogram import ChromatogramTab
+from src.gui.tab_data import DataTab
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1277,7 +1278,10 @@ class MainDashboard(QWidget):
         self.window().showMaximized()
         self.tabs.clear()
         run_data = self.window().run_data[-1]
-        self.tabs.addTab(ChromatogramTab(run_data, self), "Chromatogram")
+        self.chrom_tab = ChromatogramTab(run_data, self)
+        self.data_tab = DataTab(run_data, self.chrom_tab, self)
+        self.tabs.addTab(self.chrom_tab, "Chromatogram")
+        self.tabs.addTab(self.data_tab, "Data")
         super().showEvent(event)
 
 # endregion

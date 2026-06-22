@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class DataMatrix:
 
-    def __init__(self, proj_name: str, run_name: str, peak_data: dict, collection_metric: str = 'area'):
+    def __init__(self, proj_name: str, run_name: str, peak_data: dict):
 
         if not peak_data:
             logger.warning("List of IntensityMatrix objects is empty")
@@ -59,31 +59,32 @@ class DataMatrix:
         float_empty = lambda: np.full((self.n_samples, self.n_molecules), np.nan, dtype=np.float64)
         int_empty = lambda: np.full((self.n_samples, self.n_molecules), -1, dtype=np.int32)
         self.data = {
-            'area': float_empty(),
-            'fwhh': float_empty(),
-            'rt': float_empty(),
+            'Area': float_empty(),
+            'FWHH': float_empty(),
+            'RT': float_empty(),
             'right_bound': int_empty(),
             'left_bound': int_empty(),
-            'height': float_empty(),
-            'tailing': float_empty(),
-            'conv': float_empty(),
-            'sn': float_empty(),
-            'tp': float_empty(),
+            'Height': float_empty(),
+            'Tailing_Factor': float_empty(),
+            'Sharpness': float_empty(),
+            'SN_Ratio': float_empty(),
+            'Theoretical_Plates': float_empty(),
             'peak_idx': int_empty(),
-            'normalized': float_empty()
+            'norm_Area': float_empty(),
+            'norm_Height': float_empty()
         }
         
         # outlier matrices (samples x features, rows x columns), 1/True if outlier
         bool_empty = lambda: np.zeros((self.n_samples, self.n_molecules), dtype=bool)
         self.outliers = {
-            'area': bool_empty(),
-            'fwhh': bool_empty(),
-            'rt': bool_empty(),
-            'height': bool_empty(),
-            'tailing': bool_empty(),
-            'conv': bool_empty(),
-            'sn': bool_empty(),
-            'tp': bool_empty()
+            'Area': bool_empty(),
+            'FWHH': bool_empty(),
+            'RT': bool_empty(),
+            'Height': bool_empty(),
+            'Tailing_Factor': bool_empty(),
+            'Sharpness': bool_empty(),
+            'SN_Ratio': bool_empty(),
+            'Theoretical_Plates': bool_empty()
         }
 
         # missiness matrix (samples x features, rows x columns), 1/True if missing, looks only at
@@ -93,9 +94,6 @@ class DataMatrix:
         # save standards
         self.standards = []
         self.std_map = {}
-
-        # normalized data matrix metric
-        self.collection_metric = collection_metric
 
         # fill the matrices from peak data
         self.fill_matrices(peak_data)
@@ -117,16 +115,16 @@ class DataMatrix:
                 
                 col_i = self.mol_map[peak['molecule']]
 
-                self.data['area'][row_i,col_i] = peak['area']
-                self.data['fwhh'][row_i,col_i] = peak['fwhh']
-                self.data['rt'][row_i,col_i] = peak['rt']
+                self.data['Area'][row_i,col_i] = peak['area']
+                self.data['FWHH'][row_i,col_i] = peak['fwhh']
+                self.data['RT'][row_i,col_i] = peak['rt']
                 self.data['left_bound'][row_i,col_i] = peak['left_bound']
                 self.data['right_bound'][row_i,col_i] = peak['right_bound']
-                self.data['height'][row_i,col_i] = peak['height']
-                self.data['tailing'][row_i,col_i] = peak['tailing_factor']
-                self.data['conv'][row_i,col_i] = peak['conv']
-                self.data['sn'][row_i,col_i] = peak['sn_ratio']
-                self.data['tp'][row_i,col_i] = self._theoretical_plates(peak['rt'],peak['fwhh'])
+                self.data['Height'][row_i,col_i] = peak['height']
+                self.data['Tailing_Factor'][row_i,col_i] = peak['tailing_factor']
+                self.data['Sharpness'][row_i,col_i] = peak['conv']
+                self.data['SN_Ratio'][row_i,col_i] = peak['sn_ratio']
+                self.data['Theoretical_Plates'][row_i,col_i] = self._theoretical_plates(peak['rt'],peak['fwhh'])
                 self.data['peak_idx'][row_i][col_i] = peak['peak_idx']
 
         # outlier matrix
@@ -134,10 +132,11 @@ class DataMatrix:
             self._detect_outliers(metric, outlier_threshold)
 
         # missingness matrix
-        self.missing = np.isnan(self.data['area'])
+        self.missing = np.isnan(self.data['Area'])
 
         # normalize matrix
-        self._normalize_matrix(self.collection_metric)
+        self._normalize_matrix('Area')
+        self._normalize_matrix('Height')
 
     def _theoretical_plates(self, rt: np.float64, fwhh: np.float64):
         """
@@ -202,10 +201,10 @@ class DataMatrix:
         stdev = np.nanstd(array)
 
         return avg, stdev
-    
+
     def _pct_cv(self, array: np.ndarray):
         """
-        calculates the percent coefficient of variation for a given array
+        calculates the average and percent coefficient of variation for a given array
         """
         if len(array) == 0:
             raise ValueError("Array is empty")
@@ -259,7 +258,6 @@ class DataMatrix:
                 logger.warning(f"ISTD did not normalize to 1.0, check normalization/ISTD")
 
         # save data
-        self.data['normalized'] = matrix
-        self.collection_metric = metric
+        self.data[f"norm_{metric}"] = matrix
 
     # endregion
