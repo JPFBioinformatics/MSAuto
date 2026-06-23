@@ -327,7 +327,7 @@ class IntensityMatrix:
             else:
                 l_val = array[peak_max-1]
                 r_val = array[peak_max+1]
-                tol = max_val * 0.001
+                tol = max_val * 0.01
                 flat_top = False
                 if abs(l_val-max_val) <= tol or abs(r_val-max_val) <= tol:
                     flat_top = True
@@ -911,14 +911,6 @@ class IntensityMatrix:
         Params:
             peak                    dict entry for the peak to be integrated
         """
-        # check to see if it is flat-top, if it is do not integrate
-        if peak.get("flat_top", False):
-            peak["area"] = 0
-            return None
-        # check if peak is out of bounds for valid RT, if so then do not integrate
-        if not peak.get("rt_valid", True):
-            peak["area"] = 0
-
         # get symmetry threshold
         cfg = self.cfg
         end_threshold = cfg.get("endpoint_threshold")
@@ -979,7 +971,10 @@ class IntensityMatrix:
         for idx,molecule in enumerate(molecules):
             peak = self.closest_peak(mzs[idx],rts[idx])
             if peak is None:
-                logger.info(f"Skipped {molecule} peak in {samlpe_name} sample")
+                logger.info(f"Skipped {molecule} peak in {samlpe_name} sample due to no peaks found")
+                continue
+            if not peak['rt_valid']:
+                logger.info(f"Skipped {molecule} peak in {samlpe_name} sample due to RT invalid")
                 continue
             peak["molecule"] = molecule
             peaks.append(peak)
@@ -1128,7 +1123,6 @@ class IntensityMatrix:
                              sample_name=sample_name,
                              time_map=time_map,)
         im.baseline_mask = baseline_mask
-
 
         return im
 

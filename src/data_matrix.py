@@ -166,7 +166,16 @@ class DataMatrix:
 
         for j in range(matrix.shape[1]):
             col = matrix[:,j]
-            self.outliers[metric][:,j] = self._is_outlier(col, threshold)
+            outlier_mask = np.zeros(matrix.shape[0], dtype=bool)
+
+            if self.group_indices:
+                for indices in self.group_indices.values():
+                    group_col = col[indices]
+                    outlier_mask[indices] = self._is_outlier(group_col, threshold)
+            else:
+                outlier_mask = self._is_outlier(col, threshold)
+            
+            self.outliers[metric][:,j] = outlier_mask
 
     def _is_outlier(self, array: np.ndarray, threshold: float = 3.5):
         """

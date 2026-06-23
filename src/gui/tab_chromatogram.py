@@ -282,6 +282,38 @@ class ChromatogramTab(QWidget):
         if mol_idx >= 0:
             self.mol_dropdown.setCurrentIndex(mol_idx)
 
+    def navigate_to(self, sample, molecule):
+        
+        # sample state
+        self.sample = sample
+        self.intensity_matrix = self.run_data.intensity_matrices[self.sample]
+        self.ion_list = [str(x) for x in self.intensity_matrix.unique_mzs]
+        self.ion_list[-1] = 'TIC'
+        self.sample_dropdown.blockSignals(True)
+        self.sample_dropdown.setCurrentText(sample)
+        self.sample_dropdown.blockSignals(False)
+        self.ion_dropdown.blockSignals(True)
+        self.ion_dropdown.clear()
+        self.ion_dropdown.addItems(self.ion_list)
+        self.ion_dropdown.blockSignals(False)
+
+        # molecule state
+        self.molecule = molecule
+        self.ion = self.run_data.molecules[molecule]['ion']
+        self.peak_idx = self.get_peak_idx()
+        self.peak = self.intensity_matrix.peak_dict[self.ion if self.ion != 'TIC' else 9999][self.peak_idx]
+        self.mol_dropdown.blockSignals(True)
+        self.mol_dropdown.setCurrentText(molecule)
+        self.mol_dropdown.blockSignals(False)
+        self.ion_dropdown.blockSignals(True)
+        self.ion_dropdown.setCurrentText(str(self.ion))
+        self.ion_dropdown.blockSignals(False)
+
+        # render signals
+        self.trace_view.update(self.ion)
+        self.peak_view.update(self.peak)
+        self.spectrum_view.update(self.intensity_matrix, self.peak)
+
 class TraceViewWidget(QWidget):
     def __init__(self, time_array, int_array, ion, peak_list, parent=None):
         super().__init__(parent)

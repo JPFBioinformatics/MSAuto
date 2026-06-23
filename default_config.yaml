@@ -4,6 +4,9 @@
 project_name: proj_name
 run_name: run_name
 
+# type of run, targeted/untargeted metabolomics or standard curve
+run_type: targeted
+
 # full path to the imput directory where your files to be processed live
 input_dir: C:/input/path
 

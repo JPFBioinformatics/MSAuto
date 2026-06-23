@@ -520,7 +520,6 @@ QGroupBox::indicator {
 QMenu::indicator,
 QListView::indicator,
 QTableWidget::indicator,
-QRadioButton::indicator,
 QCheckBox::indicator {
   width: 28px;
   height: 28px;
@@ -645,22 +644,30 @@ QGroupBox::indicator:indeterminate:disabled {
 /*  ------------------------------------------------------------------------  */
 /*  QRadioButton Indicator  */
 
+QRadioButton::indicator {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  border: 2px solid #448aff;
+  background-color: transparent;
+  image: none;
+}
+
 QRadioButton::indicator:checked {
-  image: url(icon:/primary/radiobutton_checked.svg);
+  background-color: #448aff;
+  border: 2px solid #448aff;
+  image: none;
 }
 
-QRadioButton::indicator:unchecked {
-  image: url(icon:/primary/radiobutton_unchecked.svg);
+QRadioButton::indicator:unchecked:hover {
+  border: 2px solid #83b9ff;
+  image: none;
 }
 
-QRadioButton::indicator:checked:disabled {
-  image: url(icon:/disabled/radiobutton_checked.svg);
+QRadioButton::indicator:disabled {
+  border: 2px solid rgba(68, 138, 255, 0.3);
+  image: none;
 }
-
-QRadioButton::indicator:unchecked:disabled {
-  image: url(icon:/disabled/radiobutton_unchecked.svg);
-}
-
 
 /*  ------------------------------------------------------------------------  */
 /*  QDockWidget  */
@@ -1130,8 +1137,9 @@ QListView::item {
 QTableView::item:selected,
 QTreeView::item:selected,
 QListView::item:selected {
-  background-color: rgba(68, 138, 255, 0.2);
-  selection-background-color: rgba(68, 138, 255, 0.2);
+  background-color: transparent;
+  selection-background-color: transparent;
+  border: 2px solid #448aff;
   color: #ffffff;
   selection-color: #ffffff; /* For Windows */
 }
@@ -1139,8 +1147,9 @@ QListView::item:selected {
 QTableView::item:selected:focus,
 QTreeView::item:selected:focus,
 QListView::item:selected:focus {
-  background-color: #448aff;
-  selection-background-color: #448aff;
+  background-color: transparent;
+  selection-background-color: transparent;
+  border: 2px solid #448aff;
   color: #ffffff;
   selection-color: #ffffff; /* For Windows */
 }

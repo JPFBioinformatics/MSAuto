@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget, QTabWidget, QTableWidget,
-                             QVBoxLayout, QHBoxLayout,
+                             QVBoxLayout, QHBoxLayout, QRadioButton, QButtonGroup,
                              QLabel, QPushButton, QLineEdit, QListWidget,
                              QDialog, QFileDialog, QMessageBox, QComboBox, QProgressDialog,
                              QApplication, QHeaderView, QSizePolicy, QTableWidgetItem)
@@ -381,6 +381,7 @@ class RunSelectWidget(QWidget):
             self.window().input_type = dialog.input_type
             self.window().sample_data = dialog.sample_data
             self.window().mol_data = dialog.mol_data
+            self.window().run_type = dialog.run_type
             self.window().stack.setCurrentIndex(2)
 
     def load_clicked(self):
@@ -401,17 +402,25 @@ class NewRunDialog(QDialog):
     def __init__(self, parent=None, project_name = None):
         super().__init__(parent)
         self.setWindowTitle("New Run")
-        self.setFixedSize(600,400)
+        self.setFixedSize(800,400)
 
         self.name_input = QLineEdit()
         self.submit_btn = QPushButton("Submit")
         self.back_btn = QPushButton("Back")
         self.back_btn.setObjectName("smallBtn")
-        self.title = QLabel("Enter File Type, Run Dir, and Run Name")
+        self.title = QLabel("Enter File Type, Run Dir, Run Name and Select Run Type")
         self.browse_btn = QPushButton("Browse")
         self.path_input =QLineEdit()
         self.file_type_combo = QComboBox()
         self.file_type_label = QLabel("File Type:")
+
+        # run type button group
+        self.run_type_label = QLabel("Run Type:")
+        self.run_type_targeted = QRadioButton("Targeted")
+        self.run_type_untargeted = QRadioButton("Untargeted")
+        self.run_type_std_curve = QRadioButton("Sandard Curve")
+        self.run_type_multi = QRadioButton("Multi Run")
+        self.run_type_group = QButtonGroup()
 
         self.input_dir = None
         self.project_name = project_name
@@ -420,10 +429,12 @@ class NewRunDialog(QDialog):
         self.sample_data = None
         self.mol_data = None
         self.input_type = None
+        self.run_type = None
 
         self.initUI()
 
     def initUI(self):
+    
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignHCenter)
         layout.setSpacing(10)
@@ -436,6 +447,8 @@ class NewRunDialog(QDialog):
         file_layout = QHBoxLayout()
 
         self.title.setFont(QFont("Roboto", 12, QFont.Bold))
+
+        self.run_type_label.setFont(QFont("Roboto", 12, QFont.Bold))
 
         self.path_input.setPlaceholderText("Sample dir path...")
         self.path_input.setFixedSize(290,50)
@@ -457,6 +470,22 @@ class NewRunDialog(QDialog):
         self.file_type_combo.setCurrentText(".D")
         self.file_type_combo.setFixedSize(200,50)
         self.file_type_label.setFont(QFont("Roboto", 12))
+
+        # group run type raido buttons
+        self.run_type_targeted.setChecked(True)
+        self.run_type_group.addButton(self.run_type_targeted)
+        self.run_type_group.addButton(self.run_type_untargeted)
+        self.run_type_group.addButton(self.run_type_std_curve)
+        self.run_type_group.addButton(self.run_type_multi)
+
+        run_type_layout = QVBoxLayout()
+        run_type_layout.addStretch()
+        run_type_layout.addWidget(self.run_type_label)
+        run_type_layout.addWidget(self.run_type_targeted)
+        run_type_layout.addWidget(self.run_type_untargeted)
+        run_type_layout.addWidget(self.run_type_std_curve)
+        run_type_layout.addWidget(self.run_type_multi)
+        run_type_layout.addStretch()
         
         file_layout.addStretch()
         file_layout.addWidget(self.file_type_label)
@@ -474,13 +503,20 @@ class NewRunDialog(QDialog):
         header_layout.addStretch()
         
         layout.addLayout(header_layout)
+        layout.addStretch()
         layout.addLayout(file_layout)
         layout.addLayout(path_layout)
         layout.addWidget(self.name_input, alignment=Qt.AlignHCenter)
         layout.addWidget(self.submit_btn, alignment=Qt.AlignHCenter)
-        layout.addSpacing(50)
+        layout.addStretch()
 
-        self.setLayout(layout)
+        outer_layout = QHBoxLayout()
+        outer_layout.addLayout(layout)
+        outer_layout.addLayout(run_type_layout)
+        outer_layout.setStretch(0,3)
+        outer_layout.setStretch(1,1)
+
+        self.setLayout(outer_layout)
 
     def submit_clicked(self):
         
@@ -521,9 +557,10 @@ class NewRunDialog(QDialog):
         finally:
             conn.close()
 
-        # save run name
+        # save run name/type
         self.run_name = run_name
         self.input_type = self.file_type_combo.currentText()
+        self.run_type = self.get_run_type()
         
         # save sample and molecule data
         sample_dialog = SampleTableDialog(self, self.project_name, self.input_dir, self.input_type)
@@ -543,6 +580,16 @@ class NewRunDialog(QDialog):
         selected = QFileDialog.getExistingDirectory(self, "Select Sample Directory")
         if selected:
             self.path_input.setText(selected)
+
+    def get_run_type(self):
+        if self.run_type_untargeted.isChecked():
+            return "Untargeted"
+        if self.run_type_std_curve.isChecked():
+            return "Standard Curve"
+        if self.run_type_multi.isChecked():
+            return "Multi Run"
+        else:
+            return "Targeted"
 
 class SampleTableDialog(QDialog):
     """
@@ -983,6 +1030,7 @@ class ConfirmConfigWidget(QWidget):
         self.input_dir = None
         self.input_type = None
         self.db_path = None
+        self.run_type = None
 
         self.setWindowTitle("Confrim Data")
         self.resize(800,500)
@@ -1072,12 +1120,14 @@ class ConfirmConfigWidget(QWidget):
         self.input_dir = self.window().input_dir
         self.input_type = self.window().input_type
         self.db_path = get_proj_db(self.project_name)
+        self.run_type = self.window().run_type
         cfg = ConfigLoader.load_default_config(
             get_run_dir(self.project_name, self.run_name) / 'config.yaml')
         cfg.set("run_name", value=self.run_name)
         cfg.set("input_dir", value=str(self.input_dir))
         cfg.set("project_name", value=self.project_name)
         cfg.set("input_type", value=self.input_type)
+        cfg.set("run_type", value=self.run_type)
         self.cfg = cfg
         self._populate_config()
         self._populate_samples()
@@ -1180,6 +1230,7 @@ class ProcessingWorker(QThread):
         self.run_name = run_name
         self.input_dir = cfg.get('input_dir')
         self.input_type = cfg.get('input_type')
+        self.run_type = cfg.get('run_type')
         self.cfg = cfg
 
     def run(self):
@@ -1198,7 +1249,7 @@ class ProcessingWorker(QThread):
             rts = []
             with conn:
                 # insert run to table
-                insert_run(conn,self.run_name)
+                insert_run(conn,self.run_name,self.run_type)
 
                 # insert sample/molecule data to DB
                 for row in self.sample_data:

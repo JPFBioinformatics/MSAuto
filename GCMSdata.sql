@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS runs (
     user                    TEXT,
     method                  TEXT,
     file_type               TEXT,
-    norm_type               TEXT
+    norm_type               TEXT,
+    run_type                TEXT
 );
 
 CREATE TABLE IF NOT EXISTS samples (

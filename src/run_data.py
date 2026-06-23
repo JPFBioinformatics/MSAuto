@@ -31,13 +31,24 @@ class RunData:
             conn = connect(db_path)
             self.samples = {r['sample_name']: dict(r) for r in get_run_samples(conn, run_name)}             # dict sample_name: row_dict
             self.molecules = {r["molecule_name"]: dict(r) for r in get_run_molecules(conn, run_name)}       # dict of mol_name: row_dict
-            peaks = get_run_peaks(conn, run_name)
         finally:
             conn.close()
 
+        mols = []
+        mzs = []
+        rts = []
+        for entry in self.molecules.values():
+            mols.append(entry['molecule_name'])
+            mzs.append(np.int64(entry['ion']))
+            rts.append(entry['rt'])
+
         self.intensity_matrices = {}
+        peaks = {}
         for sample_name in self.samples:
-            self.intensity_matrices[sample_name] = IM.load_h5_object(sample_name, proj_name, run_name)
+            matrix = IM.load_h5_object(sample_name, proj_name, run_name)
+            peak_list = matrix.collect_data(mols, mzs, rts)
+            peaks[sample_name] = peak_list
+            self.intensity_matrices[sample_name] = matrix
 
         self.data_matrix = DM(proj_name, run_name, peaks)
 

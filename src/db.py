@@ -212,8 +212,11 @@ def insert_peak_batch(conn: sqlite3.Connection, im, run_name):
 
 def insert_run(conn: sqlite3.Connection,
                run_name: str,
+               run_type: str,
                user: str = 'default',
-               method: str = 'default'):
+               method: str = 'default',
+               file_type: str = 'default',
+               norm_type: str = 'default'):
     """
     Inserts a run into runs table
     """
@@ -222,9 +225,9 @@ def insert_run(conn: sqlite3.Connection,
         raise ValueError(f"Run {run_name} already in database, choose unique run name")
     created_at = datetime.now().isoformat()
     cur = conn.execute(
-        """ INSERT INTO runs (run_name, created_at, user, method)
-            VALUES (?, ?, ?, ?)""",
-            (run_name, created_at, user, method)
+        """ INSERT INTO runs (run_name, run_type, created_at, user, method, file_type, norm_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (run_name, run_type, created_at, user, method, file_type, norm_type)
     )
     return cur.lastrowid
 
