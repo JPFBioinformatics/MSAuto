@@ -1326,13 +1326,18 @@ class MainDashboard(QWidget):
         self.setLayout(layout)
 
     def showEvent(self, event):
+        
         self.window().showMaximized()
-        self.tabs.clear()
         run_data = self.window().run_data[-1]
+
+        self.tabs.clear()
+
         self.chrom_tab = ChromatogramTab(run_data, self)
         self.data_tab = DataTab(run_data, self.chrom_tab, self)
-        self.tabs.addTab(self.chrom_tab, "Chromatogram")
+
         self.tabs.addTab(self.data_tab, "Data")
+        self.tabs.addTab(self.chrom_tab, "Chromatogram")
+
         super().showEvent(event)
 
 # endregion

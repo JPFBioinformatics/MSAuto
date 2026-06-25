@@ -238,7 +238,7 @@ class DataMatrix:
         # copy data matrix
         matrix = self.data[metric].copy()
 
-        # normalize to norm factor        
+        # normalize to norm factor
         norm_factors = np.zeros(self.n_samples)
         for name,i in self.sample_map.items():
             if self.samples[name]['norm_factor'] is None:
@@ -247,24 +247,21 @@ class DataMatrix:
                 norm_factors[i] = self.samples[name]['norm_factor']
         matrix = matrix / norm_factors[:,np.newaxis]
 
-        # generate map of molecule to standard column
-        mol_std_map = {}
-        for key,value in self.molecules.items():
-            mol_i = self.mol_map[key]
-            if value['std'] is None:
-                continue
-            mol_std_map[mol_i] = self.mol_map[value['std']]
+        # generate std column dict
+        stds = set()
+        for value in self.molecules.values():
+            stds.add(value['std'])
 
-        # normalize to istd
-        for mol_i,std_i in mol_std_map.items():
-            matrix[:,mol_i] = matrix[:,mol_i] / matrix[:,std_i]
+        std_vals = {}
+        for std in stds:
+            std_i = self.mol_map[std]
+            std_vals[std] = matrix[:,std_i].copy()
 
-        # ensure normalization worked correctly
-        std_indices = set(mol_std_map.values())
-        for std_i in std_indices:
-            col = matrix[:,std_i]
-            if not np.allclose(col, 1.0, atol=1e-6):
-                logger.warning(f"ISTD did not normalize to 1.0, check normalization/ISTD")
+        for row in self.molecules.values():
+            mol = row['molecule_name']
+            std = row['std']
+            mol_i = self.mol_map[mol]
+            matrix[:,mol_i] = matrix[:,mol_i] / std_vals[std]
 
         # save data
         self.data[f"norm_{metric}"] = matrix

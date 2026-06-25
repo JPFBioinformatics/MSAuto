@@ -1,17 +1,18 @@
 """
 
-Allows a user to investigate a run's data matrix, displays area/height matrices and color
-codes cells if they are outliers with respect to the different QC metrics as follows:
+Allows a user to investigate a run's data matrix, displays area/height matrices and colors outlier
+cells red.  Supplies which metric the peak is an outlier with respect to, as well as color codes
+samples according to group and colors the standards for easy viewing.  Includes metrics of per-sample
+and per-molecule metrics for easy calculations.
 
-    | METRIC                      | COLOR                       | Type
-----|-----------------------------|-----------------------------|-------------
-    | area/height                 | Orange                      | Molecule
-    | FWHH                        | Blue                        | Molecule
-    | RT                          | Red                         | Molecule
-    | Tailing Factor              | Yellow                      | Molecule
-    | Conv/Sharpness              | Purple                      | Molecule
-    | S/N Ratio                   | Green                       | Molecule
-    | Theoretical Plates          | Grey                        | Molecule                   
+left click a cell to see the metrics with which it is an outlier in respect to, right click allows the 
+user to view the chromatogram which navigates to the peak view for the selected peak in the chromatogram
+tab.
+
+Also allows the user to export the data to excel, which exports the data selected that is displayed (area, heihgt,
+any qc metric) to be exported to an excel file, keeping color coding and including a metadat tab that has
+sample and molecule tables from the sql database as well as an outliers tab showing sample, molecule, list of
+metrics with which the sample is an outlier with respect to.
 
 """
 
@@ -20,12 +21,14 @@ codes cells if they are outliers with respect to the different QC metrics as fol
 import logging
 import numpy as np
 import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 
 from PyQt5.QtWidgets import (QWidget, QTableWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                              QLabel, QComboBox, QHeaderView, QSizePolicy, QTableWidgetItem,
                              QGroupBox, QStyledItemDelegate, QFileDialog, QPushButton, QMenu,
                              QMessageBox)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QBrush
 
 import matplotlib.cm as cm
@@ -57,10 +60,17 @@ class DataTab(QWidget):
         self.data_metrics = list(self.data_matrix.data.keys())
         self.group_map = self.data_matrix.group_map
         self.group_indices = self.data_matrix.group_indices
+
+        # group colormapping
         groups = list(set(self.group_indices.keys()))
-        self.cmap = cm.get_cmap('rainbow', len(groups))
-        self.group_colormap = {group:self.cmap(i) for i,group in enumerate(groups)}
-        self.std_color = self.cmap(len(groups)) if groups else self.cmap(0)
+        if len(groups) > 7 :
+            colors = 'tab20b'
+        else:
+            colors = 'Dark2'
+        n = max(len(groups) + 1, 2)
+        self.cmap = cm.get_cmap(colors, n)
+        self.group_colormap = {group: self.cmap((i+1)/n) for i,group in enumerate(groups)}
+        self.std_color = self.cmap(0)
 
         # get standards
         self.stds = []
@@ -105,15 +115,15 @@ class DataTab(QWidget):
 
         self.export_btn = QPushButton("Export to Excel")
 
-        print(f"Stds:\n{self.stds}")
-        print(f"Groups:\n{self.group_indices}")
+        self.processing_label = QLabel("Loading...")
 
         self.initUI()
 
     def initUI(self):
         
         # data table columns
-        self.data_table.setHorizontalHeader(ColoredHeader(Qt.Horizontal, self.data_table))
+        self.h_header = ColoredHeader(Qt.Horizontal, self.data_table)
+        self.data_table.setHorizontalHeader(self.h_header)
         col_count = self.n_molecules + len(list(self.per_sample_metrics)) + 1
         self.data_table.setColumnCount(col_count)
         col_labels = list(self.mol_map.keys())
@@ -123,11 +133,11 @@ class DataTab(QWidget):
             item = QTableWidgetItem(name)
             if name in self.stds:
                 r,g,b,_ = [int(x*225) for x in self.std_color]
-                item.setBackground(QColor(r,g,b,100))
-
+                item.setBackground(QColor(r,g,b,75))
             self.data_table.setHorizontalHeaderItem(i,item)
         # data table rows
-        self.data_table.setVerticalHeader(ColoredHeader(Qt.Vertical, self.data_table))
+        self.v_header = ColoredHeader(Qt.Vertical, self.data_table)
+        self.data_table.setVerticalHeader(self.v_header)
         row_count = self.n_samples + len(list(self.per_mol_metrics)) + 1
         self.data_table.setRowCount(row_count)
         header_labels = list(self.sample_map.keys())
@@ -135,12 +145,13 @@ class DataTab(QWidget):
         header_labels.extend(self.per_mol_metrics)
         for i,name in enumerate(header_labels):
             item = QTableWidgetItem(name)
-            try:
-                group = self.group_map[name]
-                r,g,b,_ = [int(x*225) for x in self.group_colormap[group]]
-                item.setBackground(QColor(r,g,b,100))
-            except:
-                pass
+            if len(self.group_colormap) > 1:
+                try:
+                    group = self.group_map[name]
+                    r,g,b,_ = [int(x*225) for x in self.group_colormap[group]]
+                    item.setBackground(QColor(r,g,b,75))
+                except:
+                    pass
             self.data_table.setVerticalHeaderItem(i,item)
 
         # fill in per mol metrics
@@ -153,6 +164,27 @@ class DataTab(QWidget):
             j += self.n_molecules + 1
             for i,value in enumerate(self.per_sample_metrics[sample_metric]):
                 self.data_table.setItem(i,j,QTableWidgetItem(self.format_val(value)))
+        
+        # darken empty cells for ease of viewing
+        dark = QColor(0x23, 0x26, 0x29)
+        i = self.n_samples
+        for j in range(self.data_table.columnCount()):
+            item = QTableWidgetItem()
+            item.setBackground(dark)
+            item.setFlags(Qt.NoItemFlags)
+            self.data_table.setItem(i,j,item)
+        j = self.n_molecules
+        for i in range(self.data_table.rowCount()):
+            item = QTableWidgetItem()
+            item.setBackground(dark)
+            item.setFlags(Qt.NoItemFlags)
+            self.data_table.setItem(i,j,item)
+        for i in range(self.n_samples, self.n_samples + len(self.per_mol_metrics) + 1):
+            for j in range(self.n_molecules, self.n_molecules + len(self.per_sample_metrics) + 1):
+                item = QTableWidgetItem()
+                item.setBackground(dark)
+                item.setFlags(Qt.NoItemFlags)
+                self.data_table.setItem(i,j,item)
 
         # table policies
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -164,7 +196,7 @@ class DataTab(QWidget):
         self.data_table.customContextMenuRequested.connect(self.on_cell_right_click)
         self.data_table.cellClicked.connect(self.on_cell_single_click)
         self.export_btn.clicked.connect(self.export_to_excel)
-        
+
         # data type selection
         self.data_type_label.setText("Metric:")
         self.data_type_dropdown.addItems(self.data_metrics)
@@ -182,8 +214,8 @@ class DataTab(QWidget):
 
         outlier_section = QGroupBox("Outlier Metrics")
         self.outlier_layout = QVBoxLayout()
-        none_label = QLabel("None")
-        none_label.setStyleSheet("color: rgba(255,255,255,0.4); padding: 4px;")
+        none_label = QLabel("No Outliers")
+        none_label.setStyleSheet("color: rgba(255,255,255,0.3); padding: 4px;")
         self.outlier_layout.addWidget(none_label)
         self.outlier_layout.addStretch()
         outlier_section.setLayout(self.outlier_layout)
@@ -191,9 +223,13 @@ class DataTab(QWidget):
         colors_section = QGroupBox("Group Colors")
         legend_layout = QVBoxLayout()
         for group,color in self.group_colormap.items():
-            r,g,b,_ = [int(x*225) for x in color]
-            label = QLabel(f"   {group}   ")
-            label.setStyleSheet(f"background-color: rgb({r},{g},{b}); color: white; padding: 4px; border-radius: 3px;")
+            if len(self.group_colormap) > 1:
+                label = QLabel(f"   {group}   ")
+                r,g,b,_ = [int(x*225) for x in color]
+                label.setStyleSheet(f"background-color: rgba({r},{g},{b},0.3); color: white; padding: 4px; border-radius: 3px;")
+            else:
+                label = QLabel("No Groups")
+                label.setStyleSheet("color: rgba(255,255,255,0.3); padding: 4px;")
             legend_layout.addWidget(label)
         legend_layout.addStretch()
         colors_section.setLayout(legend_layout)
@@ -214,6 +250,8 @@ class DataTab(QWidget):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.addWidget(self.data_type_label)
         toolbar_layout.addWidget(self.data_type_dropdown)
+        toolbar_layout.addWidget(self.processing_label)
+        self.processing_label.setVisible(False)
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(self.export_btn)
 
@@ -226,6 +264,15 @@ class DataTab(QWidget):
 
     def data_type_changed(self):
         dtype = self.data_type_dropdown.currentText()
+        self.processing_label.setVisible(True)
+
+        self.worker = TableWorker(self.data_matrix, dtype, self.sample_map, self.mol_map,
+                                  self.combined_outliers, self.format_val)
+        
+        self.worker.finished.connect(self.on_data_ready)
+        self.worker.start()
+
+        """
         self.data_table.setUpdatesEnabled(False)
         for sample in self.data_matrix.samples:
             i = self.sample_map[sample]
@@ -236,9 +283,31 @@ class DataTab(QWidget):
                     item.setBackground(QColor(180,0,0,75))
                 self.data_table.setItem(i,j,item)
         self.data_table.setUpdatesEnabled(True)
+        """
+
+    def on_data_ready(self, results):
+        self.data_table.setUpdatesEnabled(False)
+        for i, j, value, is_outlier in results:
+            item = QTableWidgetItem(value)
+            if is_outlier:
+                item.setBackground(QColor(180,0,0,75))
+            self.data_table.setItem(i,j,item)
+        self.data_table.setUpdatesEnabled(True)
+        self.processing_label.setVisible(False)
 
     def on_cell_single_click(self, i, j):
+        # handle invalid click locations
         if i >= self.n_samples or j >= self.n_molecules:
+            # clear previous layout
+            while self.outlier_layout.count():
+                item = self.outlier_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            label = QLabel("No Outliers")
+            label.setStyleSheet("color: rgba(255,255,255,0.4); padding: 4px;")
+            self.outlier_layout.addWidget(label)
+            self.outlier_layout.addStretch()
             return
         
         # clear previous layout
@@ -256,7 +325,7 @@ class DataTab(QWidget):
                 label.setStyleSheet("background-color: rgb(180,60,60); color: white; padding: 4px; border-radius: 3px;")
                 self.outlier_layout.addWidget(label)
         else:
-            label = QLabel("None")
+            label = QLabel("No Outliers")
             label.setStyleSheet("color: rgba(255,255,255,0.4); padding: 4px;")
             self.outlier_layout.addWidget(label)
         
@@ -290,37 +359,193 @@ class DataTab(QWidget):
             self.view_chrom(i,j)
 
     def format_val(self, val):
-        if abs(val) > 1000000:
-            return f"{val:.2e}"
-        return f"{val:.2f}"
-
+        if val == 0:
+            return "0"
+        if abs(val) > 1000000 or abs(val) < 0.01:
+            return f"{val:.4e}"
+        return f"{val:.4f}"
+    
     def export_to_excel(self):
-
+        
+        # set path and create workbook
         path, _ = QFileDialog.getSaveFileName(self, "Export to Excel", "", "Excel Files (*xlsx)")
-
         if not path:
             return
         if not path.endswith('.xlsx'):
             path += '.xlsx'
-        
-        row_labels = [self.data_table.verticalHeaderItem(i).text()
-                      for i in range(self.data_table.rowCount())]
-        col_labels = [self.data_table.horizontalHeaderItem(i).text()
-                      for i in range(self.data_table.columnCount())]
-        
-        data = []
-        for i in range(self.data_table.rowCount()):
-            row = []
-            for j in range(self.data_table.columnCount()):
-                item = self.data_table.item(i,j)
-                try:
-                    row.append(float(item.text()))
-                except:
-                    row.append(item.text() if item else '')
-            data.append(row)
 
-        df = pd.DataFrame(data, index=row_labels, columns=col_labels)
-        df.to_excel(path, index=True)
+        wb = Workbook()
+
+        # aesthetic decisions
+        dark_fill = self.make_fill("AA232629")
+        grey_fill = self.make_fill("AABFBFBF")
+        red_fill = self.make_fill("FFFF8080")
+        bold_font = Font(bold=True)
+        bottom_border = Border(bottom=Side(style='thin'))
+        right_border = Border(right=Side(style='thin'))
+        bottom_right_border = Border(right=Side(style='thin'), bottom=Side(style='thin'))
+
+        dtype = self.data_type_dropdown.currentText()
+        raw_data = self.data_matrix.data[dtype]
+
+        # first tab, metadata (samples and molecules tables) =====================================================
+        ws1 = wb.active
+        ws1.title = f"Metadata"
+        
+        # sample table
+        sample_rows = list(self.data_matrix.samples.values())
+        sample_cols = list(sample_rows[0].keys())
+        
+        # sample headers
+        for j,col in enumerate(sample_cols):
+            cell = ws1.cell(row=2, column=j+2, value=col)
+            cell.fill = grey_fill
+            cell.font = bold_font
+            if j < len(sample_cols) - 1:
+                cell.border = bottom_right_border
+            else:
+                cell.border = bottom_border
+
+        # sample data
+        for i,row in enumerate(sample_rows):
+            for j,col in enumerate(sample_cols):
+                ws1.cell(row=i+3, column=j+2, value=row[col])
+                if j < len(sample_cols)-1:
+                    ws1.cell(row=i+3, column=j+2).border = right_border
+
+        # molecules table
+        mol_rows = list(self.data_matrix.molecules.values())
+        mol_cols = list(mol_rows[0].keys())
+        
+        # molecule headers
+        for j,col in enumerate(mol_cols):
+            cell = ws1.cell(row=2, column=len(sample_cols)+j+4, value=col)
+            cell.fill = grey_fill
+            cell.font = bold_font
+            if j < len(mol_cols) - 1:
+                cell.border = bottom_right_border
+            else:
+                cell.border = bottom_border
+
+        # molecule data
+        for i,row in enumerate(mol_rows):
+            for j,col in enumerate(mol_cols):
+                ws1.cell(row=i+3, column=len(sample_cols)+j+4, value=row[col])
+                if j < len(mol_cols) - 1:
+                    ws1.cell(row=i+3, column=len(sample_cols)+j+4).border = right_border
+
+        # second tab, data table =================================================================================
+
+        ws2 = wb.create_sheet(title=f"DataTable_{dtype}")
+        
+        # column labels
+        for j in range(self.data_table.columnCount()):
+            item = self.data_table.horizontalHeaderItem(j)
+            cell = ws2.cell(row=2, column=j+3, value=item.text() if item else '')
+            bg = item.background() if item else None
+            if bg and bg.style() != Qt.NoBrush and bg.color().alpha() > 0:
+                cell.fill = self.make_fill(self.qcolor_to_hex(bg.color()))
+            elif j == self.n_molecules:
+                cell.fill = dark_fill
+            else:
+                cell.fill = grey_fill
+            cell.font = bold_font
+            if j != self.n_molecules:
+                cell.border = bottom_right_border if j < self.data_table.columnCount() - 1 else bottom_border
+            
+        # row labels
+        for i in range(self.data_table.rowCount()):
+            item = self.data_table.verticalHeaderItem(i)
+            cell = ws2.cell(row=i+3, column=2, value=item.text() if item else '')
+            bg = item.background() if item else None
+            if bg and bg.style() != Qt.NoBrush and bg.color().alpha() > 0:
+                cell.fill = self.make_fill(self.qcolor_to_hex(bg.color()))
+            elif i == self.n_samples:
+                cell.fill = dark_fill
+            else:
+                cell.fill = grey_fill
+            cell.font = bold_font
+            if i != self.n_samples:
+                cell.border = right_border
+
+        # top left
+        ws2.cell(row=2, column=2).fill = grey_fill
+        ws2.cell(row=2, column=2).border = bottom_right_border
+        ws2.cell(row=1, column=2, value=f"Data:").font = bold_font
+        ws2.cell(row=1, column=2).alignment = Alignment(horizontal='right')
+        ws2.cell(row=1, column=3, value=dtype).font = bold_font
+
+        # fill in data
+        for i in range(self.data_table.rowCount()):
+            for j in  range(self.data_table.columnCount()):
+                cell = ws2.cell(row=i+3, column=j+3)
+
+                # metric sections/empty space
+                if i >= self.n_samples or j >= self.n_molecules:
+                    table_item = self.data_table.item(i,j)
+                    if table_item and table_item.text():
+                        try:
+                            cell.value = float(table_item.text())
+                        except:
+                            cell.value = table_item.text()
+                        if j < self.data_table.columnCount() - 1:
+                            cell.border = right_border
+                    else:
+                        cell.fill = dark_fill
+                
+                # main data
+                else:
+                    val = raw_data[i,j]
+                    cell.value = None if np.isnan(val) else val
+                    if j < self.data_table.columnCount() - 1 :
+                        cell.border = right_border
+                    if self.combined_outliers[i,j]:
+                        cell.fill = red_fill
+
+        # Third Tab, outliers ===================================================================================
+        ws3 = wb.create_sheet(title="Outliers")
+
+        # setup headers
+        for j,header in enumerate(['sample_name', 'molecule_name', 'outlier_metrics']):
+            cell = ws3.cell(row=2, column=j+2, value=header)
+            cell.fill = grey_fill
+            cell.font = bold_font
+            if j < 2:
+                cell.border = bottom_right_border
+            else:
+                cell.border = bottom_border
+
+        # inv maps for index -> name/mol
+        sample_names = {v:k for k,v in self.data_matrix.sample_map.items()}
+        mol_names = {v:k for k,v in self.data_matrix.mol_map.items()}
+
+        row_idx = 3
+        for i in range(self.data_matrix.n_samples):
+            for j in range(self.data_matrix.n_molecules):
+                flagged = [metric for metric, matrix in self.data_matrix.outliers.items()
+                           if matrix[i,j]]
+                if flagged:
+                    ws3.cell(row=row_idx, column=2, value=sample_names[i]).border = right_border
+                    ws3.cell(row=row_idx, column=3, value=mol_names[j]).border = right_border
+                    ws3.cell(row=row_idx, column=4, value=', '.join(flagged))
+                    row_idx += 1
+
+        self.autofit_columns(ws1)
+        self.autofit_columns(ws2)
+        self.autofit_columns(ws3)
+        wb.save(path)
+
+    def autofit_columns(self, ws, min_width = 8.43):
+        for col_cells in ws.columns:
+            max_len = max((len(str(cell.value)) if  cell.value else 0) for cell in col_cells)
+            col_letter = col_cells[0].column_letter
+            ws.column_dimensions[col_letter].width =max(max_len+2, min_width)
+
+    def qcolor_to_hex(self, qcolor):
+        return f"{qcolor.red():02X}{qcolor.green():02X}{qcolor.blue():02X}"
+
+    def make_fill(self, hex_color):
+        return PatternFill(fill_type='solid', fgColor=hex_color)
 
 class BackgroundDelegate(QStyledItemDelegate):
     """
@@ -334,17 +559,59 @@ class BackgroundDelegate(QStyledItemDelegate):
 
 class ColoredHeader(QHeaderView):
     """
-    Allows for highlighting of table headers
+    Allows for coloring of table headers
     """
-    def paintSection(self, painter, rect, logical_index):
-        super().paintSection(painter, rect, logical_index)
-        table = self.parent()
-        if self.orientation() == Qt.Horizontal:
-            item = table.horizontalHeaderItem(logical_index)
-        else:
-            item = table.verticalHeaderItem(logical_index)
-        if item:
-            bg = item.background()
-            if bg.color().isValid() and bg.color().alpha() > 0:
-                painter.fillRect(rect, bg)
+    def __init__(self, orientation, table):
+        super().__init__(orientation, table)
+        self._table = table
+        self.setStyleSheet("""
+            QHeaderView {
+                background-color: #232629
+            }
+            QHeaderView::section {
+                background-color: transparent;
+                color: rgba(255,255,255,0.7);
+                text-transform: uppercase;
+                padding: 0 24px;
+                height: 36px;
+                border-right: 1px solid #31363b;
+                border-bottom: 1px solid #31363b;
+            }
+        """)
 
+    def paintSection(self, painter, rect, logical_index):
+        if self.orientation() == Qt.Horizontal:
+            item = self._table.horizontalHeaderItem(logical_index)
+        else:
+            item = self._table.verticalHeaderItem(logical_index)
+
+        bg = item.background() if item else None
+        if bg and bg.style() !=Qt.NoBrush and bg.color().isValid() and bg.color().alpha() > 0:
+            painter.fillRect(rect, bg)
+        else:
+            painter.fillRect(rect, QColor(0x23, 0x26, 0x29))
+
+        super().paintSection(painter, rect, logical_index)
+
+class TableWorker(QThread):
+    finished = pyqtSignal(list)
+
+    def __init__(self, data_matrix, dtype, sample_map, mol_map, outliers, format_val):
+        super().__init__()
+        self.data_matrix = data_matrix
+        self.dtype = dtype
+        self.sample_map = sample_map
+        self.mol_map = mol_map
+        self.outliers = outliers
+        self.format_val = format_val
+
+    def run(self):
+        results = []
+        for sample in self.data_matrix.samples:
+            i = self.sample_map[sample]
+            for mol in self.data_matrix.molecules:
+                j = self.mol_map[mol]
+                value = self.format_val(self.data_matrix.data[self.dtype][i,j])
+                is_outlier = bool(self.outliers[i,j])
+                results.append((i,j, value, is_outlier))
+        self.finished.emit(results)

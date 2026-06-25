@@ -8,6 +8,15 @@ goal of MSAuto is to create a comprehensive QC report with each run, and handle 
 various projects made of many individual runs (collections of samples) to allow for easy data
 organization and retrevial for paper production.
 
+There is a built in, lightweight project management system.  Projects are organized into groups of
+runs, where each run is a set of samples processed together/ran on the machine togheter. The current build
+works on a targeted set of metabolites specified by a user, but future builds will also enable untargeted
+analysis where fetaures are built from groups of peaks matched by retention time across ion traces,
+then grouped with most similar features across all samples.  Features can then be identified and 
+quantified, building a dataset of metabolites as the samples are processed.  Batch-based analyses
+will also be implemented, allowing for the selection of several runs with overlapping groups which can
+then be batch-corrected to produce larger, consistent datasets for downstream analyses.
+
 QC metrics are centered around detecting molecules, samples, and individual features that are 
 outliers in the dataset, as well as general dataset peak quality based on standard metrics such 
 as signal to noise ration (S/N), full-width at half-height (FWHH), peak symmetry (Tailing factor),
@@ -19,7 +28,7 @@ Once peaks are picked and quality is checked, data is stored in a hybrid SQL/h5 
 easy visualization and retrevial in the MSAuto GUI, allowing users to investigate the peak and
 chromatogram quality manually as well.
 
-Basic data analysis techniques are also available for the output data matrix.  PCA to see how
+LIghtweight data analysis techniques are also available for the output data matrix.  PCA to see how
 clusters arise within the dataset help inform wether or not the data is structured as one would
 expect (case/control clustering seperately for example). In addition to MSEA (metabolite set
 enrichment analyiss), which just applies the concepts of GSEA to metabolite sets defined by users
@@ -28,7 +37,7 @@ and topological analysis are the end goal of generating these feature matrices, 
 a limited feature set as is common in metabolomics makes this more difficult and potentially less
 informative as these same techniques when applied to transcriptomic datasets.
 
-The end goal of MSAuto is to streamline data collection for GC-MS in a way that allows users
+The goal of MSAuto is to streamline data collection for GC-MS in a way that allows users
 to have control over the set of peaks being picked and full access to a robust QC system 
 that can quantify any issues with the chromatography, allowing for more consistent results and 
 better machine management. The untargeted metabolomics and pathway analysis applications are in
@@ -155,7 +164,7 @@ per molecule
     % CV across samples per group
     % missing
     avg/err RT
-    %CV S/N
+    % CV S/N
     avg/err FWHH
     avg/err symmetry
     % intensity outliers
@@ -164,7 +173,7 @@ per molecule
 
 per sample
     % missing
-    %CV S/N
+    % CV S/N
     injection order vs intensity
     % intensity outliers
     % RT_diff outliers
