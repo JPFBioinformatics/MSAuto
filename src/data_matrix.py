@@ -12,6 +12,8 @@ from src.config_loader import ConfigLoader
 from src.db import get_run_samples, get_run_molecules, connect
 from src.utils import get_run_dir, get_proj_db
 
+from scipy.optimize import curve_fit
+
 # logging
 import logging
 logger = logging.getLogger(__name__)
@@ -55,9 +57,12 @@ class DataMatrix:
         self.n_samples = len(self.sample_map)
         self.n_molecules = len(self.mol_map)
 
-        # data matrices (samples x features, rows x columns)
+        # matrix builders
         float_empty = lambda: np.full((self.n_samples, self.n_molecules), np.nan, dtype=np.float64)
         int_empty = lambda: np.full((self.n_samples, self.n_molecules), -1, dtype=np.int32)
+        bool_empty = lambda: np.zeros((self.n_samples, self.n_molecules), dtype=bool)
+
+        # data matrices (samples x features, rows x columns)
         self.data = {
             'Area': float_empty(),
             'FWHH': float_empty(),
@@ -71,11 +76,13 @@ class DataMatrix:
             'Theoretical_Plates': float_empty(),
             'peak_idx': int_empty(),
             'norm_Area': float_empty(),
-            'norm_Height': float_empty()
+            'norm_Height': float_empty(),
+            'bl_slope': float_empty(),
+            'flat': bool_empty(),
+            'gaussian_similarity': float_empty()
         }
         
         # outlier matrices (samples x features, rows x columns), 1/True if outlier
-        bool_empty = lambda: np.zeros((self.n_samples, self.n_molecules), dtype=bool)
         self.outliers = {
             'Area': bool_empty(),
             'FWHH': bool_empty(),
@@ -84,7 +91,9 @@ class DataMatrix:
             'Tailing_Factor': bool_empty(),
             'Sharpness': bool_empty(),
             'SN_Ratio': bool_empty(),
-            'Theoretical_Plates': bool_empty()
+            'Theoretical_Plates': bool_empty(),
+            'bl_slope': bool_empty(),
+            'gaussian_similarity': bool_empty()
         }
 
         # missiness matrix (samples x features, rows x columns), 1/True if missing, looks only at
@@ -126,17 +135,20 @@ class DataMatrix:
                 self.data['SN_Ratio'][row_i,col_i] = peak['sn_ratio']
                 self.data['Theoretical_Plates'][row_i,col_i] = self._theoretical_plates(peak['rt'],peak['fwhh'])
                 self.data['peak_idx'][row_i][col_i] = peak['peak_idx']
+                self.data['bl_slope'][row_i][col_i] = peak['bl_slope']
+                self.data['flat'][row_i][col_i] = peak['flat_top']
+                self.data['gaussian_similarity'][row_i][col_i] = self.gaussian_similarity(peak['peak_array'])
 
         # outlier matrix
         for metric in self.outliers:
-            self._detect_outliers(metric, outlier_threshold)
+            self.detect_outliers(metric, outlier_threshold)
 
         # missingness matrix
         self.missing = np.isnan(self.data['Area'])
 
         # normalize matrix
-        self._normalize_matrix('Area')
-        self._normalize_matrix('Height')
+        self.normalize_matrix('Area')
+        self.normalize_matrix('Height')
 
     def _theoretical_plates(self, rt: np.float64, fwhh: np.float64):
         """
@@ -157,7 +169,7 @@ class DataMatrix:
             tp = 5.545 * (rt / fwhh)**2
         return tp
 
-    def _detect_outliers(self, metric: str, threshold: float = 3.5):
+    def detect_outliers(self, metric: str, threshold: float = 3.5):
         """
         uses median/mad based outlier detection to return a list if (i,j) index values for outliers
         with respect to a specific metric, determined by comparing feature values across all samples
@@ -226,11 +238,30 @@ class DataMatrix:
         
         return (stdev / avg) * 100
 
+    def _gaussian(self, x, amp, mu, sigma):
+        return amp*np.exp(-((x-mu)**2) / (2 * sigma**2))
+    
+    def gaussian_similarity(self, array):
+        x = np.arange(len(array))
+        y = array.astype(float)
+
+        try:
+            p0 = [y.max(), np.argmax(y), len(y) / 4]
+            popt, _ = curve_fit(self._gaussian, x, y, p0=p0)
+            y_fit = self._gaussian(x,*popt)
+            ss_res = np.sum((y - y_fit)**2)
+            ss_tot = np.sum((y - np.mean(y))**2)
+            if ss_tot == 0:
+                return np.nan
+            return 1 - (ss_res / ss_tot)
+        except:
+            return np.nan
+
     # endregion
 
     # region                 ---------- Normalization ----------
 
-    def _normalize_matrix(self, metric: str):
+    def normalize_matrix(self, metric: str):
         """
         Takes a data matrix (area or height) and normalizes to norm factor and internal standards,
         standards are kept in the normalized matrix and will just be a column of all 1's

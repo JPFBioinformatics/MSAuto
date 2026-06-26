@@ -977,6 +977,16 @@ class IntensityMatrix:
                 logger.info(f"Skipped {molecule} peak in {samlpe_name} sample due to RT invalid")
                 continue
             peak["molecule"] = molecule
+
+            # generate im slice
+            row_i = self.unique_mzs.index(peak['ion'])
+            l = peak['left_bound']
+            r = peak['right_bound']
+
+            im_slice = self.intensity_matrix[row_i][l:r+1].astype(float)
+
+            peak['peak_array'] = im_slice
+
             peaks.append(peak)
 
             molecule_map[molecule] = (peak['ion'], peak['peak_idx'])

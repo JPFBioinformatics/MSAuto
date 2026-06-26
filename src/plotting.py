@@ -2,32 +2,6 @@
 
 Plotting functions for QC metrics, statistical analysis visualization, and chromatogram display.
 All functions return matplotlib Figure objects and never call plt.show().
-The caller decides whether to embed in GUI or save to PDF.
-
-Usage for PDF:
-    from matplotlib.backends.backend_pdf import PdfPages
-    with PdfPages("report.pdf") as pdf:
-        fig = plot_something(...)
-        pdf.savefig(fig)
-        plt.close(fig)
-
-Usage for PyQt5 GUI:
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-    canvas = FigureCanvas(fig)
-    layout.addWidget(canvas)
-
-Holds functions for:
-    - Heatmaps (missingness, outliers, clustering, correlation)
-    - Line/scatter plots (injection order drift, PCA/PLS-DA scores)
-    - Dot/strip plots (feature distributions per group)
-    - Histograms (permutation test)
-    - Box-and-whisker (group comparisons)
-    - Scree plots
-    - Volcano plots
-    - VIP bar charts
-    - Confusion matrix
-    - Chromatogram traces
-    - Single peak visualization
 
 """
 
@@ -36,8 +10,8 @@ Holds functions for:
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.colors import ListedColormap
 from matplotlib.axes import Axes
+from matplotlib import cm
 from scipy.cluster.hierarchy import dendrogram
 
 import logging
@@ -45,181 +19,187 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-# region                 ---------- Internal Helpers ----------
+# region                 ---------- Basic Plots ----------
 
-_COLORS = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-def _color_map(names: list):
-    return {name: _COLORS[i % len(_COLORS)] for i, name in enumerate(names)}
-
-# endregion
-
-# region                 ---------- QC: Heatmaps ----------
-
-def plot_missing_heatmap(missing_matrix: np.ndarray, sample_names: list, mol_names: list,
-                         title: str = "Missingness"):
+def plot_boxplot(ax, data, labels, ylabel='', title='', cutoff=None):
     """
-    Heatmap of missing values (samples x features). Black = missing, white = present.
+    makes a set of boxplots from the data given, optionally including a horizontal cutoff line
 
     Params
     ------
-    missing_matrix      bool (n_samples, n_features) from DataMatrix.missing
-    sample_names        row labels, index matched to matrix rows
-    mol_names           column labels, index matched to matrix columns
+    ax                          ax to plot on
+    data                        list of arrays of data to make boxplots of
+    labels                      list of str labels index matched to data
+    ylabel/title                for annotating axis/title
+    cutoff                      value to plot a cutoff line at
     """
-    n_rows, n_cols = missing_matrix.shape
-    fig, ax = plt.subplots(figsize=(max(6, n_cols * 0.4), max(4, n_rows * 0.3)))
-    ax.imshow(missing_matrix.astype(float), aspect='auto', cmap='Greys',
-              vmin=0, vmax=1, interpolation='nearest')
-    ax.set_xticks(range(n_cols))
-    ax.set_xticklabels(mol_names, rotation=90, fontsize=7)
-    ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(sample_names, fontsize=7)
-    ax.set_title(title)
-    ax.set_xlabel("Feature")
-    ax.set_ylabel("Sample")
-    fig.tight_layout()
-    return fig
 
-def plot_outlier_heatmap(outlier_matrix: np.ndarray, sample_names: list, mol_names: list,
-                         metric: str = "", title: str = ""):
+    ax.boxplot(data,labels=labels)
+
+    if cutoff is not None:
+        ax.axhline(cutoff, color='red', linestyle='--')
+
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+
+def plot_scatter(ax, x, y, point_labels=None, ylabel='', xlabel='', title='', hlines=None, vlines=None, fit=False):
     """
-    Heatmap of outlier flags (samples x features). Red = outlier, white = normal.
+    Plots a scatter plot with optional labelling, horizontal/vertical lines, and linear fit
 
     Params
     ------
-    outlier_matrix      bool (n_samples, n_features) from DataMatrix.outliers[metric]
-    metric              metric name shown in title if no explicit title given
+    ax                          ax to plot on
+    x                           x values to plot
+    y                           y values to plot
+    point_labels                str labels index matched to x,y
+    ylabel/xlabel/title         str axis/title labels
+    hlines                      list of values to plot horizontal lines at
+    vlines                      list of values to plot vertical lines at
+    fit                         True/False to calculate a linear fit for x,y
     """
-    if not title:
-        title = f"Outliers — {metric}" if metric else "Outliers"
-    n_rows, n_cols = outlier_matrix.shape
-    cmap = ListedColormap(['white', 'crimson'])
-    fig, ax = plt.subplots(figsize=(max(6, n_cols * 0.4), max(4, n_rows * 0.3)))
-    ax.imshow(outlier_matrix.astype(float), aspect='auto', cmap=cmap,
-              vmin=0, vmax=1, interpolation='nearest')
-    ax.set_xticks(range(n_cols))
-    ax.set_xticklabels(mol_names, rotation=90, fontsize=7)
-    ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(sample_names, fontsize=7)
-    ax.set_title(title)
-    ax.set_xlabel("Feature")
-    ax.set_ylabel("Sample")
-    fig.tight_layout()
-    return fig
+    
+    ax.scatter(x,y)
 
-def plot_heatmap(matrix: np.ndarray, row_labels: list, col_labels: list,
-                 title: str = "", xlabel: str = "", ylabel: str = "",
-                 cmap: str = 'viridis'):
-    """
-    General-purpose heatmap for any (rows x cols) numeric matrix.
-    """
-    n_rows, n_cols = matrix.shape
-    fig, ax = plt.subplots(figsize=(max(6, n_cols * 0.4), max(4, n_rows * 0.3)))
-    im = ax.imshow(matrix, aspect='auto', cmap=cmap, interpolation='nearest')
-    ax.set_xticks(range(n_cols))
-    ax.set_xticklabels(col_labels, rotation=90, fontsize=7)
-    ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(row_labels, fontsize=7)
-    ax.set_title(title)
+    if point_labels:
+        for i,label in enumerate(point_labels):
+            ax.annotate(label, x[i], y[i])
+            
+    if hlines:
+        for h in hlines:
+            ax.axhline(h, color='red', linestyle='--')
+
+    if vlines:
+        for v in vlines:
+            ax.axvline(v, color='red', linestyle='--')
+
+    if fit:
+        coeffs = np.polyfit(x,y,1)
+        fit_fn = np.poly1d(coeffs)
+
+        x_line = np.linspace(min(x), max(x), 100)
+
+        residuals = y - fit_fn(x)
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum(y - np.mean(y))**2
+        r2 = 1 - (ss_res / ss_tot)
+        
+        ax.plot(x_line, fit_fn(x_line), color='blue')
+        ax.annotate(f'R2={r2:.3f}', xy=(0.05, 0.950), xycooords='axes fraction')
+    
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    fig.colorbar(im, ax=ax)
-    fig.tight_layout()
-    return fig
+    ax.set_title(title)
 
-# endregion
-
-# region                 ---------- QC: Injection Order ----------
-
-def plot_injection_order(values: np.ndarray, injection_orders: np.ndarray,
-                         sample_names: list, title: str = "", ylabel: str = ""):
+def plot_heatmap(ax, matrix, row_labels='', col_labels='', title='', cmap='RdY1Gn'):
     """
-    Line + scatter of a QC metric vs injection order. Useful for detecting run-order drift in
-    RT, S/N, theoretical plates, etc.
+    Plots a heatmap witha annotation and a colorbar
 
     Params
     ------
-    values              (n_samples,) array of metric values, one per sample
-    injection_orders    (n_samples,) integer injection order, index matched to values
-    sample_names        sample name labels, index matched to values
+    ax                          ax to plot on
+    matrix                      matrix of values to plot
+    row/col_labels              labels for row/cols of the matrix
+    title                       title
+    cmap                        colormap to use
     """
-    sort_idx = np.argsort(injection_orders)
-    x = injection_orders[sort_idx]
-    y = values[sort_idx]
-    names = [sample_names[i] for i in sort_idx]
 
-    fig, ax = plt.subplots(figsize=(max(6, len(x) * 0.35), 4))
-    ax.plot(x, y, color='steelblue', linewidth=1.2, zorder=1)
-    ax.scatter(x, y, color='steelblue', s=40, zorder=2)
-    ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=90, fontsize=7)
+    im = ax.imshow(matrix, cmap=cmap, aspect='auto')
+    plt.colorbar(im, ax=ax)
+
+    if col_labels:
+        ax.set_xticks(range(len(col_labels)))
+        ax.set_xticklabels(col_labels, rotation=90)
+
+    if row_labels:
+        ax.set_yticks(range(len(row_labels)))
+        ax.set_yticks(row_labels)
+
     ax.set_title(title)
-    ax.set_xlabel("Injection Order")
+
+def plot_violin(ax, data, labels, ylabel='', title='', color=False):
+    """
+    Plots a set of violin plots
+
+    Params
+    ------
+    ax                          ax to plot on
+    data                        list of arrays to plot
+    labels                      list of labels index matched to data
+    ylabel/title                annotations
+    color                       wether or not to color the plots
+    """
+
+    parts = ax.violinplot(data)
+
+    if color:
+        cmap = cm.get_cmap('Dark2', len(data))
+        colors = [cmap(i/len(data)) for i in range(len(data))]
+        for body,color in zip(parts['bodies'], colors):
+            body.set_facecolor(color)
+            body.set_alpha(0.7)
+
+    ax.set_xticks(range(1, len(labels)+1))
+    ax.set_xticklabels(labels)
+
     ax.set_ylabel(ylabel)
-    fig.tight_layout()
-    return fig
 
-# endregion
+    ax.set_title(title)
 
-# region                 ---------- QC: Box / Strip Plots ----------
-
-def plot_boxplot(values: np.ndarray, group_indices: dict,
-                 title: str = "", xlabel: str = "", ylabel: str = ""):
+def plot_histogram(ax, data, labels, xlabel='', title='', bins=20):
     """
-    Box-and-whisker for a single feature across groups.
+    Plots overlaid histograms (or just one)
 
     Params
     ------
-    values              (n_samples,) array for one feature (one column of DataMatrix.data)
-    group_indices       dict of group_name -> list of row indices (DataMatrix.group_indices)
+    ax                          ax to plot on
+    data                        list of array distributinos to plot
+    labels                      list of str labels index matched to data
+    xlabel/title                annotations
+    bins                        number of bins to break data into
     """
-    group_names = list(group_indices.keys())
-    data = [values[idxs] for idxs in group_indices.values()]
-    cmap = _color_map(group_names)
 
-    fig, ax = plt.subplots(figsize=(max(4, len(group_names) * 0.9), 5))
-    bp = ax.boxplot(data, patch_artist=True, medianprops=dict(color='black', linewidth=1.5))
-    for patch, name in zip(bp['boxes'], group_names):
-        patch.set_facecolor(cmap[name])
-        patch.set_alpha(0.7)
-    ax.set_xticks(range(1, len(group_names) + 1))
-    ax.set_xticklabels(group_names, rotation=45, ha='right')
-    ax.set_title(title)
+    for arr,label in zip(data,labels):
+        ax.hist(arr, bins=bins, alpha=0.6, label=label)
+
+    ax.legend()
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    fig.tight_layout()
-    return fig
+    ax.set_title(title)
 
-def plot_stripplot(values: np.ndarray, group_indices: dict,
-                   title: str = "", xlabel: str = "", ylabel: str = ""):
+def plot_bar(ax, values, labels, ylabel='', title='', cutoff=None, sorted_desc=False):
     """
-    Strip / dot plot with jitter for a single feature across groups.
-    Horizontal median bar overlaid on each group.
+    Plots a barplot with error bars, optionally include cutoff horizontal lines at specified values
+    and allows sorting of bars in descending order of magnitude
 
     Params
     ------
-    values              (n_samples,) array for one feature
-    group_indices       dict of group_name -> list of row indices (DataMatrix.group_indices)
+    ax                          ax to plot on
+    values                      list of values to plot
+    labels                      index matched labels for values
+    ylabel/title                annotation
+    cutoff                      values to draw horizontal lines on (optional)
+    sorted_desc                 T/F wether or not to sort values in desc order on plot
     """
-    group_names = list(group_indices.keys())
-    cmap = _color_map(group_names)
 
-    fig, ax = plt.subplots(figsize=(max(4, len(group_names) * 0.9), 5))
-    for pos, (name, idxs) in enumerate(group_indices.items(), start=1):
-        y = values[idxs]
-        x = np.random.normal(pos, 0.08, size=len(y))
-        ax.scatter(x, y, color=cmap[name], alpha=0.75, s=40, zorder=3)
-        ax.plot([pos - 0.2, pos + 0.2], [np.nanmedian(y)] * 2,
-                color='black', linewidth=2, zorder=4)
-    ax.set_xticks(range(1, len(group_names) + 1))
-    ax.set_xticklabels(group_names, rotation=45, ha='right')
-    ax.set_xlim(0.5, len(group_names) + 0.5)
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
+    if sorted_desc:
+        paris = sorted(zip(values,labels), reverse=True)
+        values,labels = zip(*paris)
+
+    ax.bar(range(len(values)), values)
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=90)
+
+    if cutoff is not None:
+        for h in cutoff:
+            ax.axhline(h, color='red', linestyle='--', label=f'{h:3f}')
+
     ax.set_ylabel(ylabel)
-    fig.tight_layout()
-    return fig
+
+    ax.set_title(title)
+
+def plot_table(ax, data, col_labels = '', row_labels=''):
+    ax.table(cellText=data, colLabels=col_labels, rowLabels=row_labels)
+    ax.axis('off')
 
 # endregion
 
@@ -281,7 +261,7 @@ def plot_scores(scores: np.ndarray, labels: list, explained_variance: np.ndarray
     explained_variance  (n_components,) from pca()['explained_variance'], or None for PLS-DA
     """
     group_names = list(dict.fromkeys(labels))
-    cmap = _color_map(group_names)
+    #cmap = _color_map(group_names)
 
     if explained_variance is not None:
         xlabel = f"PC1 ({explained_variance[0] * 100:.1f}%)"
@@ -290,8 +270,8 @@ def plot_scores(scores: np.ndarray, labels: list, explained_variance: np.ndarray
     fig, ax = plt.subplots(figsize=(6, 5))
     for name in group_names:
         idx = [i for i, l in enumerate(labels) if l == name]
-        ax.scatter(scores[idx, 0], scores[idx, 1], label=name,
-                   color=cmap[name], s=55, alpha=0.85)
+        #ax.scatter(scores[idx, 0], scores[idx, 1], label=name,
+                   #color=cmap[name], s=55, alpha=0.85)
     ax.axhline(0, color='grey', linewidth=0.5)
     ax.axvline(0, color='grey', linewidth=0.5)
     ax.set_xlabel(xlabel)

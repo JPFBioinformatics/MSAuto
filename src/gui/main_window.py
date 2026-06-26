@@ -35,6 +35,7 @@ from src.intensity_matrix import IntensityMatrix as IM
 from src.run_data import RunData as RD
 from src.gui.tab_chromatogram import ChromatogramTab
 from src.gui.tab_data import DataTab
+from src.gui.tab_qc import QCTab
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1326,7 +1327,7 @@ class MainDashboard(QWidget):
         self.setLayout(layout)
 
     def showEvent(self, event):
-        
+
         self.window().showMaximized()
         run_data = self.window().run_data[-1]
 
@@ -1334,9 +1335,11 @@ class MainDashboard(QWidget):
 
         self.chrom_tab = ChromatogramTab(run_data, self)
         self.data_tab = DataTab(run_data, self.chrom_tab, self)
+        self.qc_tab = QCTab(run_data, self)
 
-        self.tabs.addTab(self.data_tab, "Data")
         self.tabs.addTab(self.chrom_tab, "Chromatogram")
+        self.tabs.addTab(self.data_tab, "Data")
+        self.tabs.addTab(self.qc_tab, "QC")
 
         super().showEvent(event)
 

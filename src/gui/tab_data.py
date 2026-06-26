@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # Main data table
 class DataTab(QWidget):
-    def __init__(self, run_data, chrom_tab, parent):
+    def __init__(self, run_data, chrom_tab, parent=None):
         super().__init__(parent)
 
         # save relevant run data

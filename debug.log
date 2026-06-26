@@ -5030,3 +5030,1227 @@
 2026-06-25 11:37:40,319 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
 2026-06-25 11:37:40,319 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
 2026-06-25 11:37:40,319 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:10:28,805 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,806 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:10:28,807 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:10:35,391 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:10:35,392 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:10:41,213 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:10:41,215 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:10:46,413 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:10:46,414 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:10:46,414 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:10:46,414 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:10:46,414 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:10:51,231 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:10:51,232 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:10:51,232 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:10:51,232 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:10:51,232 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:10:51,232 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:10:55,052 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:10:55,052 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,052 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,052 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,052 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,053 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,053 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,053 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:10:55,053 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,123 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,124 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,124 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:10:59,124 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:11:02,828 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:11:02,828 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:11:02,829 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:11:06,228 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:11:06,229 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,704 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,705 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,705 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:11:09,705 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:12:21,211 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:12:21,211 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:12:21,212 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:12:27,820 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:12:27,821 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:12:33,647 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:12:33,648 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:12:38,862 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:12:38,862 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:12:38,863 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:12:38,863 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:12:38,863 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:12:43,703 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:12:43,704 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:12:43,704 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:12:43,704 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:12:43,704 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:12:43,704 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:12:47,495 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:12:47,496 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:12:51,564 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:12:51,564 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:12:51,565 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:12:55,139 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:12:55,140 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,507 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,508 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,508 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,508 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,508 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:12:58,508 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:13:01,991 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:13:01,992 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:18:08,785 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:18:08,785 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:18:08,786 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:18:15,352 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:18:15,353 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:18:21,158 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:18:21,159 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:18:26,340 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:18:26,341 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:18:26,341 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:18:26,341 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:18:26,341 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:18:31,192 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:18:31,193 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:18:31,193 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:18:31,193 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:18:31,193 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:18:31,193 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:18:34,981 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:18:34,982 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:18:39,066 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:18:39,067 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,653 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,654 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,654 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:18:42,654 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:18:46,040 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:18:46,041 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:18:49,524 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:20:08,414 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,415 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,416 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,416 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,416 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:20:08,416 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:20:14,957 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:20:14,958 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:20:20,767 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:20:20,768 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:20:25,988 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:20:25,989 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:20:25,989 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:20:25,989 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:20:25,989 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:20:30,832 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:20:30,832 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:20:30,832 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:20:30,832 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:20:30,833 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:20:30,833 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:20:34,619 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:20:34,619 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,619 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:20:34,620 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:20:38,704 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:20:42,280 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:20:42,280 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,281 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:20:42,282 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:20:45,658 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:20:45,659 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,115 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,116 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,116 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,116 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,116 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:20:49,116 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:21:58,024 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,025 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,026 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,026 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,026 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:21:58,026 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:22:04,581 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:22:04,583 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:22:10,581 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:22:10,582 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:22:15,734 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:22:15,735 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:22:15,735 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:22:15,735 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:22:15,736 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:22:20,557 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:22:20,558 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:22:20,558 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:22:20,558 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:22:20,558 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:22:20,558 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:22:24,327 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:22:24,328 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:22:28,391 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:22:28,392 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,954 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,955 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,955 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,955 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,955 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:22:31,955 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:22:35,323 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,324 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,325 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:22:35,325 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,780 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,781 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,781 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,781 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,781 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:22:38,781 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:26:13,010 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,011 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:26:13,012 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:26:19,531 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:26:19,532 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:26:25,314 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:26:25,316 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:26:30,485 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:26:30,486 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:26:30,486 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:26:30,486 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:26:30,486 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:26:35,333 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:26:35,334 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:26:35,334 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:26:35,334 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:26:35,334 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:26:35,335 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:26:39,108 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:26:39,109 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:26:43,175 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:26:43,176 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:26:46,747 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:26:46,747 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:26:46,748 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:26:50,111 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:26:50,111 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,111 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,111 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,111 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:26:50,112 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,556 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:26:53,557 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:27:38,712 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,713 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:27:38,714 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:27:45,226 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:27:45,227 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:27:50,987 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:27:50,988 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:27:56,141 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:27:56,141 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:27:56,141 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:27:56,141 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:27:56,142 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:28:00,960 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:28:00,960 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:28:00,960 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:28:00,960 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:28:00,960 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:28:00,961 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:28:04,713 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:28:04,714 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,766 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,767 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,767 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:28:08,767 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:28:12,324 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,325 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,326 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,326 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,326 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,326 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:28:12,326 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:28:15,685 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:28:19,141 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:28:19,141 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:28:19,142 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:31:27,835 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,836 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:31:27,837 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:31:34,406 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:31:34,407 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:31:40,190 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:31:40,191 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:31:45,347 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:31:45,348 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:31:45,348 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:31:45,348 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:31:45,349 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:31:50,154 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:31:50,154 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:31:50,155 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:31:50,155 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:31:50,155 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:31:50,155 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,912 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:31:53,913 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:31:57,964 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:31:57,965 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:32:01,530 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:32:01,531 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:32:04,892 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:32:04,893 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:32:08,360 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:32:55,607 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,608 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,609 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,609 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,609 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:32:55,609 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:33:02,185 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:33:02,186 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:33:07,969 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:33:07,970 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:33:13,142 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:33:13,143 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:33:13,143 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:33:13,143 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:33:13,144 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:33:17,958 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:33:17,959 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:33:17,959 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:33:17,959 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:33:17,959 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:33:17,959 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,747 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,748 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,748 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:33:21,748 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:33:25,826 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:33:25,827 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,383 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:33:29,384 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:33:32,752 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:33:32,752 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,752 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,752 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,752 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:33:32,753 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:33:36,218 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 12:34:29,054 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 12:34:29,054 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,055 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 12:34:29,056 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 12:34:35,669 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 12:34:35,670 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:34:41,466 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 12:34:41,468 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 12:34:46,637 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 12:34:46,638 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:34:46,638 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:34:46,638 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 12:34:46,638 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 12:34:51,431 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 12:34:51,432 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:34:51,432 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:34:51,432 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:34:51,432 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 12:34:51,432 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 12:34:55,179 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,180 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 12:34:55,181 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,230 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 12:34:59,231 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 12:35:02,800 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 12:35:02,801 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 12:35:06,153 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 12:35:06,154 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,600 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 12:35:09,601 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,984 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:19:44,985 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 14:19:51,572 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 14:19:51,573 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 14:19:57,364 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 14:19:57,365 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 14:20:02,556 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 14:20:02,557 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:20:02,557 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:20:02,557 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:20:02,557 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 14:20:07,387 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 14:20:07,387 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:20:07,388 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:20:07,388 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:20:07,388 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:20:07,388 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 14:20:11,184 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 14:20:11,184 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,184 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,184 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,185 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,185 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,185 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,185 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:20:11,185 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:20:15,261 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 14:20:18,838 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:20:18,839 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 14:20:22,210 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 14:20:22,210 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,210 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,210 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,210 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:20:22,211 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 14:20:25,675 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:20:25,676 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
+2026-06-26 14:23:02,277 [INFO] src.intensity_matrix: --------------------Processing Sample DERIV TMS--------------------
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Fumarate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Malate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Aspartate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Methionine peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Phenylalanine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Taurine peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,278 [INFO] src.intensity_matrix: Skipped Citrate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Tyrosine 2TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Linoleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Oleate peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Skipped Cholesterol peak in DERIV TMS sample due to RT invalid
+2026-06-26 14:23:02,279 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 21 | Pct Found 50.0
+2026-06-26 14:23:08,809 [INFO] src.intensity_matrix: --------------------Processing Sample SC1 TMS--------------------
+2026-06-26 14:23:08,810 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 14:23:14,588 [INFO] src.intensity_matrix: --------------------Processing Sample SC2 TMS--------------------
+2026-06-26 14:23:14,590 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 42 | Pct Found 100.0
+2026-06-26 14:23:19,744 [INFO] src.intensity_matrix: --------------------Processing Sample SC3 TMS--------------------
+2026-06-26 14:23:19,744 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:23:19,745 [INFO] src.intensity_matrix: Skipped Taurine peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:23:19,745 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC3 TMS sample due to RT invalid
+2026-06-26 14:23:19,745 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 39 | Pct Found 92.85714285714286
+2026-06-26 14:23:24,554 [INFO] src.intensity_matrix: --------------------Processing Sample SC4 TMS--------------------
+2026-06-26 14:23:24,555 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:23:24,555 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:23:24,555 [INFO] src.intensity_matrix: Skipped Taurine peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:23:24,555 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC4 TMS sample due to RT invalid
+2026-06-26 14:23:24,555 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 38 | Pct Found 90.47619047619048
+2026-06-26 14:23:28,305 [INFO] src.intensity_matrix: --------------------Processing Sample SC5 TMS--------------------
+2026-06-26 14:23:28,305 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Taurine peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC5 TMS sample due to RT invalid
+2026-06-26 14:23:28,306 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 35 | Pct Found 83.33333333333334
+2026-06-26 14:23:32,368 [INFO] src.intensity_matrix: --------------------Processing Sample SC6 TMS--------------------
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Taurine peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Skipped Oleate peak in SC6 TMS sample due to RT invalid
+2026-06-26 14:23:32,370 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 34 | Pct Found 80.95238095238095
+2026-06-26 14:23:35,922 [INFO] src.intensity_matrix: --------------------Processing Sample SC7 TMS--------------------
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Methionine peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Glutamate 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Taurine peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Skipped Oleate peak in SC7 TMS sample due to RT invalid
+2026-06-26 14:23:35,923 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 29 | Pct Found 69.04761904761905
+2026-06-26 14:23:39,271 [INFO] src.intensity_matrix: --------------------Processing Sample SC8 TMS--------------------
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Aspartate 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Phenylalanine 1TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Taurine peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Skipped Oleate peak in SC8 TMS sample due to RT invalid
+2026-06-26 14:23:39,272 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 30 | Pct Found 71.42857142857143
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: --------------------Processing Sample SC9 TMS--------------------
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Malate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Methionine peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Asparagine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Glutamate 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Serine 2TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Taurine peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Glycerol-3-Phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Glycerol-3-phosphate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Citrate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Lysine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Lysine 4TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Tyrosine 3TMS peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Linoleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Skipped Oleate peak in SC9 TMS sample due to RT invalid
+2026-06-26 14:23:42,700 [INFO] src.intensity_matrix: Molecules Queried: 42 | Peaks Found: 28 | Pct Found 66.66666666666666
