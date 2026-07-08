@@ -13,10 +13,20 @@ input_dir: C:/input/path
 # type of file to process, .D or .mzML
 input_type: .D
 
-# thesholds/analysis parameters
+# peak picking thresholds
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged
 endpoint_threshold: 10              # max difference between endpoint heights (as a percent of max height of peak) for peak to be flagged
 variance_threshold: 1e-6            # minimum variance to be included in PCA plot
 width_threshold: 25                 # maximum width of a peak before it is flagged as overloaded
-pca_var: 0.8                        # decimal percent of how much variance accounted for by plotted pca, 0.8 means plot all pcs that in sum account for 80% of variance
 sn_threshold: 3.0                   # signal to noise threshold for peak picking, 3 is standard for detection 10 for quantitation
+
+# preprocessing settings
+sparseness_threshold: 0.5           # if ALL groups have >= this fraction of missing data then drop the feature from future analysis
+impute_method: hm                   # what method to use for imputing data, hm = half minimum (best for our purposes), knn or mabye random forest/MICE if you want overkill 
+impute_knns: 5                      # if we use knn for imputation the number of neighbors to use
+
+# anaylsis settings
+
+# add a field for H5_location so runs can share same h5 files but have different parameters?
+# add thresholds for:
+  # RT Drift - 0.01 is current default in tab_QC, molecules whose rt has a stdev of greater than this value are plotted when "All" is selected as molecule list

@@ -7,7 +7,7 @@ Data container for loading a given run from database to feed to GUI, used for vi
 # region Imports
 
 import numpy as np
-from src.db import get_run_samples, get_run_molecules, get_run_peaks
+from src.db import get_run_samples, get_run_molecules
 from src.intensity_matrix import IntensityMatrix as IM
 from src.config_loader import ConfigLoader
 from src.data_matrix import DataMatrix as DM

@@ -56,6 +56,7 @@ class DataTab(QWidget):
         self.inv_sample_map = {v:k for k,v in self.sample_map.items()}
         self.n_molecules = self.data_matrix.n_molecules
         self.mol_map = self.data_matrix.mol_map
+        self.clean_mol_map = self.data_matrix.clean_mol_map
         self.inv_mol_map = {v:k for k,v in self.mol_map.items()}
         self.data_metrics = list(self.data_matrix.data.keys())
         self.group_map = self.data_matrix.group_map
@@ -201,7 +202,7 @@ class DataTab(QWidget):
         self.data_type_label.setText("Metric:")
         self.data_type_dropdown.addItems(self.data_metrics)
         self.data_type_dropdown.currentTextChanged.connect(self.data_type_changed)
-        self.data_type_dropdown.setCurrentIndex(self.data_metrics.index('Area'))
+        self.data_type_dropdown.setCurrentIndex(self.data_metrics.index('norm_Area'))
 
         # setup table
         table_box = QGroupBox("Data")
@@ -266,24 +267,16 @@ class DataTab(QWidget):
         dtype = self.data_type_dropdown.currentText()
         self.processing_label.setVisible(True)
 
-        self.worker = TableWorker(self.data_matrix, dtype, self.sample_map, self.mol_map,
+        if dtype == 'clean_Area' or dtype == 'clean_Height':
+            mol_map = self.clean_mol_map
+        else:
+            mol_map = self.mol_map
+
+        self.worker = TableWorker(self.data_matrix, dtype, self.sample_map, mol_map, 
                                   self.combined_outliers, self.format_val)
         
         self.worker.finished.connect(self.on_data_ready)
         self.worker.start()
-
-        """
-        self.data_table.setUpdatesEnabled(False)
-        for sample in self.data_matrix.samples:
-            i = self.sample_map[sample]
-            for mol in self.data_matrix.molecules:
-                j = self.mol_map[mol]
-                item = QTableWidgetItem(self.format_val(self.data_matrix.data[dtype][i,j]))
-                if self.combined_outliers[i,j]:
-                    item.setBackground(QColor(180,0,0,75))
-                self.data_table.setItem(i,j,item)
-        self.data_table.setUpdatesEnabled(True)
-        """
 
     def on_data_ready(self, results):
         self.data_table.setUpdatesEnabled(False)
@@ -436,12 +429,18 @@ class DataTab(QWidget):
 
         # second tab, data table =================================================================================
 
-        ws2 = wb.create_sheet(title=f"DataTable_{dtype}")
+        ws2 = wb.create_sheet(title=f"raw_{dtype}")
         
-        # column labels
+        # column labels (casNO preferred)
         for j in range(self.data_table.columnCount()):
             item = self.data_table.horizontalHeaderItem(j)
-            cell = ws2.cell(row=2, column=j+3, value=item.text() if item else '')
+            
+            if item and item.text() in self.data_matrix.molecules:
+                col_label = self.data_matrix.molecules[item.text()]['casNo']
+            else:
+                col_label = item.text() if item else ''
+            cell = ws2.cell(row=2, column=j+3, value=col_label)
+
             bg = item.background() if item else None
             if bg and bg.style() != Qt.NoBrush and bg.color().alpha() > 0:
                 cell.fill = self.make_fill(self.qcolor_to_hex(bg.color()))
@@ -450,13 +449,16 @@ class DataTab(QWidget):
             else:
                 cell.fill = grey_fill
             cell.font = bold_font
+
             if j != self.n_molecules:
                 cell.border = bottom_right_border if j < self.data_table.columnCount() - 1 else bottom_border
             
         # row labels
         for i in range(self.data_table.rowCount()):
             item = self.data_table.verticalHeaderItem(i)
+
             cell = ws2.cell(row=i+3, column=2, value=item.text() if item else '')
+
             bg = item.background() if item else None
             if bg and bg.style() != Qt.NoBrush and bg.color().alpha() > 0:
                 cell.fill = self.make_fill(self.qcolor_to_hex(bg.color()))
@@ -465,6 +467,7 @@ class DataTab(QWidget):
             else:
                 cell.fill = grey_fill
             cell.font = bold_font
+
             if i != self.n_samples:
                 cell.border = right_border
 

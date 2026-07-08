@@ -33,9 +33,11 @@ from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_
 from src.mzml_processor import full_bulk_convert
 from src.intensity_matrix import IntensityMatrix as IM
 from src.run_data import RunData as RD
+
 from src.gui.tab_chromatogram import ChromatogramTab
 from src.gui.tab_data import DataTab
 from src.gui.tab_qc import QCTab
+from src.gui.tab_analysis import AnalysisTab
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +66,16 @@ class MainWindow(QMainWindow):
         self.run_select = RunSelectWidget(self)
         self.confirm_window = ConfirmConfigWidget(self)
         self.dashboard = MainDashboard(self)
+
+        """
+        Add toolbar that has options to:
+        Save Run
+            save as new
+            override
+        Re-Analyze Run
+        Load Additional Runs
+        Load New Run
+        """
 
         self.setWindowTitle("MSAuto")
         screen = QApplication.primaryScreen().geometry()
@@ -1315,7 +1327,9 @@ class MainDashboard(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
+        self.run_data = None
+        self.tabs_built = False
         self.tabs = QTabWidget()
 
         self.initUI()
@@ -1327,19 +1341,26 @@ class MainDashboard(QWidget):
         self.setLayout(layout)
 
     def showEvent(self, event):
-
+        
         self.window().showMaximized()
-        run_data = self.window().run_data[-1]
 
-        self.tabs.clear()
+        if not self.tabs_built:
 
-        self.chrom_tab = ChromatogramTab(run_data, self)
-        self.data_tab = DataTab(run_data, self.chrom_tab, self)
-        self.qc_tab = QCTab(run_data, self)
+            self.run_data = self.window().run_data[-1]
 
-        self.tabs.addTab(self.chrom_tab, "Chromatogram")
-        self.tabs.addTab(self.data_tab, "Data")
-        self.tabs.addTab(self.qc_tab, "QC")
+            self.tabs.clear()
+
+            self.chrom_tab = ChromatogramTab(self.run_data, self)
+            self.data_tab = DataTab(self.run_data, self.chrom_tab, self)
+            self.qc_tab = QCTab(self.run_data, self)
+            self.analysis_tab = AnalysisTab(self.run_data, self)
+
+            self.tabs.addTab(self.chrom_tab, "Chromatogram")
+            self.tabs.addTab(self.data_tab, "Data")
+            self.tabs.addTab(self.qc_tab, "QC")
+            self.tabs.addTab(self.analysis_tab, "Analysis")
+
+            self.tabs_built = True
 
         super().showEvent(event)
 

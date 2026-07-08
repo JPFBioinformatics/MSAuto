@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-# region                 ---------- Basic Plots ----------
+# region                 ---------- Primitives ----------
 
-def plot_boxplot(ax, data, labels, ylabel='', title='', cutoff=None):
+DARK_MODE = True
+
+def plot_boxplot(ax: Axes, data, labels, ylabel='', title='', cutoff=None, color=True):
     """
     makes a set of boxplots from the data given, optionally including a horizontal cutoff line
 
@@ -33,64 +35,196 @@ def plot_boxplot(ax, data, labels, ylabel='', title='', cutoff=None):
     ylabel/title                for annotating axis/title
     cutoff                      value to plot a cutoff line at
     """
+    clean_data = [arr[~np.isnan(arr)] for arr in data]
 
-    ax.boxplot(data,labels=labels)
+    bp = ax.boxplot(clean_data,labels=labels, patch_artist=True)
+
+    if color:
+        if len(data) > 7:
+            cmap = cm.get_cmap('tab20b', len(data))
+        else:
+            cmap = cm.get_cmap('Dark2', max(len(data), 2))
+
+        for i, patch in enumerate(bp['boxes']):
+            c = cmap(i / len(data))
+            patch.set_facecolor(c)
+            patch.set_alpha(0.5)
 
     if cutoff is not None:
         ax.axhline(cutoff, color='red', linestyle='--')
 
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right')
     ax.set_ylabel(ylabel)
     ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
 
-def plot_scatter(ax, x, y, point_labels=None, ylabel='', xlabel='', title='', hlines=None, vlines=None, fit=False):
+def plot_scatter(ax: Axes, data, labels=None, ylabel='', xlabel='', title='', fit=True, 
+                 color=True, avg=False, legend=True, annotate_fit=False, series_labels=None):
     """
     Plots a scatter plot with optional labelling, horizontal/vertical lines, and linear fit
 
     Params
     ------
     ax                          ax to plot on
-    x                           x values to plot
-    y                           y values to plot
+    data                        list of arrays to plot, either two lists of arrays with equal count or
+                                data[0] is a list of arrays to average and data[1] is the corresponding
+                                x values (so array at data[0[0] averages and gets x value at data[1][0])
     point_labels                str labels index matched to x,y
     ylabel/xlabel/title         str axis/title labels
-    hlines                      list of values to plot horizontal lines at
-    vlines                      list of values to plot vertical lines at
     fit                         True/False to calculate a linear fit for x,y
+    color                       T/F color your points?
+    avg                         T/F average data before plotting?
     """
+    # average serie(s)
+    if avg:
+        x = []
+        x_err = []
+        y = []
+        y_err = []
+        for array in data[0]:
+            y.append(np.nanmean(array))
+            y_err.append(np.nanstd(array))
+        for array in data[1]:
+            x.append(np.nanmean(array))
+            x_err.append(np.nanstd(array))
+        y = [np.array(y)]
+        y_err = [np.array(y_err)]
+        x = [np.array(x)]
+        x_err = [np.array(x_err)]
+    else:
+        y = data[0]
+        x = data[1]
     
-    ax.scatter(x,y)
+    # setup colormap
+    if len(x) > 7 :
+        colors = 'tab20b'
+    else:
+        colors = 'Dark2'
+    cmap = cm.get_cmap(colors, max(len(x), 2))
+    
+    # Add error bars
+    for i,(xi,yi) in enumerate(zip(x,y)):
+        label = labels[i] if labels else None
+        c = cmap(i / len(x)) if color else None
+        if avg:
+            ax.errorbar(xi, yi, xerr=x_err[i], yerr=y_err[i], fmt='o', capsize=4, color=c)
+        else:
+            ax.scatter(xi,yi, color=c, label=label)
 
-    if point_labels:
-        for i,label in enumerate(point_labels):
-            ax.annotate(label, x[i], y[i])
-            
-    if hlines:
-        for h in hlines:
-            ax.axhline(h, color='red', linestyle='--')
-
-    if vlines:
-        for v in vlines:
-            ax.axvline(v, color='red', linestyle='--')
-
+    # add linear fit
     if fit:
-        coeffs = np.polyfit(x,y,1)
-        fit_fn = np.poly1d(coeffs)
+        for i,(xi,yi) in enumerate(zip(x,y)):
 
-        x_line = np.linspace(min(x), max(x), 100)
+            mask = ~(np.isnan(xi) | np.isnan(yi))
+            xi = xi[mask]
+            yi = yi[mask]
 
-        residuals = y - fit_fn(x)
-        ss_res = np.sum(residuals**2)
-        ss_tot = np.sum(y - np.mean(y))**2
-        r2 = 1 - (ss_res / ss_tot)
+            if len(xi) < 2:
+                continue
+
+            c = cmap(i / len(x)) if color else 'blue'
+            coeffs = np.polyfit(xi,yi,1)
+            fit_fn = np.poly1d(coeffs)
+
+            x_line = np.linspace(min(xi), max(xi), 100)
+
+            residuals = yi - fit_fn(xi)
+            ss_res = np.sum(residuals**2)
+            ss_tot = np.sum((yi - np.mean(yi))**2)
+            r2 = 1 - (ss_res / ss_tot)
         
-        ax.plot(x_line, fit_fn(x_line), color='blue')
-        ax.annotate(f'R2={r2:.3f}', xy=(0.05, 0.950), xycooords='axes fraction')
+            ax.plot(x_line, fit_fn(x_line), color=c)
+
+            if annotate_fit:
+                slope = fmt(coeffs[0])
+                yint = fmt(coeffs[1])
+                rsqr = fmt(r2)
+                ax.annotate(f'y = ({slope})x + {yint}\nR2={rsqr}', 
+                            xy=(0.05, 0.85 - i*0.05), xycoords='axes fraction', color=c)
     
+    if series_labels:
+        for idx,label in series_labels.items():
+            xi,yi = x[idx], y[idx]
+            valid = ~(np.isnan(xi) | np.isnan(yi))
+            if not np.any(valid):
+                continue
+            ax.annotate(label, (xi[valid][-1],yi[valid][-1]),
+                                fontsize=7, xytext=(4,0), textcoords='offset points')
+
+    if legend and labels:
+        ax.legend()
+
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
 
-def plot_heatmap(ax, matrix, row_labels='', col_labels='', title='', cmap='RdY1Gn'):
+    def on_click(event):
+        if event.inaxes != ax:
+            return
+
+        # initialize markers/annotations as list
+        if not hasattr(ax, '_click_anns'):
+            ax._click_anns = []
+        if not hasattr(ax, '_click_markers'):
+            ax._click_markers = []
+        
+        # double click to clear annotations
+        if event.dblclick:
+            for ann in ax._click_anns:
+                ann.remove()
+            for marker in ax._click_markers:
+                marker.remove()
+            ax._click_anns = []
+            ax._click_markers = []
+            ax.figure.canvas.draw_idle()
+            return
+        
+        best_dist = float('inf')
+        best_label = None
+        best_x = None
+        best_y = None
+        
+        x_range = ax.get_xlim()[1] - ax.get_xlim()[0]
+        y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
+
+        for i, (xi,yi) in enumerate(zip(x,y)):
+            valid = ~(np.isnan(xi) | np.isnan(yi))
+            if not np.any(valid):
+                continue
+            x_iv = xi[valid]
+            y_iv = yi[valid]
+            
+            distances = np.sqrt(((x_iv - event.xdata) / x_range)**2 +
+                                ((y_iv - event.ydata) / y_range)**2)
+            idx = np.argmin(distances)
+
+            if distances[idx] < best_dist:
+                best_dist = distances[idx]
+                best_x = x_iv[idx]
+                best_y = y_iv[idx]
+                if len(x) == 1 and len(labels) > 1:
+                    best_label = labels[idx]
+                else:
+                    best_label = labels[i] if labels else f"{best_x:.3f}, {best_y:.3f}"
+
+        ann = ax.annotate(best_label, (best_x,best_y), xytext=(10,10),
+                                    textcoords='offset points',
+                                    bbox=dict(boxstyle='round', fc='black', alpha=0.7),
+                                    color='white')
+        marker, = ax.plot(best_x, best_y, 'o', markerfacecolor='none',
+                                    markeredgecolor='red', markeredgewidth=2, markersize=12)
+        
+        ax._click_anns.append(ann)
+        ax._click_markers.append(marker)
+
+        ax.figure.canvas.draw_idle()
+
+    ax.figure.canvas.mpl_connect('button_press_event', on_click)
+
+def plot_heatmap(ax: Axes, matrix, row_labels='', col_labels='', title='', cmap='RdYlGn'):
     """
     Plots a heatmap witha annotation and a colorbar
 
@@ -104,7 +238,7 @@ def plot_heatmap(ax, matrix, row_labels='', col_labels='', title='', cmap='RdY1G
     """
 
     im = ax.imshow(matrix, cmap=cmap, aspect='auto')
-    plt.colorbar(im, ax=ax)
+    ax.figure.colorbar(im, ax=ax)
 
     if col_labels:
         ax.set_xticks(range(len(col_labels)))
@@ -112,11 +246,13 @@ def plot_heatmap(ax, matrix, row_labels='', col_labels='', title='', cmap='RdY1G
 
     if row_labels:
         ax.set_yticks(range(len(row_labels)))
-        ax.set_yticks(row_labels)
+        ax.set_yticklabels(row_labels)
 
     ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
 
-def plot_violin(ax, data, labels, ylabel='', title='', color=False):
+def plot_violin(ax: Axes, data, labels, ylabel='', title='', color=True):
     """
     Plots a set of violin plots
 
@@ -128,11 +264,17 @@ def plot_violin(ax, data, labels, ylabel='', title='', color=False):
     ylabel/title                annotations
     color                       wether or not to color the plots
     """
+    clean_data = [arr[~np.isnan(arr)] for arr in data]
 
-    parts = ax.violinplot(data)
+    parts = ax.violinplot(clean_data, showmedians=True)
 
     if color:
-        cmap = cm.get_cmap('Dark2', len(data))
+
+        if len(data) > 7:
+            cmap = cm.get_cmap('tab20b', len(data))
+        else:
+            cmap = cm.get_cmap('Dark2', max(len(data), 2))
+
         colors = [cmap(i/len(data)) for i in range(len(data))]
         for body,color in zip(parts['bodies'], colors):
             body.set_facecolor(color)
@@ -142,10 +284,13 @@ def plot_violin(ax, data, labels, ylabel='', title='', color=False):
     ax.set_xticklabels(labels)
 
     ax.set_ylabel(ylabel)
-
+    
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right')
     ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
 
-def plot_histogram(ax, data, labels, xlabel='', title='', bins=20):
+def plot_histogram(ax: Axes, data, labels, xlabel='', title='', bins=20):
     """
     Plots overlaid histograms (or just one)
 
@@ -164,8 +309,10 @@ def plot_histogram(ax, data, labels, xlabel='', title='', bins=20):
     ax.legend()
     ax.set_xlabel(xlabel)
     ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
 
-def plot_bar(ax, values, labels, ylabel='', title='', cutoff=None, sorted_desc=False):
+def plot_bar(ax: Axes, data, labels, ylabel='', title='', cutoff=None, sorted_desc=True, type = 'avg'):
     """
     Plots a barplot with error bars, optionally include cutoff horizontal lines at specified values
     and allows sorting of bars in descending order of magnitude
@@ -173,18 +320,34 @@ def plot_bar(ax, values, labels, ylabel='', title='', cutoff=None, sorted_desc=F
     Params
     ------
     ax                          ax to plot on
-    values                      list of values to plot
+    data                        list of arrays to plot avg of
     labels                      index matched labels for values
     ylabel/title                annotation
     cutoff                      values to draw horizontal lines on (optional)
     sorted_desc                 T/F wether or not to sort values in desc order on plot
     """
+    values = []
+    errs = []
+    for arr in data:
+        avg = np.nanmean(arr)
+        sd = np.nanstd(arr)
+        if type == 'avg':
+            values.append(avg)
+            errs.append(sd)
+        elif type == '%CV':
+            cv = (sd/avg)*100 if avg != 0 else np.nan
+            values.append(cv)
+        elif type == 'count':
+            values.append(np.nansum(arr))
 
     if sorted_desc:
         paris = sorted(zip(values,labels), reverse=True)
         values,labels = zip(*paris)
 
-    ax.bar(range(len(values)), values)
+    if type == 'avg':
+        ax.bar(range(len(values)), values, yerr=errs, capsize=4)
+    else:
+        ax.bar(range(len(values)), values)
 
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=90)
@@ -195,11 +358,75 @@ def plot_bar(ax, values, labels, ylabel='', title='', cutoff=None, sorted_desc=F
 
     ax.set_ylabel(ylabel)
 
-    ax.set_title(title)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right')
 
-def plot_table(ax, data, col_labels = '', row_labels=''):
-    ax.table(cellText=data, colLabels=col_labels, rowLabels=row_labels)
-    ax.axis('off')
+    ax.set_title(title)
+    ax.figure.tight_layout()
+    apply_dark_theme(ax.figure, ax)
+
+def plot_pdf_table(rows, row_labels=None, col_labels=None, title='', rows_per_page=25):
+
+    tables = [] 
+          
+    # column widths
+    col_max_chars = [len(col_labels[j]) for j in range(len(col_labels))]
+    for row in rows:
+        for j,cell in enumerate(row):
+            col_max_chars[j] = max(col_max_chars[j], len(str(cell)))
+    total = sum(col_max_chars)
+    col_widths = [c/total for c in col_max_chars]
+
+    for chunk_start in range(0,len(rows), rows_per_page):
+
+        chunk_end = chunk_start + rows_per_page
+
+        chunk = rows[chunk_start:chunk_end]
+        chunk_labels = row_labels[chunk_start:chunk_end] if row_labels else None
+
+        fig,ax = plt.subplots(figsize=(11,8.5))
+        ax.axis('off')
+
+        table = ax.table(
+            cellText=chunk,
+            rowLabels=chunk_labels,
+            colLabels=col_labels,
+            loc='center',
+            cellLoc='left'
+        )
+
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+        
+        # set widths
+        for (row,col), cell in table.get_celld().items():
+            if col >= 0:
+                cell.set_width(col_widths[col])
+
+        # find header height
+        max_len = max(len(c) for c in col_labels)
+        header_height = min(0.05 + max_len *0.006, 0.3)
+
+        # rotate headers
+        for j in range(len(col_labels)):
+            cell = table[0,j]
+            cell.get_text().set_rotation(60)
+            cell.get_text().set_ha('left')
+            cell.set_height(header_height)
+
+        ax.set_title(title,pad=20)
+        apply_dark_theme(fig,ax)
+        tables.append(fig)
+
+    return tables
+
+def plot_volcano():
+    pass
+
+def plot_corr_heatmap():
+    pass
+
+def plot_ranked_bar():
+    pass
 
 # endregion
 
@@ -247,9 +474,7 @@ def plot_volcano(fold_changes: np.ndarray, p_values: np.ndarray, mol_names: list
 
 # region                 ---------- Analysis: PCA / PLS-DA Scores ----------
 
-def plot_scores(scores: np.ndarray, labels: list, explained_variance: np.ndarray = None,
-                title: str = "Scores Plot",
-                xlabel: str = "Component 1", ylabel: str = "Component 2"):
+def plot_pca(ax: Axes, pca_data: dict, group_indices: list, title: str = '', pc_x: int = 1, pc_y: int = 2):
     """
     Scatter of sample scores, one point per sample colored by group label.
     Works for both PCA (pass explained_variance) and PLS-DA (pass None).
@@ -257,62 +482,67 @@ def plot_scores(scores: np.ndarray, labels: list, explained_variance: np.ndarray
     Params
     ------
     scores              (n_samples, n_components) from pca()['scores'] or pls_da()['scores']
-    labels              group label per sample, index matched (used for color grouping)
+    group_indices       dict of group_name: list of idxs
     explained_variance  (n_components,) from pca()['explained_variance'], or None for PLS-DA
     """
-    group_names = list(dict.fromkeys(labels))
-    #cmap = _color_map(group_names)
+    
+    # setup group coloring
+    group_names = list(group_indices.keys())    
+    if len(group_names) > 7:
+        cmap = cm.get_cmap('tab20b', len(group_names))
+    else:
+        cmap = cm.get_cmap('Dark2', max(len(group_names), 2))
+    colors = [cmap(i) for i in range(len(group_names))]
 
+    # retreive explained variance and/or label x and y axes
+    explained_variance = pca_data['explained_variance']
     if explained_variance is not None:
-        xlabel = f"PC1 ({explained_variance[0] * 100:.1f}%)"
-        ylabel = f"PC2 ({explained_variance[1] * 100:.1f}%)"
+        xlabel = f"PC{pc_x} ({explained_variance[pc_x] * 100:.1f}%)"
+        ylabel = f"PC{pc_y} ({explained_variance[pc_y] * 100:.1f}%)"
+    else:
+        xlabel = f"PC{pc_x}"
+        ylabel = f"PC{pc_y}"
+    
+    # plot points
+    scores = pca_data['scores']
+    for i, (name,idxs) in enumerate(group_indices.items()):
+        color = colors[i]
+        ax.scatter(scores[idxs, pc_x-1], scores[idxs, pc_y-1], label=name, color=color, s=55, alpha=0.85)
+    
+    # generate Title if needed
+    if not title:
+        title = f"PC{pc_x+1} vs PC{pc_y+1} Plot"
 
-    fig, ax = plt.subplots(figsize=(6, 5))
-    for name in group_names:
-        idx = [i for i, l in enumerate(labels) if l == name]
-        #ax.scatter(scores[idx, 0], scores[idx, 1], label=name,
-                   #color=cmap[name], s=55, alpha=0.85)
+    # cfg graph
     ax.axhline(0, color='grey', linewidth=0.5)
     ax.axvline(0, color='grey', linewidth=0.5)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend(fontsize=8, framealpha=0.5)
-    fig.tight_layout()
-    return fig
 
-def plot_scree(scree: dict, title: str = "Scree Plot"):
+def plot_scree_bar(ax: Axes, values, title: str = "Explained Varaince", cutoff=None):
     """
-    Bar chart of variance explained per component with cumulative line and 80% reference.
+    Plots vertically aligned bar plot for scree plot visualization
 
     Params
     ------
-    scree       dict from scree_data() with keys 'explained', 'cumulative', 'n_for_80pct'
+    ax                      axis to plot on
+    values                  values to plot
+    title                   title
     """
-    explained = scree['explained']
-    cumulative = scree['cumulative']
-    n = len(explained)
-    x = np.arange(1, n + 1)
 
-    fig, ax1 = plt.subplots(figsize=(max(5, n * 0.5), 4))
-    ax1.bar(x, explained * 100, color='steelblue', alpha=0.7, label='Per component')
-    ax1.set_xlabel("Component")
-    ax1.set_ylabel("Variance Explained (%)")
-    ax1.set_xticks(x)
-    ax1.set_title(title)
+    labels = np.arange(1,len(values)+1)
 
-    ax2 = ax1.twinx()
-    ax2.plot(x, cumulative * 100, color='crimson', marker='o',
-             markersize=4, linewidth=1.5, label='Cumulative')
-    ax2.axhline(80, color='grey', linestyle='--', linewidth=0.8, label='80% threshold')
-    ax2.set_ylabel("Cumulative Variance (%)")
-    ax2.set_ylim(0, 105)
+    ax.barh(labels,values)
+    if cutoff is not None:
+        ax.axvline(cutoff, color='red', linestyle='--', linewidth=1)
 
-    lines1, lab1 = ax1.get_legend_handles_labels()
-    lines2, lab2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, lab1 + lab2, fontsize=8, loc='center right')
-    fig.tight_layout()
-    return fig
+    ax.set_yticks(labels)
+    ax.set_yticklabels([f"PC{i}" for i in labels])
+    ax.set_title(title)
+    apply_dark_theme(ax.figure, ax)
+
 
 # endregion
 
@@ -639,13 +869,15 @@ def plot_spectrum(mzs: np.ndarray, abundances: np.ndarray, ax: Axes = None):
 
 # endregion
 
-# region                 ---------- Theme ----------
+# region                 ---------- Utils ----------
 
 def apply_dark_theme(fig, ax):
     """
     Applies dark theme that matches the app color scheme to figures
     """
-
+    if not DARK_MODE:
+        return
+    
     fig.patch.set_facecolor('#31363b')
     ax.set_facecolor('#232629')
     ax.tick_params(colors='white')
@@ -656,5 +888,19 @@ def apply_dark_theme(fig, ax):
     ax.spines['left'].set_color('#4f5b62')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+def fmt(val):
+    """
+    Formats a float value 
+    """
+    if isinstance(val,(float,np.floating)):
+        if np.isnan(val):
+            return 'N/A'
+        if val == 0:
+            return '0'
+        elif abs(val) > 10000 or abs(val) < 0.0001:
+            return f'{val:.4e}'
+        return f'{val:.5g}'
+    return str(val) if val is not None else 'N/A'
 
 # endregion

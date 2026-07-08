@@ -11,6 +11,7 @@ import numpy as np
 from src.config_loader import ConfigLoader
 from src.db import get_run_samples, get_run_molecules, connect
 from src.utils import get_run_dir, get_proj_db
+from src.analysis import full_preprocess
 
 from scipy.optimize import curve_fit
 
@@ -44,7 +45,9 @@ class DataMatrix:
 
         # maps
         self.sample_map = {name: i for i,name in enumerate(self.samples)}
+        self.sample_list = list(self.sample_map.keys())
         self.mol_map = {name: i for i,name in enumerate(self.molecules)}
+        self.mol_list = list(self.mol_map.keys())
         self.group_map = {key: value['group_name'] for key, value in self.samples.items()}
         self.group_indices = {}
         for sample_name, group_name in self.group_map.items():
@@ -67,6 +70,7 @@ class DataMatrix:
             'Area': float_empty(),
             'FWHH': float_empty(),
             'RT': float_empty(),
+            'RT_Diff': float_empty(),
             'right_bound': int_empty(),
             'left_bound': int_empty(),
             'Height': float_empty(),
@@ -75,11 +79,13 @@ class DataMatrix:
             'SN_Ratio': float_empty(),
             'Theoretical_Plates': float_empty(),
             'peak_idx': int_empty(),
-            'norm_Area': float_empty(),
-            'norm_Height': float_empty(),
             'bl_slope': float_empty(),
             'flat': bool_empty(),
-            'gaussian_similarity': float_empty()
+            'gaussian_similarity': float_empty(),
+            'norm_Area': float_empty(),
+            'norm_Height': float_empty(),
+            'clean_Area': float_empty(),
+            'clean_Height': float_empty()
         }
         
         # outlier matrices (samples x features, rows x columns), 1/True if outlier
@@ -104,6 +110,10 @@ class DataMatrix:
         self.standards = []
         self.std_map = {}
 
+        # clean molecule list/map
+        self.clean_mol_list = []
+        self.clean_mol_map = {}
+
         # fill the matrices from peak data
         self.fill_matrices(peak_data)
 
@@ -121,12 +131,15 @@ class DataMatrix:
             for peak in peak_list:
                 if peak['molecule'] is None:
                     continue
+                if not peak['rt_valid']:
+                    continue
                 
                 col_i = self.mol_map[peak['molecule']]
 
                 self.data['Area'][row_i,col_i] = peak['area']
                 self.data['FWHH'][row_i,col_i] = peak['fwhh']
                 self.data['RT'][row_i,col_i] = peak['rt']
+                self.data['RT_Diff'][row_i,col_i] = peak['rt_diff']
                 self.data['left_bound'][row_i,col_i] = peak['left_bound']
                 self.data['right_bound'][row_i,col_i] = peak['right_bound']
                 self.data['Height'][row_i,col_i] = peak['height']
@@ -149,6 +162,26 @@ class DataMatrix:
         # normalize matrix
         self.normalize_matrix('Area')
         self.normalize_matrix('Height')
+
+        # clean matrices
+        self.preprocess_data()
+
+    def preprocess_data(self):
+        """
+        Preprocesses data to clean matrices for advanced analyses (drop sparse feaures, impute nan, log2 transform,
+        autoscale)
+        MUST be called EVERY time the config is updated
+        """
+        # clean matrices
+        try:
+            self.data['clean_Area'], keep = full_preprocess(self.data['norm_Area'], self.missing, self.group_indices, self.cfg)
+            self.data['clean_Height'], _ = full_preprocess(self.data['norm_Height'], self.missing, self.group_indices, self.cfg)
+        except Exception as e:
+            logger.error(f"Preprocessing failed: {e}", exc_info=True)
+            
+        # rebuild clean mol map and mo list
+        self.clean_mol_list = [self.mol_list[i] for i in keep]
+        self.clean_mol_map = {mol:i for i,mol in enumerate(self.clean_mol_list)}
 
     def _theoretical_plates(self, rt: np.float64, fwhh: np.float64):
         """
@@ -282,6 +315,7 @@ class DataMatrix:
         stds = set()
         for value in self.molecules.values():
             stds.add(value['std'])
+        self.standards = stds
 
         std_vals = {}
         for std in stds:

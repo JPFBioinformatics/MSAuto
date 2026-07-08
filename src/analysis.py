@@ -80,17 +80,24 @@ vips = vip_scores(pls['model'])           # which features drive separation?
 # region Imports
 
 import numpy as np
-from sklearn.impute import KNNImputer
+
+from sklearn.experimental import enable_iterative_imputer   # needed to enable IterativeImputer
+from sklearn.impute import KNNImputer, IterativeImputer
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import r2_score, confusion_matrix, accuracy_score
 from sklearn.model_selection import LeaveOneOut, KFold
+from sklearn.ensemble import RandomForestRegressor
 from scikit_posthocs import posthoc_dunn
+
 from scipy.cluster.hierarchy import linkage, optimal_leaf_ordering, leaves_list
 from scipy.stats import ttest_ind, mannwhitneyu, f_oneway, kruskal, spearmanr, pearsonr
+
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+from src.config_loader import ConfigLoader
 
 
 # logging
@@ -127,9 +134,10 @@ def find_sparse_features(missing: np.ndarray, group_indices: dict, threshold: in
 
 def impute_nans(matrix: np.ndarray, method: str = "hm", neighbors: int = 5):
     """
-    imputes nan values of non-sparse columns using method sepcified (half-minimum or knn)
-    DOES NOT copy input matrix, MUST COPY before passing into this method
-    
+    imputes nan values of non-sparse columns using method sepcified, half-minimum is sufficient for
+    most metaboloimcs applications
+    DOES NOT copy matrix, edits in place - do that yourself befor using
+
     Params
     ------
         matrix                      matrix we are imputing
@@ -137,10 +145,17 @@ def impute_nans(matrix: np.ndarray, method: str = "hm", neighbors: int = 5):
         neighbors                   number of neighbors for knn imputation
     """
 
-    if method not in ["hm", "knn"]:
-        logger.warning("Imputation method must be hm for Half-Minimum or knn for K-nearest neighbor, defaulting to half-minimum")
+    if method not in ["hm", "knn","mice","rf"]:
+        logger.warning(
+            "Imputation method must be" \
+            "\nhm   =   Half-Minimum" \
+            "\nknn  =   K-nearest neighbor" \
+            "\nmice =   Multiple Imputation by Chained Equations" \
+            "\nrf   =   Random Forest" \
+            "\nDefaulting to half-minimum")
         method = "hm"
 
+    # half minimum
     if method == "hm":
         for j in range(matrix.shape[1]):
             col = matrix[:,j]
@@ -148,8 +163,19 @@ def impute_nans(matrix: np.ndarray, method: str = "hm", neighbors: int = 5):
             col[np.isnan(col)] = min_val / 2
             matrix[:,j] = col
 
-    if method == "knn":
+    # k-nearest neightbor
+    elif method == "knn":
         imputer = KNNImputer(n_neighbors = neighbors)
+        matrix = imputer.fit_transform(matrix)
+
+    # multiple imputation by chained equations
+    elif method == "mice":
+        imputer = IterativeImputer(max_iter=10, random_state=0)
+        matrix = imputer.fit_transform(matrix)
+
+    # random forest
+    elif method == "rf":
+        imputer = IterativeImputer(estimator=RandomForestRegressor(n_estimators=100), max_iter=10, random_state=0)
         matrix = imputer.fit_transform(matrix)
 
     return matrix
@@ -157,6 +183,7 @@ def impute_nans(matrix: np.ndarray, method: str = "hm", neighbors: int = 5):
 def log2_transform(matrix: np.ndarray):
     """
     log2 transforms a given matrix
+    DOES NOT copy matrix, edits in place
 
     Params
     ------
@@ -172,6 +199,7 @@ def autoscale(matrix: np.ndarray):
     """
     autoscales matrix, making each feature have mean 0 and std 1 to prevent high abundance metaoblits
     from dominating pca
+    DOES NOT copy matrix, edits in place
 
     Params
     ------
@@ -185,6 +213,58 @@ def autoscale(matrix: np.ndarray):
     stds = np.nanstd(matrix, axis=0)
     stds[stds == 0] = 1                     # prevent divide by 0 for constant columns
     return (matrix - means) / stds
+
+def full_preprocess(matrix: np.ndarray, missing: np.ndarray, group_indices: dict, cfg: ConfigLoader):
+    """
+    fully preproccesses a matrix, finds and drops sparse features, imputes nan values, log2 transforms data, then
+    autoscales distributions
+
+    Params
+    ------
+    matrix                      matrix to process
+    missing                     missingness matrix corresponding to matrix
+    group_indices               dict of group_name: list of index values in matrix for samples in that group (rows)
+    cfg                         configloader object for this run
+
+    Returns
+    -------
+    mat                         preprocessed matrix
+    keep                        array of indices to keep
+    """
+
+    # get requried data
+    sparseness_threshold = cfg.get("sparseness_threshold")
+    if not sparseness_threshold:
+        logger.warning("No sparseness threshold detected")
+        sparseness_threshold = 0.5
+
+    imputation_method = cfg.get("impute_method")
+    if not imputation_method:
+        logger.warning("No imputation method detected")
+        imputation_method = 'hm'
+        
+    impute_knns = cfg.get("impute_knns")
+    logger.warning("No nearest neighbors setting detected")
+    if not impute_knns:
+        impute_knns = 5
+    
+    # copy input matrix
+    mat = matrix.copy()
+
+    # figure out which features to drop and drop
+    keep = find_sparse_features(missing, group_indices, sparseness_threshold)
+    mat = mat[:,keep]
+
+    # impute remaining nan values
+    mat = impute_nans(mat, imputation_method, impute_knns)
+
+    # log2 transform to correct typical right-skewing of metabolomic distributions
+    mat = log2_transform(mat)
+
+    # autoscale to remove dominance from high abundance features
+    mat = autoscale(mat)
+
+    return mat, keep
 
 # endregion
 
@@ -234,7 +314,7 @@ def mann_whitney(matrix: np.ndarray, group_a: list, group_b: list,):
 
 def effect_size(matrix: np.ndarray, group_a: list, group_b: list):
     """
-    Calculates chron's d effect sizer per feature between two groups, measures magnitude of difference independent
+    Calculates chron's d effect size per feature between two groups, measures magnitude of difference independent
     of samples size; d < 0.2 small, d 0.2 - 0.8 medium, d > 0.8 large
 
     Params
@@ -409,7 +489,7 @@ def fdr_correction(p_values: np.ndarray, method: str = 'bh'):
     """
     Performs fdr correction on a set of p values to reduce fasle positives.  Default 'bh' is Benhamini-Hotchburg
     which is good for discovery metabolomics where false positives are preferable to missing real hits, could
-    also do Bonferroni ('bonferroni) for a more strict correction
+    also do Bonferroni ('bonferroni') for a more strict correction
 
     Params
     ------
@@ -444,15 +524,16 @@ def log2_fold_change(matrix: np.ndarray, group_a: list, group_b: list):
 
 # region                 ---------- Multivariate ----------
 
-def pca(matrix: np.ndarray, n_components: int = 2):
+def pca(matrix: np.ndarray, exp_var: float = 0.8, n_components=None):
     """
     Performs PCA, unsuperviesd dimensionality reduction to inspect overall data structure
 
     Params
     ------
         matrix                      matrix of values to test
-        n_components                number of dimensions to extract
-
+        exp_var                     amount of variance you wnat to explain with PCs (just gives idx of pc where this value is surpassed)
+        n_components                number of components to calculate, None means do max
+        
     Returns
     -------
         {
@@ -461,15 +542,25 @@ def pca(matrix: np.ndarray, n_components: int = 2):
         explained_variance: (n_components) - fraciton of total varaince each PC explains
         }
     """
+    if exp_var > 1 or exp_var < 0:
+        logger.warning("Explained Varaince must be in range [0,1]")
+        exp_var = 0.80
+
     model = PCA(n_components=n_components)
     scores = model.fit_transform(matrix)
+
+    cumulative = np.cumsum(model.explained_variance_ratio_)
+    n_for_exp_var = int(np.searchsorted(cumulative, exp_var)) + 1
+
     return {
         'scores': scores,
         'loadings': model.components_,
-        'explained_variance': model.explained_variance_ratio_
+        'explained_variance': model.explained_variance_ratio_,
+        'cumulative_variance': cumulative,
+        'n_for_exp_var': n_for_exp_var
     }
 
-def scree_data(matrix: np.ndarray):
+def scree_data(matrix: np.ndarray, exp_var: float):
     """
     Returns varianace explianed per component for skerr plot, used to decide how many components capture
     meaningful variance
@@ -486,18 +577,22 @@ def scree_data(matrix: np.ndarray):
         n_for_80pct: scalar, minimum components needed to explain 80% varaince
         }
     """
+    if exp_var > 1:
+        logger.warning("Explained Varaince must be in range [0,1]")
+        return
+    
     n_components = min(matrix.shape[0], matrix.shape[1])
     model = PCA(n_components=n_components)
     model.fit(matrix)
 
     explained = model.explained_variance_ratio_
     cumulative = np.cumsum(explained)
-    n_for_80 = int(np.searchsorted(cumulative, 0.8)) + 1
+    n_for_exp_var = int(np.searchsorted(cumulative, exp_var)) + 1
 
     return {
         'explained': explained,
         'cumulative': cumulative,
-        'n_for_80pct': n_for_80
+        'n_for_exp_var': n_for_exp_var
     }
 
 def pls_da(matrix: np.ndarray, labels: list, n_components: int = 2):
@@ -519,6 +614,11 @@ def pls_da(matrix: np.ndarray, labels: list, n_components: int = 2):
         model: sklearn fitted model object to use later for vip_scores()
         }
     """
+    max_comps = min(matrix.shape[0], matrix.shape[1])
+    if n_components > max_comps:
+        logger.warning(f'Too many PCA components requested, defautling to max {max_comps}')
+        n_components = max_comps
+
     y = LabelEncoder().fit_transform(labels)
     model = PLSRegression(n_components=n_components)
     model.fit(matrix, y)
@@ -605,7 +705,8 @@ def permutation_test(matrix: np.ndarray, labels: list, n_perms: int = 999):
         }
 
 def hierarchical_clustering(matrix: np.ndarray, method: str = 'ward'):
-    """Hierarchical clustering for heatmap ordering.
+    """
+    Hierarchical clustering for heatmap ordering.
     Performs hirearchical clustering on data to group similar samples together for heatmap visualization,
     ward linkage minimizes within-cluster variance, optimal leaf ordering reorders leaves to minimize
     adjacent dissimilartiy

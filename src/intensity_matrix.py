@@ -6,7 +6,7 @@ Class that stores an mzml file's data as a matrix for peak identification and se
 
 # region Imports
 
-import h5py
+import h5py, copy
 import numpy as np
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
@@ -288,17 +288,6 @@ class IntensityMatrix:
         median = np.median(array)
         mad = np.median(np.abs(array - median))
         prom = (median +  mad)/2
-
-        """
-        # set prominance
-        if prom is None:
-            # handle nan/0 noise factors (SIM files have this a lot)
-            if np.isnan(self.noise_factor) or self.noise_factor == 0:
-                # set based on median and mad (3*MAD is a common noise threshold hueristic)
-                prom = np.median(array) + 3 * np.median(np.abs(array-np.median(array)))
-            else:
-                prom = self.noise_factor*100
-        """
             
         # Excludes the first and last 12 points from the search to prevent bounding errors
         array_range = array[12:-12]
@@ -666,7 +655,7 @@ class IntensityMatrix:
         
         # calculate RMS deviation
         bl_signal = row_array[local_bl]
-        noise = np.std(bl_signal)
+        noise = np.max(bl_signal) - np.min(bl_signal)       # peak to peak noise, not stdev
 
         # fallback if baseline for noise has no variation
         if noise == 0:
@@ -871,8 +860,9 @@ class IntensityMatrix:
             peaks = self.peak_dict[mz]
 
         except Exception as e:
-            raise ValueError(f"Error locating ion chromatogram for ion: {mz}\n{e}\nUnique mzs:\n {self.unique_mzs}")
-        
+            logger.warning(f"Error locating ion chromatogram for ion: {mz}\n{e}\nUnique mzs:\n {self.unique_mzs}")
+            return None
+
         # if no peaks are found raise error
         if len(peaks) == 0:
             logger.debug(f"No peaks found for {self.sample_name} Ion {mz}")
@@ -887,23 +877,26 @@ class IntensityMatrix:
         except Exception as e:
             logger.debug(f"No peaks availbe in ion chromatogram for ion: {mz}\n{e}")
             return None
+        
+        # copy peak for collection
+        result = copy.copy(closest_peak)
 
         # find rt difference (positive if RT > real value negative if RT < real value)
-        if  np.isnan(closest_peak['rt']):
+        if  np.isnan(result['rt']):
             diff = np.nan
         else:
-            diff = rt - closest_peak['rt']
+            diff = rt - result['rt']
 
-        # save rt difference to closest peak
-        closest_peak["rt_diff"] = diff
+        # save rt diff
+        result['rt_diff'] = diff
         
-        # update rt valid flag
+        # update rt valid flag and save
         if np.isnan(diff) or abs(diff) > threshold:
-            closest_peak["rt_valid"] = False
+            result["rt_valid"] = False
         else:
-            closest_peak["rt_valid"] = True
+            result["rt_valid"] = True
         
-        return closest_peak
+        return result
     
     def integrate_peak(self, peak: dict):
         """
@@ -968,6 +961,7 @@ class IntensityMatrix:
         
         molecule_map = {}
         peaks = []
+
         for idx,molecule in enumerate(molecules):
             peak = self.closest_peak(mzs[idx],rts[idx])
             if peak is None:
