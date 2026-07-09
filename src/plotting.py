@@ -497,8 +497,8 @@ def plot_pca(ax: Axes, pca_data: dict, group_indices: list, title: str = '', pc_
     # retreive explained variance and/or label x and y axes
     explained_variance = pca_data['explained_variance']
     if explained_variance is not None:
-        xlabel = f"PC{pc_x} ({explained_variance[pc_x] * 100:.1f}%)"
-        ylabel = f"PC{pc_y} ({explained_variance[pc_y] * 100:.1f}%)"
+        xlabel = f"PC{pc_x} ({explained_variance[pc_x-1] * 100:.1f}%)"
+        ylabel = f"PC{pc_y} ({explained_variance[pc_y-1] * 100:.1f}%)"
     else:
         xlabel = f"PC{pc_x}"
         ylabel = f"PC{pc_y}"

@@ -8,9 +8,7 @@ is a different measured intensity value, used for analysis/QC
 # region Imports
 
 import numpy as np
-from src.config_loader import ConfigLoader
-from src.db import get_run_samples, get_run_molecules, connect
-from src.utils import get_run_dir, get_proj_db
+from src.utils import get_proj_db
 from src.analysis import full_preprocess
 
 from scipy.optimize import curve_fit
@@ -23,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DataMatrix:
 
-    def __init__(self, proj_name: str, run_name: str, peak_data: dict):
+    def __init__(self, proj_name: str, run_name: str, peak_data: dict, samples: dict, molecules: dict, cfg):
 
         if not peak_data:
             logger.warning("List of IntensityMatrix objects is empty")
@@ -32,16 +30,13 @@ class DataMatrix:
         # config/attrs
         self.run_name = run_name
         self.project_name = proj_name
-        rundir = get_run_dir(proj_name,run_name)
-        self.cfg = ConfigLoader(rundir / 'config.yaml')
+        self.cfg = cfg
         self.db_path = get_proj_db(proj_name)
         self.run_name = run_name
 
-        # sample/molecule tables
-        conn = connect(self.db_path)
-        self.samples = {r['sample_name']: r for r in get_run_samples(conn, run_name)}
-        self.molecules = {r['molecule_name']: r for r in get_run_molecules(conn, run_name)}
-        conn.close()
+        # sve sample/molecule tables
+        self.samples = samples
+        self.molecules = molecules
 
         # maps
         self.sample_map = {name: i for i,name in enumerate(self.samples)}
@@ -108,7 +103,6 @@ class DataMatrix:
 
         # save standards
         self.standards = []
-        self.std_map = {}
 
         # clean molecule list/map
         self.clean_mol_list = []
@@ -302,15 +296,6 @@ class DataMatrix:
         # copy data matrix
         matrix = self.data[metric].copy()
 
-        # normalize to norm factor
-        norm_factors = np.zeros(self.n_samples)
-        for name,i in self.sample_map.items():
-            if self.samples[name]['norm_factor'] is None:
-                norm_factors[i] = 1
-            else:
-                norm_factors[i] = self.samples[name]['norm_factor']
-        matrix = matrix / norm_factors[:,np.newaxis]
-
         # generate std column dict
         stds = set()
         for value in self.molecules.values():
@@ -322,6 +307,16 @@ class DataMatrix:
             std_i = self.mol_map[std]
             std_vals[std] = matrix[:,std_i].copy()
 
+        # normalize to norm factor
+        norm_factors = np.zeros(self.n_samples)
+        for name,i in self.sample_map.items():
+            if self.samples[name]['norm_factor'] is None:
+                norm_factors[i] = 1
+            else:
+                norm_factors[i] = self.samples[name]['norm_factor']
+        matrix = matrix / norm_factors[:,np.newaxis]
+
+        # normalize to istd
         for row in self.molecules.values():
             mol = row['molecule_name']
             std = row['std']

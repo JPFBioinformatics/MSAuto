@@ -10,8 +10,11 @@ run_type: targeted
 # full path to the imput directory where your files to be processed live
 input_dir: C:/input/path
 
-# type of file to process, .D or .mzML
-input_type: .D
+# MZML processing
+input_type: .D                      # type of file to process, .D or .mzML
+max_mz: 1000                        # maximum m/z value to include when binning masses, prevents errors in proteowizard conversion
+min_mz: 50                          # same as above but minimum
+max_signal: 1000000000              # max signal (1e9) if signal is above this it is set to 0 and seen as an error
 
 # peak picking thresholds
 rt_threshold: 0.025                 # max time (seconds) from the supplied rt a peak can be or peak is flagged
@@ -19,6 +22,8 @@ endpoint_threshold: 10              # max difference between endpoint heights (a
 variance_threshold: 1e-6            # minimum variance to be included in PCA plot
 width_threshold: 25                 # maximum width of a peak before it is flagged as overloaded
 sn_threshold: 3.0                   # signal to noise threshold for peak picking, 3 is standard for detection 10 for quantitation
+prominance_multiplier: 0.5          # value to multiply prominance by when detecting peaks
+valley_ratio: 0.5                   # raito of the height of a valley (endpoint between peaks) and the height of the smaller peak for valley-to-valley baseline calculation
 
 # preprocessing settings
 sparseness_threshold: 0.5           # if ALL groups have >= this fraction of missing data then drop the feature from future analysis

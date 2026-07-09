@@ -184,7 +184,7 @@ class ChromatogramTab(QWidget):
             self.peak = self.peak_list[self.peak_idx]
         else:
             self.peak = None
-
+        
         # update views
         self.ion_dropdown.blockSignals(True)
         self.ion_dropdown.setCurrentIndex(self.ion_list.index(str(self.ion)))
@@ -204,7 +204,11 @@ class ChromatogramTab(QWidget):
 
         # find peak
         self.peak_idx = self.get_peak_idx()
-        self.peak = self.intensity_matrix.peak_dict[self.ion][self.peak_idx]
+        self.peak_list = self.intensity_matrix.peak_dict[self.ion][self.peak_idx]
+        if not self.peak_list:
+            self.peak = None
+        else:
+            self.peak = self.intensity_matrix.peak_dict[self.ion][self.peak_idx]
 
         # update
         self.ion_dropdown.blockSignals(True)
@@ -242,7 +246,7 @@ class ChromatogramTab(QWidget):
             self.peak = self.peak_list[0]
         else:
             self.peak = None
-
+        
         # update views
         self.trace_view.update(self.ion)
         self.peak_view.update(self.peak)
@@ -433,6 +437,13 @@ class PeakViewWidget(QWidget):
 
     def update(self, peak):
 
+        if peak is None:
+            self.title = ""
+            self.int_array = None
+            for row_i in range(self.table.rowCount()):
+                self.table.setItem(row_i, 0, QTableWidgetItem(""))
+            return
+
         self.peak = peak
         self.title = f"Peak {peak['peak_idx']}"
         im = self.tab.intensity_matrix
@@ -440,37 +451,33 @@ class PeakViewWidget(QWidget):
         self.int_array = im.intensity_matrix[ion_idx]
         self.plot()
 
-        if self.peak is not None:
-            rt = peak.get('rt', 0) or 0
-            ion = peak.get('ion', 'None')
-            if ion == 9999:
-                ion = 'TIC'
-            molecule = peak.get('molecule', 'None')
-            area = peak.get('area', 0) or 0
-            height = peak.get('height', 0) or 0
-            fwhh = peak.get('fwhh', 0) or 0
-            tf = peak.get('tailing_factor', 0) or 0
-            sn_ratio = peak.get('sn_ratio', 0) or 0
-            conv = peak.get('conv', 0) or 0
-            if fwhh == 0:
-                tp = 0
-            else:
-                tp = 5.545 * (rt / fwhh)**2
 
-            self.table.setItem(0,0,QTableWidgetItem(f"{rt:.2f}"))
-            self.table.setItem(1,0,QTableWidgetItem(str(ion)))
-            self.table.setItem(2,0,QTableWidgetItem(str(molecule)))
-            self.table.setItem(3,0,QTableWidgetItem(f"{area:.2f}"))
-            self.table.setItem(4,0,QTableWidgetItem(f"{height:.2f}"))
-            self.table.setItem(5,0,QTableWidgetItem(f"{fwhh:.2f}"))
-            self.table.setItem(6,0,QTableWidgetItem(f"{tf:.2f}"))
-            self.table.setItem(7,0,QTableWidgetItem(f"{sn_ratio:.2f}"))
-            self.table.setItem(8,0,QTableWidgetItem(f"{conv:.2f}"))
-            self.table.setItem(9,0,QTableWidgetItem(f"{tp:.2f}"))
-
+        rt = peak.get('rt', 0) or 0
+        ion = peak.get('ion', 'None')
+        if ion == 9999:
+            ion = 'TIC'
+        molecule = peak.get('molecule', 'None')
+        area = peak.get('area', 0) or 0
+        height = peak.get('height', 0) or 0
+        fwhh = peak.get('fwhh', 0) or 0
+        tf = peak.get('tailing_factor', 0) or 0
+        sn_ratio = peak.get('sn_ratio', 0) or 0
+        conv = peak.get('conv', 0) or 0
+        if fwhh == 0:
+            tp = 0
         else:
-            for row_i in range(self.table.rowCount()):
-                self.table.setItem(row_i,0,QTableWidgetItem("0"))
+            tp = 5.545 * (rt / fwhh)**2
+
+        self.table.setItem(0,0,QTableWidgetItem(f"{rt:.2f}"))
+        self.table.setItem(1,0,QTableWidgetItem(str(ion)))
+        self.table.setItem(2,0,QTableWidgetItem(str(molecule)))
+        self.table.setItem(3,0,QTableWidgetItem(f"{area:.2f}"))
+        self.table.setItem(4,0,QTableWidgetItem(f"{height:.2f}"))
+        self.table.setItem(5,0,QTableWidgetItem(f"{fwhh:.2f}"))
+        self.table.setItem(6,0,QTableWidgetItem(f"{tf:.2f}"))
+        self.table.setItem(7,0,QTableWidgetItem(f"{sn_ratio:.2f}"))
+        self.table.setItem(8,0,QTableWidgetItem(f"{conv:.2f}"))
+        self.table.setItem(9,0,QTableWidgetItem(f"{tp:.2f}"))
 
 class SpectrumViewWidget(QWidget):
     def __init__(self, intensity_matrix, peak, parent = None):
@@ -533,6 +540,15 @@ class SpectrumViewWidget(QWidget):
         self.canvas.draw()
 
     def update(self, intensity_matrix, peak):
+        if peak == None:
+            self.peak = None
+            self.mzs = np.array([])
+            self.abundances = np.array([])
+            self.table.clearContents()
+            self.figure.clear()
+            self.canvas.draw()
+            return
+        
         mzs,abundances = intensity_matrix.generate_spectra(peak)
         self.peak = peak
         self.mzs = mzs

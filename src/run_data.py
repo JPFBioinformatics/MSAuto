@@ -6,13 +6,15 @@ Data container for loading a given run from database to feed to GUI, used for vi
 
 # region Imports
 
+import shutil
 import numpy as np
 from src.db import get_run_samples, get_run_molecules
 from src.intensity_matrix import IntensityMatrix as IM
 from src.config_loader import ConfigLoader
 from src.data_matrix import DataMatrix as DM
 from src.db import connect
-from src.utils import get_proj_db
+from src.utils import get_proj_db, get_run_dir
+from src.db import insert_peak_batch, insert_im, insert_run, insert_molecule, insert_sample
 
 # logging
 import logging
@@ -21,16 +23,20 @@ logger = logging.getLogger(__name__)
 # endregion
 
 class RunData:
-    def __init__(self, run_name: str, proj_name: str):
+    def __init__(self, run_name: str, proj_name: str, cfg):
 
         self.proj_name = proj_name
         self.run_name = run_name
+        self.run_type = None
+        self.cfg = cfg
         
         db_path = get_proj_db(proj_name)
         try:
             conn = connect(db_path)
-            self.samples = {r['sample_name']: dict(r) for r in get_run_samples(conn, run_name)}             # dict sample_name: row_dict
-            self.molecules = {r["molecule_name"]: dict(r) for r in get_run_molecules(conn, run_name)}       # dict of mol_name: row_dict
+            self.samples = {r['sample_name']: {k:v for k,v in dict(r).items() if k!='run_name'} 
+                            for r in get_run_samples(conn, run_name)}
+            self.molecules = {r["molecule_name"]: {k:v for k,v in dict(r).items() if k!='run_name'} 
+                              for r in get_run_molecules(conn, run_name)}
         finally:
             conn.close()
 
@@ -49,8 +55,9 @@ class RunData:
             peak_list = matrix.collect_data(mols, mzs, rts)
             peaks[sample_name] = peak_list
             self.intensity_matrices[sample_name] = matrix
+        self.vec_size = max(mz for im in self.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1
 
-        self.data_matrix = DM(proj_name, run_name, peaks)
+        self.data_matrix = DM(proj_name, run_name, peaks, self.samples, self.molecules)
 
         # reassign detected molecules
         sample_names = {v:k for k,v in self.data_matrix.sample_map.items()}
@@ -72,3 +79,124 @@ class RunData:
                 peak = peak_list[peak_idx]
 
                 peak['molecule'] = molecule
+
+    @classmethod
+    def from_processing(cls, proj_name, run_name, samples, molecules, intensity_matrices, run_type, cfg):
+        """
+        Creates rundata object before anything has been saved to sql database 
+        """
+        obj = cls.__new__(cls)
+        obj.proj_name = proj_name
+        obj.run_name = run_name
+        obj.samples = samples
+        obj.molecules = molecules
+        obj.intensity_matrices =intensity_matrices
+        obj.run_type = run_type
+        obj.cfg = cfg
+        
+        mols = []
+        mzs = []
+        rts = []
+        for entry in obj.molecules.values():
+            mols.append(entry['molecule_name'])
+            mzs.append(np.int64(entry['ion']))
+            rts.append(entry['rt'])
+
+        peaks = {}
+        for sample_name in obj.samples:
+            matrix = obj.intensity_matrices[sample_name]
+            peak_list = matrix.collect_data(mols, mzs, rts)
+            peaks[sample_name] = peak_list
+        obj.vec_size = max(mz for im in obj.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1
+
+        # create data matrix 
+        obj.data_matrix = DM(proj_name, run_name, peaks, samples, molecules, cfg)
+
+        # reassign detected molecules
+        sample_names = {v:k for k,v in obj.data_matrix.sample_map.items()}
+        mol_names = {v:k for k,v in obj.data_matrix.mol_map.items()}
+        for i in range(obj.data_matrix.data['peak_idx'].shape[0]):         # rows/samples
+            for j in range(obj.data_matrix.data['peak_idx'].shape[1]):     # cols/molecules
+                
+                peak_idx = obj.data_matrix.data['peak_idx'][i][j]
+                if peak_idx == -1:
+                    continue
+
+                name = sample_names[i]
+                molecule = mol_names[j]
+
+                im = obj.intensity_matrices[name]
+                ion = np.int64(obj.molecules[molecule]['ion'])
+
+                peak_list = im.peak_dict[ion]
+                peak = peak_list[peak_idx]
+
+                peak['molecule'] = molecule
+
+        return obj
+
+    def save_run(self, cfg):
+        """
+        saves run to sql/h5
+        """
+        
+        conn = None
+        run_dir = None
+
+        try:
+            # make run dir
+            run_dir = get_run_dir(self.proj_name, self.run_name)
+            run_dir.mkdir(parents=True,exist_ok=True)
+
+            # save config
+            cfg.save()
+
+            # connect to db
+            conn = connect(get_proj_db(self.proj_name))
+
+            # inset ito db/h5
+            with conn:
+                # insert run to table
+                insert_run(conn,self.run_name,self.run_type)
+
+                # insert sample/molecule data to DB
+                for row in self.samples.values():
+                    insert_sample(conn,
+                                    row['sample_name'],
+                                    self.run_name,
+                                    row['modelID'],
+                                    row['group_name'],
+                                    row['sex'],
+                                    row['norm_factor'],
+                                    row['injection_order'])
+
+                for row in self.molecules.values():
+                    insert_molecule(conn,
+                                    row['molecule_name'],
+                                    self.run_name,
+                                    row['ion'],
+                                    row['rt'],
+                                    row['std'],
+                                    row['casNo'])
+
+                # generate intensity mtrices, save, collect data and save
+                for im in self.intensity_matrices.values():
+                    insert_im(conn,
+                              im.sample_name,
+                              self.run_name,
+                              im.matrix_type,
+                              im.noise_factor,
+                              im.intensity_matrix.shape[0],
+                              im.intensity_matrix.shape[1])
+                    insert_peak_batch(conn, im, self.run_name)
+                    im.save_h5_object(self.proj_name, self.run_name)
+
+        except Exception:
+            if run_dir is not None and run_dir.exists():
+                shutil.rmtree(run_dir)
+            raise
+
+        finally:
+            if conn:
+                conn.close()
+

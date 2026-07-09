@@ -28,7 +28,8 @@ class IntensityMatrix:
                  cfg: ConfigLoader,
                  sample_name: str = None,
                  time_map: dict = None,
-                 matrix_type: str = None):
+                 matrix_type: str = None,
+                 detect_peaks: bool = False):
         self.intensity_matrix = intensity_matrix
         self.unique_mzs = unique_mzs
         self.time_map = time_map
@@ -48,7 +49,8 @@ class IntensityMatrix:
         # calculate noise factor for this intensity matrix
         self.calculate_noise_factor()
         # identify peaks in this intensity matrix
-        self.identify_peaks(self.intensity_matrix)
+        if detect_peaks:
+            self.identify_peaks(self.intensity_matrix)
 
     # region                 ---------- Abundance Threshold ----------
 
@@ -249,7 +251,7 @@ class IntensityMatrix:
     # region                 ---------- Finding Maxima ----------
 
     # finds the peaks (maxima and bounds) for each row of a given intensity matrix and the tic, last row is TIC
-    def identify_peaks(self, matrix, prom=None):
+    def identify_peaks(self, matrix):
 
         # dict to hold the lists of peak values m/z : peak_list
         peaks = {}
@@ -258,7 +260,7 @@ class IntensityMatrix:
         for row_idx,row in enumerate(matrix):
 
             ion = self.unique_mzs[row_idx]
-            row_peaks, row_nm = self.find_maxima(row,ion,prom=prom)
+            row_peaks, row_nm = self.find_maxima(row,ion)
             peaks[ion] = row_peaks
             masks.append(row_nm)
 
@@ -267,7 +269,7 @@ class IntensityMatrix:
 
         return peaks
 
-    def find_maxima(self, array, ion, prom=None, vr=0.5):
+    def find_maxima(self, array, ion):
         """
         Uses a 2 pass appraoch to determine bounds and peak features for each detected maxima point, defines
         baseline using valley-to-valley baseline calculation
@@ -276,19 +278,20 @@ class IntensityMatrix:
         ------
         array                           row from intensity matrix
         ion                             ion label from row of intensity matrix
-        vr                              valley ratio for calculating baseline for clusters
 
         Returns
         -------
         maxima                          list of peaks for this ion's row array
         """
         sn_threshold = self.cfg.get('sn_threshold')
+        prom_mult = self.cfg.get('prominance_multiplier')
+        vr = self.cfg.get('valley_ratio')
 
         # set prominance
-        median = np.median(array)
-        mad = np.median(np.abs(array - median))
-        prom = (median +  mad)/2
-            
+        median = np.nanmedian(array)
+        mad = np.nanmedian(np.abs(array - median))
+        prom = (median +  mad) * prom_mult
+
         # Excludes the first and last 12 points from the search to prevent bounding errors
         array_range = array[12:-12]
 
@@ -460,8 +463,10 @@ class IntensityMatrix:
                 entry['tailing_factor'] = tailing
 
                 # S/N check
+                sn_count = 0
                 if entry['sn_ratio'] < sn_threshold or np.isnan(entry['sn_ratio']):
                     entry['valid'] = False
+                    sn_count +=1
                 else:
                     entry['valid'] = True
                 
@@ -1125,7 +1130,8 @@ class IntensityMatrix:
                              unique_mzs=unique_mzs,
                              cfg=cfg,
                              sample_name=sample_name,
-                             time_map=time_map,)
+                             time_map=time_map,
+                             detect_peaks=True)
         im.baseline_mask = baseline_mask
 
         return im

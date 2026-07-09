@@ -640,7 +640,7 @@ class SampleTableDialog(QDialog):
         footer_layout = QHBoxLayout()
         footer_layout.setAlignment(Qt.AlignBottom)
 
-        columns = ['sample_name', 'modelID', 'group', 'sex', 'norm_factor', 'injection_order']
+        columns = ['sample_name', 'modelID', 'group_name', 'sex', 'norm_factor', 'injection_order']
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -703,7 +703,7 @@ class SampleTableDialog(QDialog):
         for i in range(self.table.rowCount()):
             item = self.table.item(i,0)
             if not item or not item.text().strip():
-                QMessageBox(self,"Error", f"Sample Name missing for row {i}")
+                QMessageBox.warning(self,"Error", f"Sample Name missing for row {i}")
                 return
             row = {}
             for j in range(self.table.columnCount()):
@@ -842,7 +842,7 @@ class MoleculeTableDialog(QDialog):
         for i in range(self.table.rowCount()):
             item = self.table.item(i,0)
             if not item or not item.text().strip():
-                QMessageBox(self,"Error", f"Sample Name missing for row {i}")
+                QMessageBox.warning(self,"Error", f"Sample Name missing for row {i}")
                 return
             row = {}
             for j in range(self.table.columnCount()):
@@ -986,7 +986,7 @@ class LoadRunDialog(QDialog):
         self.progress.setWindowModality(Qt.WindowModal)
         self.progress.show()
 
-        self.worker = ProcessingLoader(self.project_name, self.run_name)
+        self.worker = ProcessingLoader(self.project_name, self.run_name, self.cfg)
         self.worker.finished.connect(self.on_processing_done)
         self.worker.error.connect(self.on_processing_error)
         self.worker.run_data.connect(self.on_run_data)
@@ -1011,14 +1011,15 @@ class ProcessingLoader(QThread):
     run_data = pyqtSignal(object)
     error = pyqtSignal(str)
 
-    def __init__(self, project_name, run_name):
+    def __init__(self, project_name, run_name, cfg):
         super().__init__()
         self.project_name = project_name
         self.run_name = run_name
+        self.cfg = cfg
 
     def run(self):
         try:
-            rd = RD(self.run_name, self.project_name)
+            rd = RD(self.run_name, self.project_name, self.cfg)
             self.run_data.emit(rd)
             self.finished.emit()
         except Exception as e:
@@ -1079,7 +1080,7 @@ class ConfirmConfigWidget(QWidget):
 
         # samples tab
         samples_layout = QVBoxLayout()
-        sample_columns = ['sample_name', 'modelID', 'group', 'sex', 'norm_factor', 'injection_order']
+        sample_columns = ['sample_name', 'modelID', 'group_name', 'sex', 'norm_factor', 'injection_order']
         self.samples_table.setColumnCount(len(sample_columns))
         self.samples_table.setHorizontalHeaderLabels(sample_columns)
         self.samples_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -1160,7 +1161,7 @@ class ConfirmConfigWidget(QWidget):
         for i,row in enumerate(sample_data):
             self.samples_table.setItem(i,0,QTableWidgetItem(str(row['sample_name'])))
             self.samples_table.setItem(i,1,QTableWidgetItem(str(row['modelID'])))
-            self.samples_table.setItem(i,2,QTableWidgetItem(str(row['group'])))
+            self.samples_table.setItem(i,2,QTableWidgetItem(str(row['group_name'])))
             self.samples_table.setItem(i,3,QTableWidgetItem(str(row['sex'])))
             self.samples_table.setItem(i,4,QTableWidgetItem(str(row['norm_factor'])))
             self.samples_table.setItem(i,5,QTableWidgetItem(str(row['injection_order'])))
@@ -1221,6 +1222,7 @@ class ConfirmConfigWidget(QWidget):
         self.progress.close()
         self.window().sample_data = None
         self.window().mol_data = None
+        self.window().cfg = self.cfg
         self.window().stack.setCurrentIndex(3)
 
     def on_processing_error(self, msg):
@@ -1247,75 +1249,44 @@ class ProcessingWorker(QThread):
         self.cfg = cfg
 
     def run(self):
-        conn = None
+        #conn = None
         try:
-            # make run dir
-            run_dir = get_run_dir(self.project_name, self.run_name)
-            run_dir.mkdir(parents=True,exist_ok=True)
 
-            # save config
-            self.cfg.save()
+            # build mol/sample dicts
+            samples = {}
+            for sample_row in self.sample_data:
+                samples[sample_row['sample_name']] = sample_row
+            print("Finished processing samples")
+            molecules = {}
+            for mol_row in self.mol_data:
+                molecules[mol_row['molecule_name']] = mol_row
+            print("Finished processing molecules")
 
-            conn = connect(get_proj_db(self.project_name))
-            mols = []
-            mzs = []
-            rts = []
-            with conn:
-                # insert run to table
-                insert_run(conn,self.run_name,self.run_type)
+            ims = full_bulk_convert(self.input_dir, self.input_type, self.cfg)
+            print("Created all Intensity  Matrix objects")
+            intensity_matrices = {}
+            for im in ims:
+                name = im.sample_name
+                intensity_matrices[name] = im
 
-                # insert sample/molecule data to DB
-                for row in self.sample_data:
-                    insert_sample(conn,
-                                    row['sample_name'],
-                                    self.run_name,
-                                    row['modelID'],
-                                    row['group'],
-                                    row['sex'],
-                                    row['norm_factor'],
-                                    row['injection_order'])
+            rd = RD.from_processing(
+                self.project_name,
+                self.run_name,
+                samples,
+                molecules,
+                intensity_matrices,
+                self.run_type,
+                self.cfg
+            )
+            print("Created run data object")
 
-                for row in self.mol_data:
-                    mols.append(row['molecule_name'])
-                    mzs.append(row['ion'])
-                    rts.append(row['rt'])
-                    insert_molecule(conn,
-                                    row['molecule_name'],
-                                    self.run_name,
-                                    row['ion'],
-                                    row['rt'],
-                                    row['std'],
-                                    row['casNo'])
-
-                # generate intensity mtrices, save, collect data and save
-                ims = full_bulk_convert(self.input_dir,self.input_type,self.cfg)
-                peak_data = {}
-                for im in ims:
-                    insert_im(conn,
-                              im.sample_name,
-                              self.run_name,
-                              im.matrix_type,
-                              im.noise_factor,
-                              im.intensity_matrix.shape[0],
-                              im.intensity_matrix.shape[1])
-                    im.collect_data(mols,mzs,rts)
-                    insert_peak_batch(conn, im, self.run_name)
-                    im.save_h5_object(self.project_name, self.run_name)
-
-            rd = RD(self.run_name, self.project_name)
             self.run_data.emit(rd)
             self.finished.emit()
 
         except Exception as e:
-            traceback.print_exc()
-            h5_file = get_run_dir(self.project_name, self.run_name) / f"{self.run_name}.h5"
-            if h5_file.exists():
-                h5_file.unlink()
-            self.error.emit(str(e))
-
-        finally:
-            if conn:
-                conn.close()
+            logger.warning(traceback.format_exc())
+            QMessageBox.warning(None, 'Error', f'Processing error:\n{e}')
+            logger.warning(e)
 
 # endregion
 
@@ -1332,11 +1303,20 @@ class MainDashboard(QWidget):
         self.tabs_built = False
         self.tabs = QTabWidget()
 
+        self.save_btn = QPushButton("Save")
+
         self.initUI()
 
     def initUI(self):
+        
+        self.save_btn.clicked.connect(self.save_run)
+
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.addStretch()
+        toolbar_layout.addWidget(self.save_btn)
 
         layout = QVBoxLayout()
+        layout.addLayout(toolbar_layout)
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
@@ -1363,6 +1343,30 @@ class MainDashboard(QWidget):
             self.tabs_built = True
 
         super().showEvent(event)
+
+    def save_run(self):
+        self.save_worker = SaveRunWorker(self.run_data, self.window().cfg)
+        self.save_worker.error.connect(lambda e: QMessageBox.critical(self, 'Error', f'Save Failed:\n{e}'))
+        self.save_worker.start()
+
+class SaveRunWorker(QThread):
+    """
+    Saves run data if it is done
+    """
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+    
+    def __init__(self, run_data, cfg):
+        super().__init__()
+        self.run_data = run_data
+        self.cfg = cfg
+
+    def run(self):
+        try:
+            self.run_data.save_run(self.cfg)
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))
 
 # endregion
 

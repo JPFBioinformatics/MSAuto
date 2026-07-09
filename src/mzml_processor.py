@@ -7,7 +7,7 @@ objects.
 
 # region Imports
 
-import subprocess, base64, zlib
+import subprocess, base64, zlib, re
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
@@ -36,6 +36,7 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
         tmpdir = input_dir / 'temp'
         for raw_file in raw_files:
             if raw_file.is_dir():
+
                 cmd = [
                     "msconvert",
                     str(raw_file),
@@ -56,12 +57,13 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
 
     return matrices
 
-def decode_binary_data(encoded_data, dtype):
+def decode_binary_data(encoded_data, dtype, max_signal=None):
     """
     Decodes base64, decompresses zlib, and converts to a NumPy array with an associated m/z and time lists.
     Params:
         encoded_data                base64 data to be decoded
         dtype                       type of data that is converted
+        max_signal                  maximum signal expected, if signal exceeds this it is set to 0
     """
     try:
         decoded = base64.b64decode(encoded_data)
@@ -69,22 +71,44 @@ def decode_binary_data(encoded_data, dtype):
     except Exception as e:
         print(f"Exception:\n{e}")
         return None
+    
+    # generate result array, removing nan and clipping to max signal
+    result = np.frombuffer(decompressed,dtype=dtype)                        # generate result array
+    mask = result > 1e9
+    if mask.any():
+        indices = np.where(mask)[0]
+        logger.info(f"Large Raw Values:{result[indices]}\nIndex values:{indices}")
+    
+    result =np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0)          # replace nan with 0
+    if max_signal is not None:
+        result[result > max_signal] = 0                                     # remove excessively high signals
+    return result
 
-    return np.frombuffer(decompressed, dtype=dtype)
-
-def bin_masses(unique_mzs, intensity_matrix):
+def bin_masses(unique_mzs, intensity_matrix, max_mz, min_mz):
     """
     Bins masses -0.3 to +0.7 of integer values
     Params:
         unique_mzs                      list of m/z values to bin
         intensity_matrix                intensity matrix that corrosponds to unbinned m/z values for processing
+        min/max mz                      mz range for this run, used to prevent corrupted data from entering analysis
+    
     Returns:
         binned_mzs                      list of binned mz values
         binned_matrix                   intensity matrix that has been binned
     """
+
+    if min_mz is None:
+        min_mz = 50
+    if max_mz is None:
+        max_mz = 1000
     
     # change unique mz list to array
     mz_array = np.asarray(unique_mzs)
+
+    # filter out invalid entries
+    valid = (mz_array >= min_mz) & ~np.isnan(mz_array) & (mz_array <= max_mz)
+    mz_array = mz_array[valid]
+    intensity_matrix = intensity_matrix[valid,:]
 
     # get bin assignments
     bin_assignments = (mz_array + 0.3).astype(int)
@@ -123,6 +147,10 @@ def create_scan_matrix(mzml_path, cfg):
     intensity_list = []
     unique_mzs = set()
     skipped = 0
+
+    max_mz = cfg.get('max_mz')
+    min_mz = cfg.get('min_mz')
+    max_signal = cfg.get('max_signal')
 
     # get name of sample
     name = mzml_path.stem
@@ -173,8 +201,8 @@ def create_scan_matrix(mzml_path, cfg):
             continue
 
         # decode the data
-        mz_array = decode_binary_data(mz_encoded,dtype=np.float64)
-        intensity_array = decode_binary_data(intensity_encoded,dtype=np.float32)
+        mz_array = decode_binary_data(mz_encoded,dtype=np.float64, max_signal=max_signal)
+        intensity_array = decode_binary_data(intensity_encoded,dtype=np.float32, max_signal=max_signal)
 
         # make sure array values are valid
         if mz_array is None or intensity_array is None:
@@ -219,7 +247,18 @@ def create_scan_matrix(mzml_path, cfg):
                 intensity_matrix[row_idx, col_idx] = intensity
 
     # bin the intensity matrix and unique_mzs
-    binned_mzs, binned_matrix = bin_masses(unique_mzs, intensity_matrix)
+    binned_mzs, binned_matrix = bin_masses(unique_mzs, intensity_matrix, max_mz, min_mz)
+
+    """
+    # print max to figure out worst rows
+    if name == 'Jejunum 2 scan':
+        logger.info(f'------------------------- {name} -------------------------')
+        for i in range(binned_matrix.shape[0]):
+            row = binned_matrix[i,:]
+            row_max = np.nanmax(row)
+            logger.info(f'\nIon: {binned_mzs[i]}   Max:{row_max}')
+    """  
+
 
     # add TIC row to end of matrix
     sum_row = np.sum(binned_matrix, axis=0)
@@ -234,7 +273,8 @@ def create_scan_matrix(mzml_path, cfg):
                                     cfg=cfg,
                                     sample_name=name,
                                     time_map=time_map,
-                                    matrix_type="SCAN")
+                                    matrix_type="SCAN",
+                                    detect_peaks=True)
 
     return output_matrix
 
@@ -337,7 +377,8 @@ def create_sim_matrix(mzml_path, cfg):
                                     cfg=cfg,
                                     sample_name=file_name,
                                     time_map=time_map,
-                                    matrix_type="SIM")
+                                    matrix_type="SIM",
+                                    detect_peaks=True)
     return output_matrix
 
 def create_intensity_matrix(mzml_path, cfg):
@@ -387,3 +428,4 @@ def aq_type(mzml_path: Path):
             return "SIM"
         elif acc == "MS:1000579":
             return "SCAN"
+

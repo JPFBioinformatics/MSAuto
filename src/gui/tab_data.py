@@ -330,7 +330,7 @@ class DataTab(QWidget):
         molecule = self.inv_mol_map[j]
 
         if self.data_matrix.missing[i,j]:
-            QMessageBox(self, "Error", f"No peak found for {molecule} in {sample}")
+            QMessageBox.warning(self, "Error", f"No peak found for {molecule} in {sample}")
             return
 
         self.chrom_tab.navigate_to(sample, molecule)
@@ -359,6 +359,10 @@ class DataTab(QWidget):
         return f"{val:.4f}"
     
     def export_to_excel(self):
+
+        # get run name
+        run_name = self.run_data.run_name
+        proj_name = self.run_data.proj_name
         
         # set path and create workbook
         path, _ = QFileDialog.getSaveFileName(self, "Export to Excel", "", "Excel Files (*xlsx)")
@@ -385,13 +389,19 @@ class DataTab(QWidget):
         ws1 = wb.active
         ws1.title = f"Metadata"
         
+        # give project/row name
+        ws1.cell(row=1,column=1,value='Project Name:')
+        ws1.cell(row=1,column=2,value=proj_name)
+        ws1.cell(row=2,column=1,value='Run Name:')
+        ws1.cell(row=2,column=2,value=run_name)
+
         # sample table
         sample_rows = list(self.data_matrix.samples.values())
         sample_cols = list(sample_rows[0].keys())
         
         # sample headers
         for j,col in enumerate(sample_cols):
-            cell = ws1.cell(row=2, column=j+2, value=col)
+            cell = ws1.cell(row=4, column=j+2, value=col)
             cell.fill = grey_fill
             cell.font = bold_font
             if j < len(sample_cols) - 1:
@@ -402,9 +412,9 @@ class DataTab(QWidget):
         # sample data
         for i,row in enumerate(sample_rows):
             for j,col in enumerate(sample_cols):
-                ws1.cell(row=i+3, column=j+2, value=row[col])
+                ws1.cell(row=i+5, column=j+2, value=row[col])
                 if j < len(sample_cols)-1:
-                    ws1.cell(row=i+3, column=j+2).border = right_border
+                    ws1.cell(row=i+5, column=j+2).border = right_border
 
         # molecules table
         mol_rows = list(self.data_matrix.molecules.values())
@@ -412,7 +422,7 @@ class DataTab(QWidget):
         
         # molecule headers
         for j,col in enumerate(mol_cols):
-            cell = ws1.cell(row=2, column=len(sample_cols)+j+4, value=col)
+            cell = ws1.cell(row=4, column=len(sample_cols)+j+4, value=col)
             cell.fill = grey_fill
             cell.font = bold_font
             if j < len(mol_cols) - 1:
@@ -423,9 +433,9 @@ class DataTab(QWidget):
         # molecule data
         for i,row in enumerate(mol_rows):
             for j,col in enumerate(mol_cols):
-                ws1.cell(row=i+3, column=len(sample_cols)+j+4, value=row[col])
+                ws1.cell(row=i+5, column=len(sample_cols)+j+4, value=row[col])
                 if j < len(mol_cols) - 1:
-                    ws1.cell(row=i+3, column=len(sample_cols)+j+4).border = right_border
+                    ws1.cell(row=i+5, column=len(sample_cols)+j+4).border = right_border
 
         # second tab, data table =================================================================================
 
