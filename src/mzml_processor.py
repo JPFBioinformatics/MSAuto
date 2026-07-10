@@ -33,7 +33,7 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
     # check to see if mzml files are already converted
     if file_type == '.D':
         raw_files = list(input_dir.glob("*.D"))
-        tmpdir = input_dir / 'temp'
+        tmpdir = input_dir / 'mzML_files'
         for raw_file in raw_files:
             if raw_file.is_dir():
 

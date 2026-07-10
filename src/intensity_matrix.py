@@ -947,9 +947,10 @@ class IntensityMatrix:
             raise ValueError("baseline and signal arrays are of different length")
         
         net = signal - peak['baseline']
+        time_points = np.array([self.time_map[start+i] for i in range(len(net))])
 
         # tarpazoidal integrate the net value
-        peak_area = np.trapezoid(net)
+        peak_area = np.trapezoid(y=net, x=time_points)
         peak["area"] = peak_area
     
     def collect_data(self, molecules: list, mzs: list, rts: list):

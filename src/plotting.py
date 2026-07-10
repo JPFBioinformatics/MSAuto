@@ -339,8 +339,11 @@ def plot_bar(ax: Axes, data, labels, ylabel='', title='', cutoff=None, sorted_de
             values.append(cv)
         elif type == 'count':
             values.append(np.nansum(arr))
-
-    if sorted_desc:
+            
+    if sorted_desc and errs:
+        paris = sorted(zip(values,errs,labels), reverse=True)
+        values,errs,labels = zip(*paris)
+    elif sorted_desc:
         paris = sorted(zip(values,labels), reverse=True)
         values,labels = zip(*paris)
 

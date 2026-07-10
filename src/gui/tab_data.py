@@ -354,7 +354,7 @@ class DataTab(QWidget):
     def format_val(self, val):
         if val == 0:
             return "0"
-        if abs(val) > 1000000 or abs(val) < 0.01:
+        if abs(val) > 1000000 or abs(val) < 0.001:
             return f"{val:.4e}"
         return f"{val:.4f}"
     

@@ -443,7 +443,10 @@ def kruskal_wallis(matrix: np.ndarray, group_indices: dict, posthoc: bool = True
     p_values = np.zeros(matrix.shape[1])
     for j in range(matrix.shape[1]):
         groups = [matrix[idxs,j] for idxs in group_indices.values()]
-        _,p = kruskal(*groups)
+        try:
+            _,p = kruskal(*groups)
+        except:
+            p = np.nan
         p_values[j] = p
 
     result = {'p_values': p_values}
