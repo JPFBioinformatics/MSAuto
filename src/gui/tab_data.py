@@ -441,12 +441,12 @@ class DataTab(QWidget):
 
         ws2 = wb.create_sheet(title=f"raw_{dtype}")
         
-        # column labels (casNO preferred)
+        # column labels
         for j in range(self.data_table.columnCount()):
             item = self.data_table.horizontalHeaderItem(j)
             
             if item and item.text() in self.data_matrix.molecules:
-                col_label = self.data_matrix.molecules[item.text()]['casNo']
+                col_label = self.data_matrix.molecules[item.text()]['molecule_name']
             else:
                 col_label = item.text() if item else ''
             cell = ws2.cell(row=2, column=j+3, value=col_label)

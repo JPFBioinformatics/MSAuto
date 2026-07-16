@@ -631,7 +631,6 @@ def main():
     if not excel_path:
         return
     
-    
     # stup logger
     log_path = excel_path.with_suffix('.log')
     logging.basicConfig(
@@ -675,7 +674,7 @@ def main():
     kw_results = kruskal_wallis(matrix, indices_to_use)
     fdr_corrected = fdr_correction(kw_results['p_values'], fdr_method)
     sig_indices = np.where(fdr_corrected < 0.05)[0]
-    logger.info("Kruskal-Wallic with Dunn posthoc complete")
+    logger.info(f"Kruskal-Wallic with Dunn posthoc complete\nSignificant Features Found: {len(sig_indices)}")
 
     # create document
     with PdfPages(pdf_path) as pdf:

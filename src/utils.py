@@ -132,6 +132,26 @@ def get_proj_dir(proj_name):
 def get_run_cfg_path(proj_name, run_name):
     return get_run_dir(proj_name, run_name) / 'config.yaml'
 
+def configure_run_logging(run_dir: Path):
+    """
+    Redirects the root logger's file output to run_dir/log_name, replacing any
+    previously attached FileHandler. Safe to call again later (e.g. switching runs).
+    """
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    root_logger = logging.getLogger()
+
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+            handler.close()
+            
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    file_handler = logging.FileHandler(run_dir / "run.log")
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
 def sanitize_name(name: str):
     """
     Replaces problematic characaters and spaces with "_"
@@ -140,3 +160,18 @@ def sanitize_name(name: str):
     name = re.sub(r'[\\/:*?"<>|]','_',name)
     name = name.replace(" ", "_")
     return name
+
+def find_abandoned_runs(proj_dir: Path):
+    if not proj_dir.is_dir():
+        logger.warning(f"No directory found at {proj_dir}")
+        return
+    
+    abandoned = []
+    for entry in proj_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        if not any(entry.glob("*.h5")):
+            abandoned.append(entry)
+
+    return abandoned
+    

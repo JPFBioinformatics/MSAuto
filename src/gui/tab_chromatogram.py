@@ -200,7 +200,7 @@ class ChromatogramTab(QWidget):
 
         # get molecule's ion for trace if applicable
         if self.molecule != 'None':
-            self.ion = self.data_matrix.molecules[self.molecule]['ion']
+            self.ion = np.int64(self.data_matrix.molecules[self.molecule]['ion'])
 
         # find peak
         self.peak_idx = self.get_peak_idx()
@@ -305,7 +305,7 @@ class ChromatogramTab(QWidget):
 
         # molecule state
         self.molecule = molecule
-        self.ion = self.run_data.molecules[molecule]['ion']
+        self.ion = np.int64(self.run_data.molecules[molecule]['ion'])
         self.peak_idx = self.get_peak_idx()
         self.peak = self.intensity_matrix.peak_dict[self.ion if self.ion != 'TIC' else 9999][self.peak_idx]
         self.mol_dropdown.blockSignals(True)

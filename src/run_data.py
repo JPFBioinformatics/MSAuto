@@ -8,6 +8,7 @@ Data container for loading a given run from database to feed to GUI, used for vi
 
 import shutil
 import numpy as np
+from pathlib import Path
 from src.db import get_run_samples, get_run_molecules
 from src.intensity_matrix import IntensityMatrix as IM
 from src.config_loader import ConfigLoader
@@ -29,6 +30,7 @@ class RunData:
         self.run_name = run_name
         self.run_type = None
         self.cfg = cfg
+        self.failed_samples = None
         
         db_path = get_proj_db(proj_name)
         try:
@@ -102,9 +104,20 @@ class RunData:
             mzs.append(np.int64(entry['ion']))
             rts.append(entry['rt'])
 
+        input_dir = Path(cfg.get('input_dir'))
+        input_type = cfg.get('input_type')
+
+        obj.failed_samples = []
         peaks = {}
         for sample_name in obj.samples:
-            matrix = obj.intensity_matrices[sample_name]
+            matrix = obj.intensity_matrices.get(sample_name)
+            if input_type == '.D':
+                file_path = input_dir / f"{sample_name}.mzML"
+            else:
+                file_path = input_dir / f"{sample_name}.mzML"
+            if matrix is None:
+                logger.warning(f"No IntensityMatrix found for {sample_name}, sample ws not processed successfully")
+                obj.failed_samples.append([sample_name,file_path])
             peak_list = matrix.collect_data(mols, mzs, rts)
             peaks[sample_name] = peak_list
         obj.vec_size = max(mz for im in obj.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1

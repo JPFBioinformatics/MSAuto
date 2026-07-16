@@ -54,95 +54,51 @@ class IntensityMatrix:
 
     # region                 ---------- Abundance Threshold ----------
 
-    # calculates At value to replace 0 values with
-    def calculate_threshold(self):
-
+    def calculate_threshold(self):        
         """
-        Counts the number of zero to nonzero transtions for each m/z in 10 approximately equally sized time segments then takes the square root
-        of these values and multiplies it by the minimum abundance measured in the entire intensity matrix, use this value to replace 0 values
+            Counts the number of zero to nonzero transtions for each m/z in 10 approximately equally sized time segments then takes the square root
+            of these values and multiplies it by the minimum abundance measured in the entire intensity matrix, use this value to replace 0 values
 
-        Parameters:
-            intensity_matrix (np.ndarray): 2D numpy array where each row corrosponds to a m/z chromatogram intensity profile and each column
-                                           corrosponds to a scan
-        Returns:
-            threshold_values (np.ndarray): 2D numpy array with 10 columns (1 per segment) and a row for each unique m/z in the input matrix
-                                           each entry corrosponds to the calculated threshold value for that m/z in that segment
-        """
-
+            Parameters:
+                intensity_matrix (np.ndarray): 2D numpy array where each row corrosponds to a m/z chromatogram intensity profile and each column
+                                            corrosponds to a scan
+            Returns:
+                threshold_values (np.ndarray): 2D numpy array with 10 columns (1 per segment) and a row for each unique m/z in the input matrix
+                                            each entry corrosponds to the calculated threshold value for that m/z in that segment
+            """
+        
         intensity_matrix = self.intensity_matrix
-
-        # the minimum measured abundance in the intensity matrix
-        min_value = np.min(intensity_matrix[intensity_matrix>0])
-
-        # creates a 2d array to store the threshold transitions, min value in the input array/sqrt(fraction of transitions in segment in row)
-        threshold_values = np.empty((len(self.unique_mzs),10))
-
-        # split the array into 10 approximately equal time segments
+        min_value = np.min(intensity_matrix[intensity_matrix > 0])
+        threshold_values = np.empty((len(self.unique_mzs), 10))
         segments = np.array_split(intensity_matrix, 10, axis=1)
 
-        # counter for the start index of each segment
-        start_idx = 0
-
-        # list to hold the start index of each segment
         segment_starts = []
-
-        # for each segment count the number of times a 0 value is followed by a nonzero value and store in transitions array
-        for seg_idx,segment in enumerate(segments):
-            for row_idx, row in enumerate(segment):
-
-                # create array with 1 in any position where a 0 to nonzero transition occurs
-                transitions = ((row[:-1] == 0) & (row[1:] > 0))
-                # number of 0 to nonzero transitions in row
-                num_transitions = np.sum(transitions)
-                # length of the segment
-                segment_length = segment.shape[1]
-                # fraction of all scans in segment that are involved in m/z transtion
-                threshold_values[row_idx, seg_idx] = num_transitions / segment_length
-
-            # adds the start index for this segment to segment_starts list
+        start_idx = 0
+        for seg_idx, segment in enumerate(segments):
+            transitions = (segment[:, :-1] == 0) & (segment[:, 1:] > 0)
+            threshold_values[:, seg_idx] = transitions.sum(axis=1) / segment.shape[1]
             segment_starts.append(start_idx)
-            # increments start_idx so that it now holds the first index value of the next segment
-            start_idx += segment_length
+            start_idx += segment.shape[1]
 
-        # takes the square root of all transition fraction values
         threshold_values **= 0.5
-
-        # multiplies these square rooted values by the min value in matrix
         threshold_values *= min_value
 
-        # dictionary that holds the start index of each segment (list) and the 2D numpy array (10 col, len(unique_mzs) rows) with threshold values stored in each cell
-        threshold_dict = {
-            'start_idxs' : segment_starts,
-            'values' : threshold_values
-        }
- 
-        self.abundance_threshold = threshold_dict
+        self.abundance_threshold = {'start_idxs': segment_starts, 'values': threshold_values}
 
     # takes any value in the array that is below At for that segment for that m/z value and 
     def apply_threshold(self):
-
         matrix = self.intensity_matrix
+        starts = self.abundance_threshold['start_idxs']
+        values = self.abundance_threshold['values']  # (n_ions, 10)
 
-        # iterate over each row, segment
-        for row_idx,row in enumerate(matrix):
-            for seg_idx in range(10):
-                
-                # start index for this segment
-                start = self.abundance_threshold['start_idxs'][seg_idx]
+        for seg_idx in range(10):
+            start = starts[seg_idx]
+            end = starts[seg_idx + 1] if seg_idx < 9 else matrix.shape[1]
+            seg_thresh = values[:, seg_idx][:, None]
+            segment = matrix[:, start:end]
+            matrix[:, start:end] = np.where(segment < seg_thresh, seg_thresh, segment)
 
-                # end index for this segment
-                if seg_idx <9:
-                    end = self.abundance_threshold['start_idxs'][seg_idx+1]
-                else:
-                    end = row.shape[0]
-
-                # get threshold value for this row this segment
-                threshold = self.abundance_threshold['values'][row_idx,seg_idx]
-
-                # replace values in this range for this segment with threshold
-                row[start:end] = np.where(row[start:end]<threshold,threshold,row[start:end])
-
-        self.intensity_matrix = matrix 
+        self.intensity_matrix = matrix
 
     # endregion
 
@@ -352,6 +308,7 @@ class IntensityMatrix:
 
         # get noise mask for this row
         row_nm = self.noise_mask(maxima)
+        bl_indices = np.where(row_nm)[0]
 
         # second pass, finds baseline and other relevant features
         n_clusters = 1
@@ -404,7 +361,7 @@ class IntensityMatrix:
                 entry['valley_ratio'] = min_vr if j > i else None
 
                 # calculate sharpness/conv value
-                conv = self.convolution_value(entry)
+                conv = self.convolution_value(entry,array)
                 entry['conv'] = conv
 
                 # assign cluster identity
@@ -451,16 +408,8 @@ class IntensityMatrix:
                 entry['height'] = entry['raw_height'] - bl_norm
 
                 # calculate signal to noise ratio
-                sn_ratio = self.calculate_sn(entry, array, row_nm)
+                sn_ratio = self.calculate_sn(entry, array, bl_indices)
                 entry['sn_ratio'] = sn_ratio
-
-                # calculate fwhh
-                fwhh = self.calculate_fwhh(entry, array)
-                entry['fwhh'] = fwhh
-
-                # calculate tailing factor
-                tailing = self.calculate_tailing(entry, array)
-                entry['tailing_factor'] = tailing
 
                 # S/N check
                 sn_count = 0
@@ -480,8 +429,10 @@ class IntensityMatrix:
         valid_peaks = []
         for peak in maxima:
             if peak.get('valid', True):
-                self.integrate_peak(peak)
+                self.integrate_peak(peak,array)
                 valid_peaks.append(peak)
+                peak['tailing_factor'] = self.calculate_tailing(peak,array)
+                peak['fwhh'] = self.calculate_fwhh(peak,array)
                 
         # get peak indices and finish analysis
         for idx, peak in enumerate(valid_peaks):
@@ -562,7 +513,12 @@ class IntensityMatrix:
 
     # finds a quadratic fit for a set of 3 points in an array
     def quadratic_fit(self, array, center):
+        """
+        Calculates quadratic fit through 3 points using closd-form quadradic approach
+        """
 
+        """
+        Old function
         # get map to convert scans to minutes
         scan_map = self.time_map
         # x values for fit, the center index and its two direct neighbors (in minutes)
@@ -589,7 +545,42 @@ class IntensityMatrix:
         }
 
         return fit_result
-    
+        """
+
+        scan_map = self.time_map
+        
+        # get x,y values
+        x0,x1,x2 = scan_map[center-1],scan_map[center],scan_map[center+1]
+        y0,y1,y2 = array[center-1],array[center],array[center+1]
+
+        # closed-from quadradic through 3 points
+        f01 = (y1-y0) / (x1-x0)
+        f12 = (y2-y1) / (x2-x1)
+        a = (f12 - f01) / (x2-x0)
+
+        # check for flat top (no curvature to interpolate)
+        if a == 0:
+            return {
+                'x_values': np.array([x1-1,x1,x1+1]),
+                'y_values': np.array([y1,y1,y1]),
+                'coeffs': np.array([0.0,0.0,y1])
+            }
+
+        # calcualte rest
+        b = f01 - a * (x0+x1)
+        c = y0 - f01 * x0 + a * x0 * x1
+        max_x = -b / (2*a)
+
+        # apply the fit
+        x_values = np.array([max_x-1,max_x,max_x+1])
+        y_values = a*x_values**2 + b*x_values + c
+
+        return {
+            'x_values': x_values,
+            'y_values': y_values,
+            'coeffs': np.array([a,b,c])
+        }
+
     # checks if peak is above rejection threshold (4 noise units is base but we can adjust in the future)
     def threshold_check(self, row, peak_idx, height):
 
@@ -601,13 +592,13 @@ class IntensityMatrix:
             return True
 
     # calculates convolution value for a single peak, used to see if peak is singlet or not
-    def convolution_value(self, peak):
+    def convolution_value(self, peak, array):
         
         # get values from the peak dict
         peak_max = peak["center"]
         left = peak["left_bound"]
         right = peak["right_bound"]
-        row = self.intensity_matrix[self.unique_mzs.index(peak["ion"])]
+        row = array
 
         # holds the sum of all rates of sharpness calculated for the peak
         rate_sum = 0
@@ -628,7 +619,7 @@ class IntensityMatrix:
 
         return rate_sum
 
-    def calculate_sn(self, peak: dict, row_array: np.ndarray, row_nm: np.ndarray, n_closest: int = 20):
+    def calculate_sn(self, peak: dict, row_array: np.ndarray, bl_indices: np.ndarray, n_closest: int = 20):
         """
         Calculates S/N ratio for a given peak using the baseline mask to determine local
         noise. If this calculation fails then falls back to avereage noise level for
@@ -638,7 +629,7 @@ class IntensityMatrix:
         ------
         peak                            peak to calculate S/N for
         row_array                       array for this row of intensity matrix
-        row_nm                          noise mask for this row of intensity matrix
+        bl_indices                      indices where row noise mask is valid (noise point indices)
         n_closest                       how far in each direction from center to use for calculation
 
         Returns
@@ -647,8 +638,6 @@ class IntensityMatrix:
         """
         
         center = peak['center']
-
-        bl_indices = np.where(row_nm)[0]
 
         # determine n_closest points from baseline mask on either side of our peak
         left_bl = bl_indices[bl_indices < center][-n_closest:]
@@ -691,9 +680,21 @@ class IntensityMatrix:
         while right_i < len(signal)-1 and signal[right_i] > half_height:
             right_i += 1
 
+        # bailout checks
+        denom_l = signal[left_i+1] - signal[left_i]
+        denom_r = signal[right_i-1] - signal[right_i]
+        bad_left = (left_i == 0 and signal[0] > half_height) or denom_l == 0
+        bad_right = (right_i == len(signal) and signal[right_i] > half_height) or denom_r == 0
+        if bad_left or bad_right:
+            logger.debug(
+                f"Sample {self.sample_name} | Ion {peak['ion']} | RT {peak['rt']:.3f} "
+                f"FWHH undefined - peak bounds do not cross half height cleanly"
+            )
+            return np.nan
+
         # interpolate precise HH time
-        frac_l = (half_height - signal[left_i]) / (signal[left_i+1] - signal[left_i])
-        frac_r = (half_height -signal[right_i]) / (signal[right_i-1] - signal[right_i])
+        frac_l = (half_height - signal[left_i]) / denom_l
+        frac_r = (half_height -signal[right_i]) / denom_r
         time_l = self.time_map[left+left_i] + frac_l * (self.time_map[left+left_i+1] - self.time_map[left+left_i])
         time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
         
@@ -724,9 +725,21 @@ class IntensityMatrix:
         while right_i < len(signal)-1 and signal[right_i] > tf_height:
             right_i += 1
 
+        # bailout checks
+        denom_l = signal[left_i+1] - signal[left_i]
+        denom_r = signal[right_i-1] - signal[right_i]
+        bad_left = (left_i == 0 and signal[0] > tf_height) or denom_l == 0
+        bad_right = (right_i == len(signal)-1 and signal[right_i] > tf_height) or denom_r == 0
+        if bad_left or bad_right:
+            logger.debug(
+                f"Sample {self.sample_name} | Ion {peak['ion']} | RT {peak['rt']:.3f} "
+                f"Tailing factor undefined - peak bounds do not cross 10% height cleanly"
+            )
+            return np.nan
+
         # interpolate precise times when tf height is reached
-        frac_l = (tf_height - signal[left_i]) / (signal[left_i+1] - signal[left_i])
-        frac_r = (tf_height -signal[right_i]) / (signal[right_i-1] - signal[right_i])
+        frac_l = (tf_height - signal[left_i]) / denom_l
+        frac_r = (tf_height -signal[right_i]) / denom_r
         time_l = self.time_map[left+left_i] + frac_l * (self.time_map[left+left_i+1] - self.time_map[left+left_i])
         time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
         
@@ -797,11 +810,11 @@ class IntensityMatrix:
 
     # region                 ---------- Data Collection ----------
 
-    def generate_spectra(self, peak: dict, label: str = "Unknown", n_closest: int = 10):
+    def generate_spectra(self, peak: dict, label: str = "Unknown", n_closest: int = 10, save_spectra: bool = False):
         """
         Generates a spectra for a given peak, takes signal from all ions at the peak's center scan, subtracts
         local noise and generates a spectra.  Spectra is then normalized to relative abundance, and any peaks
-        less than 1% of the largest peak are dropped
+        less than 5% of the largest peak are dropped
         """
         center = peak['center']
 
@@ -838,10 +851,18 @@ class IntensityMatrix:
         max_val = np.nanmax(raw_vals)
         rel_vals = 100 * raw_vals / max_val
 
-        # filter peaks less than 1% rel abundance
-        rel_vals[rel_vals < 1] = 0
+        # filter peaks less than 5% rel abundance
+        rel_vals[rel_vals < 5] = 0
 
         mzs = np.array(self.unique_mzs)[mask]
+
+        spectra = {
+            'mzs': mzs,
+            'abundances': rel_vals
+        }
+
+        if save_spectra:
+            peak['spectra'] = spectra
 
         return mzs, rel_vals
 
@@ -903,7 +924,7 @@ class IntensityMatrix:
         
         return result
     
-    def integrate_peak(self, peak: dict):
+    def integrate_peak(self, peak: dict, array: np.ndarray):
         """
         uses trapazoidal integration to get a peak area value
         Params:
@@ -918,8 +939,7 @@ class IntensityMatrix:
         end = peak["right_bound"]
 
         # get correct ion chromatogram
-        row_idx = self.unique_mzs.index(peak['ion'])
-        row = self.intensity_matrix[row_idx]
+        row = array
 
         # get this peak's abundance array
         signal =  row[start:end+1]

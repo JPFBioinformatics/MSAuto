@@ -29,7 +29,7 @@ from PyQt5.QtGui import QFont
 from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
                     insert_molecule, get_run_molecules, insert_peak, insert_im, insert_peak_batch)
 from src.config_loader import ConfigLoader
-from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path
+from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path,configure_run_logging
 from src.mzml_processor import full_bulk_convert
 from src.intensity_matrix import IntensityMatrix as IM
 from src.run_data import RunData as RD
@@ -1018,7 +1018,11 @@ class ProcessingLoader(QThread):
         self.cfg = cfg
 
     def run(self):
+
         try:
+            # configure log file
+            run_dir = get_run_dir(self.cfg.get("project_name"), self.cfg.get("run_name"))
+            configure_run_logging(run_dir)
             rd = RD(self.run_name, self.project_name, self.cfg)
             self.run_data.emit(rd)
             self.finished.emit()
@@ -1217,6 +1221,14 @@ class ConfirmConfigWidget(QWidget):
 
     def on_run_data(self, rd):
         self.window().run_data.append(rd)
+        if getattr(rd, 'failed_samples', None):
+            QMessageBox.warning(
+                self, "Some Samples Failed",
+                "The following sample were not processed successfully and are excluded from this run:\n\n"
+                + "\n".join(rd.failed_samples)
+                + "\n\nCheck run.log for details on why each one failed"
+                + "Suggest Reprocessing run from .D"
+            )
 
     def on_processing_done(self):
         self.progress.close()
@@ -1249,21 +1261,24 @@ class ProcessingWorker(QThread):
         self.cfg = cfg
 
     def run(self):
-        #conn = None
+
         try:
+            # configure log file
+            run_dir = get_run_dir(self.cfg.get("project_name"), self.cfg.get("run_name"))
+            configure_run_logging(run_dir)
 
             # build mol/sample dicts
             samples = {}
             for sample_row in self.sample_data:
                 samples[sample_row['sample_name']] = sample_row
-            print("Finished processing samples")
+            logger.info("Finished processing samples")
             molecules = {}
             for mol_row in self.mol_data:
                 molecules[mol_row['molecule_name']] = mol_row
-            print("Finished processing molecules")
+            logger.info("Finished processing molecules")
 
             ims = full_bulk_convert(self.input_dir, self.input_type, self.cfg)
-            print("Created all Intensity  Matrix objects")
+            logger.info("Created all Intensity  Matrix objects")
             intensity_matrices = {}
             for im in ims:
                 name = im.sample_name
@@ -1278,7 +1293,7 @@ class ProcessingWorker(QThread):
                 self.run_type,
                 self.cfg
             )
-            print("Created run data object")
+            logger.info("Created run data object")
 
             self.run_data.emit(rd)
             self.finished.emit()

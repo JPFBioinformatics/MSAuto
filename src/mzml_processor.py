@@ -7,13 +7,15 @@ objects.
 
 # region Imports
 
-import subprocess, base64, zlib, re
+import subprocess, base64, zlib, os, psutil, random
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
 from src.intensity_matrix import IntensityMatrix
 from src.config_loader import ConfigLoader
 from src.utils import log_subprocess,delete_file
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from src.utils import get_run_dir, configure_run_logging
 
 # logging
 import logging
@@ -28,7 +30,15 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
         mzml_dir                        location of mzml dir
         matrices                        list of intensitymatrix objects created from all files in mzml
     """
+    # stop any orphaned msconvert calls
+    kill_orphaned_msconvert()
+
+    # get input dir
     input_dir = Path(input_dir)
+
+    # setup loger
+    run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
+    configure_run_logging(run_dir)
 
     # check to see if mzml files are already converted
     if file_type == '.D':
@@ -36,24 +46,52 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
         tmpdir = input_dir / 'mzML_files'
         for raw_file in raw_files:
             if raw_file.is_dir():
-
                 cmd = [
                     "msconvert",
                     str(raw_file),
                     "--mzML",
                     "--outdir", str(tmpdir)
                 ]
-                subprocess.run(cmd,check=True,capture_output=False)
+                proc = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+                try:
+                    proc.wait()
+                finally:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        proc.wait()
         files = list(tmpdir.glob("*.mzML"))
+
     elif file_type == '.mzML':
         files = list(input_dir.glob("*.mzML"))
 
     # sort mzml files
+    print(f"mzML files processed")
     files = sorted(files, key=lambda f: f.stem)
-    matrices = []
-    for file in files:
-        matrix = create_intensity_matrix(file, cfg)
-        matrices.append(matrix)
+
+    # determine max workers for this system
+    max_workers, results, success_count, fail_count = choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2)
+    remaining_files = [f for f in files if f not in results]
+
+    run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
+
+    with ProcessPoolExecutor(max_workers=max_workers, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
+        futures = {executor.submit(create_intensity_matrix, file, cfg): file for file in remaining_files}
+        for future in as_completed(futures):
+            file = futures[future]
+            try:
+                results[file] = future.result()
+                logger.info(f"Created {file.name} IntensityMatrix")
+                success_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to process {file.name}: {e}")
+                fail_count += 1
+
+    matrices = [results[file] for file in files if file in results]
+
+    logger.info(
+        "\n\n-------------------- Converstion to IntensityMatrix --------------------\n"
+        f"Total Converstions Attempted: {len(files)}\nSuccessful Conversions: {success_count}\nFailed Conversions: {fail_count}\nMatrices Output {len(matrices)}\n\n"
+    )
 
     return matrices
 
@@ -154,7 +192,7 @@ def create_scan_matrix(mzml_path, cfg):
 
     # get name of sample
     name = mzml_path.stem
-    print(f"Sample Name: {name}")
+    logger.info(f"Sample: {name} Identified")
 
     # Iterate over each <spectrum> element and get scan information
     for spectrum in root.findall('.//spectrum', namespaces):
@@ -226,39 +264,41 @@ def create_scan_matrix(mzml_path, cfg):
         # Add the m/z values to the set of unique m/z values
         unique_mzs.update(mz_array)
 
+    logger.info(f"Sample: {name} Finsihed mzML parse")
+
     # show how many spectra have beens skipped
     if skipped > 0:
-        print(f"File: {mzml_path.stem}\nSkipped: {skipped}\n")
+        logger.warning(f"File: {mzml_path.stem}\nSkipped: {skipped}\n")
 
-    # Convert the set of unique m/z values to a sorted list
+    # sort unnizue mz lit
     unique_mzs = sorted(unique_mzs)
 
-    # Create a NumPy array for the intensity matrix
-    intensity_matrix = np.zeros((len(unique_mzs), len(intensity_list)))
+    # check max/min
+    if min_mz is None:
+        min_mz = 50
+    if max_mz is None:
+        max_mz = 1000
 
-    # Create a map from m/z values to row indices in the intensity matrix
-    mz_index_map = {mz: idx for idx, mz in enumerate(unique_mzs)}
+    # remove invalid mz values from list
+    mz_array  = np.asarray(unique_mzs)
+    valid = (mz_array >= min_mz) & ~np.isnan(mz_array) & (mz_array <= max_mz)
+    mz_array = mz_array[valid]
 
-    # Iterate over the intensity_list to fill the intensity matrix
+    # assign bins
+    bin_assignments = (mz_array + 0.3).astype(int)
+    binned_mzs_arr, inverse = np.unique(bin_assignments, return_inverse=True)
+    mz_to_bin_row = dict(zip(mz_array, inverse))
+
+    # generate binnd matrix
+    binned_matrix = np.zeros((len(binned_mzs_arr), len(intensity_list)))
+
+    # fill in matrix from bins
     for col_idx, spectrum_intensity_dict in enumerate(intensity_list):
-        for mz, intensity in spectrum_intensity_dict.items():
-            row_idx = mz_index_map.get(mz)
-            if row_idx is not None:
-                intensity_matrix[row_idx, col_idx] = intensity
-
-    # bin the intensity matrix and unique_mzs
-    binned_mzs, binned_matrix = bin_masses(unique_mzs, intensity_matrix, max_mz, min_mz)
-
-    """
-    # print max to figure out worst rows
-    if name == 'Jejunum 2 scan':
-        logger.info(f'------------------------- {name} -------------------------')
-        for i in range(binned_matrix.shape[0]):
-            row = binned_matrix[i,:]
-            row_max = np.nanmax(row)
-            logger.info(f'\nIon: {binned_mzs[i]}   Max:{row_max}')
-    """  
-
+        for mz,intensity in spectrum_intensity_dict.items():
+            bin_row = mz_to_bin_row.get(mz)
+            if bin_row is not None:
+                binned_matrix[bin_row, col_idx] += intensity
+    binned_mzs = list(binned_mzs_arr)
 
     # add TIC row to end of matrix
     sum_row = np.sum(binned_matrix, axis=0)
@@ -275,6 +315,7 @@ def create_scan_matrix(mzml_path, cfg):
                                     time_map=time_map,
                                     matrix_type="SCAN",
                                     detect_peaks=True)
+    logger.info(f"Sample: {name} IntensityMatrix Created")
 
     return output_matrix
 
@@ -379,6 +420,7 @@ def create_sim_matrix(mzml_path, cfg):
                                     time_map=time_map,
                                     matrix_type="SIM",
                                     detect_peaks=True)
+    logger.info(f"Produced inntensity matrix for sample: {file_name}")
     return output_matrix
 
 def create_intensity_matrix(mzml_path, cfg):
@@ -395,6 +437,10 @@ def create_intensity_matrix(mzml_path, cfg):
         matrix = create_sim_matrix(mzml_path, cfg)
     elif type == "SCAN":
         matrix = create_scan_matrix(mzml_path, cfg)
+    """
+    peak_mem_gb = psutil.Process(os.getpid()).memory_info().peak_wset / 1e9
+    logger.info(f"{mzml_path.stem}: peak working set so far {peak_mem_gb:.2f} GB")
+    """
 
     return matrix
 
@@ -429,3 +475,75 @@ def aq_type(mzml_path: Path):
         elif acc == "MS:1000579":
             return "SCAN"
 
+def kill_orphaned_msconvert():
+    """
+    kills leftover msconvert processed left over from a failed run
+    """
+
+    target_names = {
+        "msconvert.exe"
+    }
+
+    killed_pids = []
+    for proc in psutil.process_iter(['pid','name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() in target_names:
+                proc.terminate()
+                killed_pids.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    if killed_pids:
+        procs = [psutil.Process(pid) for pid in killed_pids if psutil.pid_exists(pid)]
+        _, alive = psutil.wait_procs(procs,timeout=5)
+        for p in alive:
+            p.kill()
+        logger.warning(f"Cleaned up {len(killed_pids)} orphaned process(es) from previous run: {killed_pids}")
+
+def create_im_with_mem(mzml_path, cfg):
+    """
+    creates an intesnitymatrix object and returns the peak memroy needed for process
+    """
+    matrix = create_intensity_matrix(mzml_path, cfg)
+    peak_mem = psutil.Process(os.getpid()).memory_info().peak_wset
+    return matrix,peak_mem
+
+def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0):
+    """
+    chooses a random number of files to use to test system and calibrate how many workers
+    we can use to process samples based on availbe cpu cores and memory
+    """
+    cpu_ceiling = max(1, os.cpu_count()-1)
+
+    calibration_files = random.sample(files, min(calibration_n,len(files)))
+    
+    peak_mem_bytes = 0
+    calibration_results  = {}
+    success_count = 0
+    fail_count = 0
+    with ProcessPoolExecutor(max_workers=1) as executor:
+        for file in calibration_files:
+            try:
+                matrix,mem = executor.submit(create_im_with_mem, file, cfg).result()
+                peak_mem_bytes = max(peak_mem_bytes, mem)
+                calibration_results[file] = matrix
+                success_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to process {file.name} during calibration: {e}")
+                fail_count += 1
+    
+    if peak_mem_bytes == 0:
+        logger.warning(f"Calbiration failed for all sampled files, defaulting to max_workers = 1")
+        return 1, calibration_results, success_count, fail_count
+        
+    available_bytes = psutil.virtual_memory().available - headroom_gb * 1e9
+    mem_ceiling = max(1, int(available_bytes // peak_mem_bytes))
+    max_workers = min(cpu_ceiling, mem_ceiling)
+
+    logger.info(
+        "\n------------------------------ CPU Optimization ------------------------------\n"
+        f"Total CPU Cores: {os.cpu_count()} | CPU Cores Available: {cpu_ceiling}\n"
+        f"Memory Available (GB): {available_bytes/1e9:.2f} | Max Workers: {min(cpu_ceiling,mem_ceiling)}\n"
+    )
+
+    return max_workers, calibration_results, success_count, fail_count
