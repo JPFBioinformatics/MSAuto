@@ -862,7 +862,7 @@ class IntensityMatrix:
         }
 
         if save_spectra:
-            peak['spectra'] = spectra
+            peak['spectrum'] = spectra
 
         return mzs, rel_vals
 

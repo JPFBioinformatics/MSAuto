@@ -114,7 +114,7 @@ class QCTab(QWidget):
         self.group_indices = self.data_matrix.group_indices
         self.group_map = self.data_matrix.group_map
 
-        self.inj_map = {k:row['injection_order'] for k,row in self.data_matrix.samples.items()}
+        self.inj_map = {k:int(row['injection_order']) for k,row in self.data_matrix.samples.items()}
 
         self.data = self.data_matrix.data
         self.outliers = self.data_matrix.outliers
@@ -210,6 +210,12 @@ class QCTab(QWidget):
                 'per-group':[],
                 'global': ['Heatmap']
             },
+            'Spectra Similarity': {
+                'per-molecule': ['Violin Plot','Boxplot'],
+                'per-sample': [],
+                'per-group':[],
+                'global': ['Heatmap']
+            }
         }
 
         self.figure_metrics = {
@@ -226,6 +232,7 @@ class QCTab(QWidget):
             'Area':['Area'],
             'Gaussian Similarity':['gaussian_similarity'],
             'Flat Top Prevalance':['flat'],
+            'Spectra Similarity': ['spectra_similarity']
         }
         
         self.plot_dispatch = {
@@ -621,7 +628,15 @@ class QCTab(QWidget):
                         pdf.savefig(fig, bbox_inches='tight')
                         plt.close(fig)
 
-                # Outlier Heatmap (page 2)
+                # Spectral similarity heatmap (page 2)
+                fig,ax = plt.subplots(figsize=(fig_width,fig_height))
+                plot_heatmap(ax, self.data['spectra_similarity'], self.sample_list, self.mol_list,
+                             title='Spectra Similarity Heatmap', cmap='RdYlGn')
+                
+                pdf.savefig(fig,bbox_inches='tight')
+                plt.close(fig)
+
+                # Outlier Heatmap (page 3)
                 fig,ax = plt.subplots(figsize=(fig_width,fig_height))
                 plot_heatmap(ax, self.combined_outliers.astype(float), self.sample_list, self.mol_list,
                             title='Outlier Heatmap', cmap='RdYlGn_r')
@@ -682,7 +697,7 @@ class QCTab(QWidget):
                 return f'{val:.4e}'
             return f'{val:.5g}'
         return str(val) if val is not None else 'N/A'
-    
+
     def export_fig_clicked(self):
 
         path, _ = QFileDialog.getSaveFileName(self, "Export Full Report PDF", "", "PDF Files (*pdf)")

@@ -12,6 +12,7 @@ from src.utils import get_proj_db
 from src.analysis import full_preprocess
 
 from scipy.optimize import curve_fit
+from scipy.spatial.distance import pdist,squareform
 
 # logging
 import logging
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class DataMatrix:
 
-    def __init__(self, proj_name: str, run_name: str, peak_data: dict, samples: dict, molecules: dict, cfg):
+    def __init__(self, proj_name: str, run_name: str, peak_data: dict, samples: dict, molecules: dict, max_mz: int, cfg):
 
         if not peak_data:
             logger.warning("List of IntensityMatrix objects is empty")
@@ -30,9 +31,9 @@ class DataMatrix:
         # config/attrs
         self.run_name = run_name
         self.project_name = proj_name
-        self.cfg = cfg
-        self.db_path = get_proj_db(proj_name)
         self.run_name = run_name
+        self.max_mz = max_mz
+        self.cfg = cfg
 
         # sve sample/molecule tables
         self.samples = samples
@@ -79,6 +80,7 @@ class DataMatrix:
             'gaussian_similarity': float_empty(),
             'norm_Area': float_empty(),
             'norm_Height': float_empty(),
+            'spectra_similarity': float_empty(),
             'clean_Area': float_empty(),
             'clean_Height': float_empty()
         }
@@ -94,7 +96,8 @@ class DataMatrix:
             'SN_Ratio': bool_empty(),
             'Theoretical_Plates': bool_empty(),
             'bl_slope': bool_empty(),
-            'gaussian_similarity': bool_empty()
+            'gaussian_similarity': bool_empty(),
+            'spectra_similarity': bool_empty()
         }
 
         # missiness matrix (samples x features, rows x columns), 1/True if missing, looks only at
@@ -117,6 +120,9 @@ class DataMatrix:
         """
         Fills the qc calculation and feature value matrices
         """
+
+        # dict for spectral similarity comparison
+        spectra_by_mol = {}
 
         # data/QC metric matrices
         for name,peak_list in peak_data.items():
@@ -145,6 +151,16 @@ class DataMatrix:
                 self.data['bl_slope'][row_i][col_i] = peak['bl_slope']
                 self.data['flat'][row_i][col_i] = peak['flat_top']
                 self.data['gaussian_similarity'][row_i][col_i] = self.gaussian_similarity(peak['peak_array'])
+                
+                try:
+                    vec = self._spectrum_to_vec(peak['spectrum'])
+                    spectra_by_mol.setdefault(peak['molecule'],[]).append((row_i,col_i,vec))
+                except KeyError as e:
+                    logger.warning(f"No spectrum in sample {name} for molecule {peak['molecule']}: {e}")
+                    continue
+
+        # spectral similarity matrix
+        self.compute_spectral_similarity(spectra_by_mol)
 
         # outlier matrix
         for metric in self.outliers:
@@ -283,6 +299,37 @@ class DataMatrix:
             return 1 - (ss_res / ss_tot)
         except:
             return np.nan
+
+    def _spectrum_to_vec(self, spectrum: dict):
+        """
+        takes a spectra dict {mzs: [array of mz values], abundances: [array of intesnity values] from 
+        IntensityMatrix and converts it to a vector of size self.max_mz, where the mz value is the index
+        and the cell in the array contains the intensity of that m/z value (relative abuncance)
+        """
+
+        vec = np.zeros(self.max_mz+1)
+
+        for i,mz in enumerate(spectrum['mzs']):
+            vec[mz] = spectrum['abundances'][i]
+
+        return vec
+
+    def compute_spectral_similarity(self, spectra_by_mol: dict):
+        """
+        Takes the spectra_by_mol dict, calculates all pairwise cosine similarities and stores the median in
+        self.data['spectra_similarity'][row_i][col_i]
+        """
+
+        for _,entries in spectra_by_mol.items():
+            if len(entries) < 2:
+                continue
+
+            rows,cols,vectors = zip(*entries)
+            similarity_matrix = 1 - squareform(pdist(np.array(vectors), metric='cosine'))
+
+            for i, (row_i,col_i) in enumerate(zip(rows,cols)):
+                others = np.delete(similarity_matrix[i],i)                          # take row for this spectra and remove self-compare
+                self.data['spectra_similarity'][row_i][col_i] = np.median(others)   # store median of this row
 
     # endregion
 

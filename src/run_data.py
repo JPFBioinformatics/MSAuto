@@ -55,13 +55,16 @@ class RunData:
         for sample_name in self.samples:
             matrix = IM.load_h5_object(sample_name, proj_name, run_name)
             peak_list = matrix.collect_data(mols, mzs, rts)
+            for peak in peak_list:
+                matrix.generate_spectra(peak,label=peak['molecule'],n_closest=10,save_spectra=True)
             peaks[sample_name] = peak_list
             self.intensity_matrices[sample_name] = matrix
-        self.vec_size = max(mz for im in self.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1
 
-        self.data_matrix = DM(proj_name, run_name, peaks, self.samples, self.molecules)
+        self.max_mz = np.nanmax(mz for im in self.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999)
 
-        # reassign detected molecules
+        self.data_matrix = DM(proj_name, run_name, peaks, self.samples, self.molecules, self.max_mz, self.cfg)
+
+        # reassign detected molecules and get spectra for use
         sample_names = {v:k for k,v in self.data_matrix.sample_map.items()}
         mol_names = {v:k for k,v in self.data_matrix.mol_map.items()}
         for i in range(self.data_matrix.data['peak_idx'].shape[0]):         # rows/samples
@@ -81,6 +84,8 @@ class RunData:
                 peak = peak_list[peak_idx]
 
                 peak['molecule'] = molecule
+
+    # region Data loading/saving
 
     @classmethod
     def from_processing(cls, proj_name, run_name, samples, molecules, intensity_matrices, run_type, cfg):
@@ -112,18 +117,22 @@ class RunData:
         for sample_name in obj.samples:
             matrix = obj.intensity_matrices.get(sample_name)
             if input_type == '.D':
-                file_path = input_dir / f"{sample_name}.mzML"
+                file_path = input_dir / 'mzML_files' / f"{sample_name}.mzML"
             else:
                 file_path = input_dir / f"{sample_name}.mzML"
             if matrix is None:
                 logger.warning(f"No IntensityMatrix found for {sample_name}, sample ws not processed successfully")
                 obj.failed_samples.append([sample_name,file_path])
+                continue
             peak_list = matrix.collect_data(mols, mzs, rts)
+            for peak in peak_list:
+                matrix.generate_spectra(peak,label=peak['molecule'],n_closest=10,save_spectra=True)
             peaks[sample_name] = peak_list
-        obj.vec_size = max(mz for im in obj.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1
+
+        obj.max_mz = max(mz for im in obj.intensity_matrices.values() for mz in im.unique_mzs if mz != 9999) + 1
 
         # create data matrix 
-        obj.data_matrix = DM(proj_name, run_name, peaks, samples, molecules, cfg)
+        obj.data_matrix = DM(proj_name, run_name, peaks, samples, molecules, obj.max_mz, obj.cfg)
 
         # reassign detected molecules
         sample_names = {v:k for k,v in obj.data_matrix.sample_map.items()}
@@ -213,3 +222,4 @@ class RunData:
             if conn:
                 conn.close()
 
+    # endregion

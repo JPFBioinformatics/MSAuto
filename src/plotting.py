@@ -264,18 +264,29 @@ def plot_violin(ax: Axes, data, labels, ylabel='', title='', color=True):
     ylabel/title                annotations
     color                       wether or not to color the plots
     """
-    clean_data = [arr[~np.isnan(arr)] for arr in data]
 
-    parts = ax.violinplot(clean_data, showmedians=True)
+    clean_data = []
+    positions = []
+    for i, arr in enumerate(data):
+        cleaned = arr[~np.isnan(arr)]
+        if len(cleaned) > 0:
+            clean_data.append(cleaned)
+            positions.append(i+1)
+
+    if not clean_data:
+        logger.warning("No valid data to plot to violin plot")
+        return
+
+    parts = ax.violinplot(clean_data, positions=positions, showmedians=True)
 
     if color:
 
-        if len(data) > 7:
+        if len(clean_data) > 7:
             cmap = cm.get_cmap('tab20b', len(data))
         else:
             cmap = cm.get_cmap('Dark2', max(len(data), 2))
 
-        colors = [cmap(i/len(data)) for i in range(len(data))]
+        colors = [cmap(i/len(clean_data)) for i in range(len(clean_data))]
         for body,color in zip(parts['bodies'], colors):
             body.set_facecolor(color)
             body.set_alpha(0.7)
@@ -290,7 +301,7 @@ def plot_violin(ax: Axes, data, labels, ylabel='', title='', color=True):
     ax.figure.tight_layout()
     apply_dark_theme(ax.figure, ax)
 
-def plot_histogram(ax: Axes, data, labels, xlabel='', title='', bins=20):
+def plot_histogram(ax: Axes, data, labels, xlabel='', title='', bins=20, vline = None):
     """
     Plots overlaid histograms (or just one)
 
@@ -305,6 +316,9 @@ def plot_histogram(ax: Axes, data, labels, xlabel='', title='', bins=20):
 
     for arr,label in zip(data,labels):
         ax.hist(arr, bins=bins, alpha=0.6, label=label)
+
+    if vline:
+        ax.axvline(x=vline,color='red',linestyle='--', linewidth=2, label=f'Threshold: {vline}')
 
     ax.legend()
     ax.set_xlabel(xlabel)
