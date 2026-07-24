@@ -151,6 +151,12 @@ class DataMatrix:
                 self.data['bl_slope'][row_i][col_i] = peak['bl_slope']
                 self.data['flat'][row_i][col_i] = peak['flat_top']
                 self.data['gaussian_similarity'][row_i][col_i] = self.gaussian_similarity(peak['peak_array'])
+
+                if peak['fwhh'] <= 0:
+                    logger.warning( "FWHH <= 0:\n"
+                            f"Sample {name} | Ion {peak['ion']} | RT {peak['rt']:.3f}"
+                            f"Molecule {peak['molecule']} Height: {peak['height']} | FWHH: {peak['fwhh']}"
+                            )
                 
                 try:
                     vec = self._spectrum_to_vec(peak['spectrum'])

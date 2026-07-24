@@ -480,7 +480,7 @@ class QCTab(QWidget):
                 plot_violin(ax1, sn_data, self.mol_list, ylabel='S/N Ratio', title='S/N Ratio Per Molecule')
 
                 tf_data = [self.data['Tailing_Factor'][:,self.mol_map[m]] for m in self.mol_list]
-                plot_violin(ax2, tf_data, self.mol_list, ylabel='S/N Ratio', title='Tailing Factor Per Molecule')
+                plot_violin(ax2, tf_data, self.mol_list, ylabel='Tailing Factor', title='Tailing Factor Per Molecule')
 
                 pdf.savefig(fig,bbox_inches='tight')
                 plt.close(fig)

@@ -6,7 +6,7 @@ Class that stores an mzml file's data as a matrix for peak identification and se
 
 # region Imports
 
-import h5py, copy
+import h5py, copy, pywt
 import numpy as np
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
@@ -32,6 +32,7 @@ class IntensityMatrix:
                  detect_peaks: bool = False):
         self.intensity_matrix = intensity_matrix
         self.unique_mzs = unique_mzs
+        self.ion_map = {mz:i for i,mz in enumerate(self.unique_mzs)}
         self.time_map = time_map
         self.noise_factor = None
         self.abundance_threshold = None
@@ -51,6 +52,41 @@ class IntensityMatrix:
         # identify peaks in this intensity matrix
         if detect_peaks:
             self.identify_peaks(self.intensity_matrix)
+
+    # region                       ---------- Utils ----------
+
+    def get_time_per_scan(self):
+        """
+        gets metrics about how long each scan accounts for
+        """
+        times = [float(time) for time in self.time_map.values()]
+        diffs = [times[i+1] - times[i] for i in range(len(times)-1)]
+        return {
+            'array': np.array(diffs,dtype=np.float64),
+            'avg': np.nanmean(diffs),
+            'stdev': np.nanstd(diffs)
+        }
+
+    def get_cwt_scales(self, min, max, num):
+        """
+        Produces an array of scale (a) values to use for CWT peak picking
+        
+        Params
+        ------
+            min                     minimum value of a
+            max                     maximum value of a
+            num                     number of CWT passes to do within range [min,max]
+        
+        Returns
+        -------
+            scales                  array of length num containing values from min to max spaced such that
+                                    smaller a values have smaller differences and larger a values have 
+                                    larger differences (log 1.18 scale)
+        """
+
+        return (np.linspace(0,1,num)**1.18) * (max - min) + min
+
+    # endregion
 
     # region                 ---------- Abundance Threshold ----------
 
@@ -449,8 +485,36 @@ class IntensityMatrix:
         
         return valid_peaks, valid_nm
 
+    def find_maxima_cwt(self, array, ion):
+        """
+        uses a continuous wavelet transform (CWT) to detect peaks in a given array
+        """
+
+        # get scale array
+        min_a = self.cfg.get('min_a')
+        max_a = self.cfg.get('max_a')
+        n_passes = self.cfg.get('n_passes')
+        scales = self.get_cwt_scales(min_a,max_a,n_passes)
+
+        # pad array
+        margin = int(8 * np.nanmax(scales))                             # default wavelet is [-8,8] scaled to scale, take half that for padding
+        row_idx = self.ion_map[ion]
+        left_c = self.abundance_threshold['values'][row_idx,0]          # reasonable 'no signal' for first segment
+        right_c = self.abundance_threshold['values'][row_idx,-1]        # reasonable 'no signal' for last segment
+        left_pad = np.full(margin,left_c)
+        right_pad = np.full(margin,right_c)
+        padded = np.concatenate([left_pad,array,right_pad])
+
+        # preform CWT transformation, gives coefficients matrix of len(scales) x len(array[12:-12])
+        coefficients, _ = pywt.cwt(padded, scales, 'mexh', method='fft')
+
+        # remove padded sections
+        coefficients = coefficients[:,margin:-margin]
+
+        return coefficients
+
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
-    def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25):
+    def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25, sustain_n: int = 3):
 
         nf = self.noise_factor
         max_value = array[center]
@@ -481,8 +545,9 @@ class IntensityMatrix:
         min_value = array[center + counter]
 
         # iterate up to 12 setps in given direction from center
+        jump_start = None
+        jump_count = 0
         while(abs(counter) <= max_width and 0 <= center + counter < n):
-
             value = array[center + counter]
             
             # if the value at this step is less than the current min, set the min to this value
@@ -496,7 +561,14 @@ class IntensityMatrix:
             
             # if the value at this step is more than 5 nf greater than the minimum close the window at the previous step
             if value > 5 * nf + min_value:
-                return center + counter - step
+                if jump_count == 0:
+                    jump_start = center + counter - step
+                jump_count += 1
+                if jump_count >= sustain_n:
+                    return jump_start
+            else:
+                jump_start = None
+                jump_count = 0
             
             # increment counter
             counter += step
@@ -684,7 +756,7 @@ class IntensityMatrix:
         denom_l = signal[left_i+1] - signal[left_i]
         denom_r = signal[right_i-1] - signal[right_i]
         bad_left = (left_i == 0 and signal[0] > half_height) or denom_l == 0
-        bad_right = (right_i == len(signal) and signal[right_i] > half_height) or denom_r == 0
+        bad_right = (right_i == len(signal)-1 and signal[right_i] > half_height) or denom_r == 0
         if bad_left or bad_right:
             logger.debug(
                 f"Sample {self.sample_name} | Ion {peak['ion']} | RT {peak['rt']:.3f} "
@@ -698,7 +770,9 @@ class IntensityMatrix:
         time_l = self.time_map[left+left_i] + frac_l * (self.time_map[left+left_i+1] - self.time_map[left+left_i])
         time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
         
-        return time_r - time_l
+        fwhh = time_r - time_l
+
+        return fwhh
 
     def calculate_tailing(self, peak: dict, row_array: np.ndarray):
         """

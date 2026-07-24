@@ -1013,6 +1013,9 @@ class ProcessingLoader(QThread):
 
     def __init__(self, project_name, run_name, cfg):
         super().__init__()
+
+        logger.info("\n-------------------- Begining Run Loading --------------------\n")
+
         self.project_name = project_name
         self.run_name = run_name
         self.cfg = cfg
@@ -1251,6 +1254,9 @@ class ProcessingWorker(QThread):
 
     def __init__(self, sample_data, mol_data, proj_name, run_name, cfg):
         super().__init__()
+
+        logger.info("\n-------------------- Begining Run Processing --------------------\n")
+
         self.sample_data = sample_data
         self.mol_data = mol_data
         self.project_name = proj_name

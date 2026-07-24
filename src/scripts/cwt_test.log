@@ -1,0 +1,24 @@
+2026-07-23 15:42:13,760 [INFO] src.mzml_processor: Sample: Int 1 Identified
+2026-07-23 15:42:14,780 [INFO] src.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-07-23 15:42:31,334 [INFO] src.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-07-23 15:42:31,336 [INFO] src.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-07-24 09:49:18,132 [INFO] src.mzml_processor: Sample: Int 1 Identified
+2026-07-24 09:49:19,200 [INFO] src.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-07-24 09:49:34,745 [INFO] src.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-07-24 09:49:34,747 [INFO] src.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-07-24 09:50:05,828 [INFO] src.mzml_processor: Sample: Int 1 Identified
+2026-07-24 09:50:06,811 [INFO] src.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-07-24 09:50:22,948 [INFO] src.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-07-24 09:50:22,950 [INFO] src.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14

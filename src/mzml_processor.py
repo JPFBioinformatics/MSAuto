@@ -317,6 +317,9 @@ def create_scan_matrix(mzml_path, cfg):
                                     detect_peaks=True)
     logger.info(f"Sample: {name} IntensityMatrix Created")
 
+    time_vals = output_matrix.get_time_per_scan()
+    logger.info(f"\nTotal Scans: {len(time_vals['array'])}\nAvg Time per Scan: {time_vals['avg']}\nStdev: {time_vals['stdev']}\nPct Err: {(100*time_vals['stdev']/time_vals['avg']):.2f}")
+
     return output_matrix
 
 def create_sim_matrix(mzml_path, cfg):
@@ -521,7 +524,10 @@ def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0):
     calibration_results  = {}
     success_count = 0
     fail_count = 0
-    with ProcessPoolExecutor(max_workers=1) as executor:
+
+    run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
+
+    with ProcessPoolExecutor(max_workers=1, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
         for file in calibration_files:
             try:
                 matrix,mem = executor.submit(create_im_with_mem, file, cfg).result()
