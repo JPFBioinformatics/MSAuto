@@ -32,8 +32,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
-from src.plotting import plot_chromatogram, plot_peak, plot_spectrum
-from src.run_data import RunData
+from src.main_pipeline.plotting import plot_chromatogram, plot_peak, plot_spectrum
+from src.gui.run_data import RunData
 
 logging.basicConfig(
     level=logging.INFO,

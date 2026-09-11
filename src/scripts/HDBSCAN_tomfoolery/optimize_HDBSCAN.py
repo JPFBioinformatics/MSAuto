@@ -273,3 +273,4 @@ with PdfPages(out_path) as pdf:
         plot_histogram(pdf, title, xlabel=f'{metric}', values=current_row, symlog=symlog,
                        bin_size=bin_size, linthresh=linthresh, rotate_labels=rotate_labels)
         logger.info(f'{metric} histogram plotted')
+    

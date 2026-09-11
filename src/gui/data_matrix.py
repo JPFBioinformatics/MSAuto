@@ -8,8 +8,8 @@ is a different measured intensity value, used for analysis/QC
 # region Imports
 
 import numpy as np
-from src.utils import get_proj_db
-from src.analysis import full_preprocess
+from src.main_pipeline.utils import get_proj_db
+from src.gui.analysis import full_preprocess
 
 from scipy.optimize import curve_fit
 from scipy.spatial.distance import pdist,squareform

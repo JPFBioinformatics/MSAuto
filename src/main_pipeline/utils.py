@@ -118,7 +118,7 @@ def get_app_dir():
     """
     if getattr(sys,'frozen',False):
         return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent.parent
 
 def get_run_dir(proj_name, run_name):
     return get_app_dir() / 'databases' / 'projects' / proj_name / run_name

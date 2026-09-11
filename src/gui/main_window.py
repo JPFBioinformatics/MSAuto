@@ -26,13 +26,13 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget, QTabWidget, Q
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from src.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
+from src.main_pipeline.db import (connect, init_db, run_exists, get_run_names, insert_sample, insert_run,
                     insert_molecule, get_run_molecules, insert_peak, insert_im, insert_peak_batch)
-from src.config_loader import ConfigLoader
-from src.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path,configure_run_logging
-from src.mzml_processor import full_bulk_convert
-from src.intensity_matrix import IntensityMatrix as IM
-from src.run_data import RunData as RD
+from src.main_pipeline.config_loader import ConfigLoader
+from src.main_pipeline.utils import get_app_dir, sanitize_name, get_proj_db, get_run_dir, get_proj_dir, get_run_cfg_path,configure_run_logging
+from src.main_pipeline.mzml_processor import full_bulk_convert
+from src.main_pipeline.intensity_matrix import IntensityMatrix as IM
+from src.gui.run_data import RunData as RD
 
 from src.gui.tab_chromatogram import ChromatogramTab
 from src.gui.tab_data import DataTab
@@ -1283,7 +1283,7 @@ class ProcessingWorker(QThread):
                 molecules[mol_row['molecule_name']] = mol_row
             logger.info("Finished processing molecules")
 
-            ims = full_bulk_convert(self.input_dir, self.input_type, self.cfg)
+            ims = full_bulk_convert(self.input_dir, self.input_type, self.cfg, detect_peaks=True)
             logger.info("Created all Intensity  Matrix objects")
             intensity_matrices = {}
             for im in ims:

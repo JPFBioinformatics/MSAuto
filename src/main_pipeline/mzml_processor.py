@@ -11,11 +11,11 @@ import subprocess, base64, zlib, os, psutil, random
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
-from src.intensity_matrix import IntensityMatrix
-from src.config_loader import ConfigLoader
-from src.utils import log_subprocess,delete_file
+from src.main_pipeline.intensity_matrix import IntensityMatrix
+from src.main_pipeline.config_loader import ConfigLoader
+from src.main_pipeline.utils import log_subprocess,delete_file
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from src.utils import get_run_dir, configure_run_logging
+from src.main_pipeline.utils import get_run_dir, configure_run_logging
 
 # logging
 import logging
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-def full_bulk_convert(input_dir: Path, file_type: str, cfg):
+def full_bulk_convert(input_dir: Path, file_type: str, cfg, serial=False, detect_peaks=False):
     """
     Converts all compatible .d files in a directory to .mzml files and saves them to a directory in the input directory
     Returns:
@@ -65,17 +65,17 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
         files = list(input_dir.glob("*.mzML"))
 
     # sort mzml files
-    print(f"mzML files processed")
+    logger.info(f"mzML files processed")
     files = sorted(files, key=lambda f: f.stem)
 
     # determine max workers for this system
-    max_workers, results, success_count, fail_count = choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2)
+    max_workers, results, success_count, fail_count = choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2, serial=False, detect_peaks=detect_peaks)
     remaining_files = [f for f in files if f not in results]
 
     run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
 
     with ProcessPoolExecutor(max_workers=max_workers, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
-        futures = {executor.submit(create_intensity_matrix, file, cfg): file for file in remaining_files}
+        futures = {executor.submit(create_intensity_matrix, file, cfg, detect_peaks=detect_peaks): file for file in remaining_files}
         for future in as_completed(futures):
             file = futures[future]
             try:
@@ -83,7 +83,7 @@ def full_bulk_convert(input_dir: Path, file_type: str, cfg):
                 logger.info(f"Created {file.name} IntensityMatrix")
                 success_count += 1
             except Exception as e:
-                logger.warning(f"Failed to process {file.name}: {e}")
+                logger.info(f"Failed to process {file.name}: {e}", exc_info=True)
                 fail_count += 1
 
     matrices = [results[file] for file in files if file in results]
@@ -165,7 +165,7 @@ def bin_masses(unique_mzs, intensity_matrix, max_mz, min_mz):
 
     return list(binned_mzs), binned_matrix 
 
-def create_scan_matrix(mzml_path, cfg, apply_threshold = True):
+def create_scan_matrix(mzml_path, cfg, apply_threshold = False, detect_peaks=False):
     """
     Extracts spectra metadata and builds a matrix where each spectrum is
     represented by a column and each unique m/z is represented by a row from a SCAN file
@@ -314,7 +314,7 @@ def create_scan_matrix(mzml_path, cfg, apply_threshold = True):
                                     sample_name=name,
                                     time_map=time_map,
                                     matrix_type="SCAN",
-                                    detect_peaks=True,
+                                    detect_peaks=detect_peaks,
                                     apply_threshold=apply_threshold)
     logger.info(f"Sample: {name} IntensityMatrix Created")
 
@@ -323,7 +323,7 @@ def create_scan_matrix(mzml_path, cfg, apply_threshold = True):
 
     return output_matrix
 
-def create_sim_matrix(mzml_path, cfg):
+def create_sim_matrix(mzml_path, cfg, detect_peaks=False):
     """
     Extracts spectra metadata and builds a matrix where each spectrum is
     represented by a column and each unique m/z is represented by a row, from a SIM file
@@ -423,11 +423,11 @@ def create_sim_matrix(mzml_path, cfg):
                                     sample_name=file_name,
                                     time_map=time_map,
                                     matrix_type="SIM",
-                                    detect_peaks=True)
+                                    detect_peaks=detect_peaks)
     logger.info(f"Produced inntensity matrix for sample: {file_name}")
     return output_matrix
 
-def create_intensity_matrix(mzml_path, cfg):
+def create_intensity_matrix(mzml_path, cfg, apply_threshold=False, detect_peaks=False):
     """
     Generatews intensity matrix from mzml object, automatically detecting if it is SCAN or SIM
     Params:
@@ -438,13 +438,9 @@ def create_intensity_matrix(mzml_path, cfg):
     type = aq_type(mzml_path)
 
     if type == "SIM":
-        matrix = create_sim_matrix(mzml_path, cfg)
+        matrix = create_sim_matrix(mzml_path, cfg, detect_peaks=detect_peaks)
     elif type == "SCAN":
-        matrix = create_scan_matrix(mzml_path, cfg)
-    """
-    peak_mem_gb = psutil.Process(os.getpid()).memory_info().peak_wset / 1e9
-    logger.info(f"{mzml_path.stem}: peak working set so far {peak_mem_gb:.2f} GB")
-    """
+        matrix = create_scan_matrix(mzml_path, cfg, apply_threshold=apply_threshold, detect_peaks=detect_peaks)
 
     return matrix
 
@@ -466,7 +462,7 @@ def aq_type(mzml_path: Path):
     try:
         content = root.find('.//fileDescription/fileContent',namespaces)
     except Exception as e:
-        raise ValueError(f"No file content found at {mzml_path}\nError:\n{e}")
+        raise ValueError(f"No file content found at {mzml_path}\nError:\n{e}", exec_info=True)
 
     # get cvParams
     cvparams = [child for child in list(content) if child.tag.endswith('cvParam')]
@@ -504,19 +500,22 @@ def kill_orphaned_msconvert():
             p.kill()
         logger.warning(f"Cleaned up {len(killed_pids)} orphaned process(es) from previous run: {killed_pids}")
 
-def create_im_with_mem(mzml_path, cfg):
+def create_im_with_mem(mzml_path, cfg, detect_peaks):
     """
     creates an intesnitymatrix object and returns the peak memroy needed for process
     """
-    matrix = create_intensity_matrix(mzml_path, cfg)
+    matrix = create_intensity_matrix(mzml_path, cfg, detect_peaks=detect_peaks)
     peak_mem = psutil.Process(os.getpid()).memory_info().peak_wset
     return matrix,peak_mem
 
-def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0):
+def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0, serial=False, detect_peaks=True):
     """
     chooses a random number of files to use to test system and calibrate how many workers
     we can use to process samples based on availbe cpu cores and memory
     """
+    if serial:
+        return 1, {}, 0, 0
+    
     cpu_ceiling = max(1, os.cpu_count()-1)
 
     calibration_files = random.sample(files, min(calibration_n,len(files)))
@@ -531,7 +530,7 @@ def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0):
     with ProcessPoolExecutor(max_workers=1, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
         for file in calibration_files:
             try:
-                matrix,mem = executor.submit(create_im_with_mem, file, cfg).result()
+                matrix,mem = executor.submit(create_im_with_mem, file, cfg, detect_peaks).result()
                 peak_mem_bytes = max(peak_mem_bytes, mem)
                 calibration_results[file] = matrix
                 success_count += 1

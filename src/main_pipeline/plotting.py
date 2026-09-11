@@ -777,21 +777,19 @@ def plot_chromatogram(time_array: np.ndarray, intensity_array: np.ndarray,
             lb = peak.get('left_bound')
             rb = peak.get('right_bound')
             center = peak.get('center')
-            rt = peak.get('rt')
-            bl_slope = peak.get('bl_slope')
-            bl_yint = peak.get('bl_yint')
+            bl_array = peak.get('baseline')
 
-            if lb and rb :
+            if lb is not None and rb is not None :
                 ax.fill_between(time_array[lb:rb+1], intensity_array[lb:rb+1], alpha=0.15, color='lightblue')
                 ax.scatter(time_array[lb], intensity_array[lb], color='crimson')
                 ax.scatter(time_array[rb], intensity_array[rb], color='crimson')
 
-            if bl_slope and bl_yint:
-                x = np.array(time_array[lb], time_array[rb])
-                y = bl_slope * x + bl_yint
+            if bl_array is not None:
+                x = np.array([time_array[lb], time_array[rb]])
+                y = bl_array
                 ax.plot(x, y, color = 'crimson', linestyle='--')
 
-            if center:
+            if center is not None:
                 ax.scatter(time_array[center], intensity_array[center], marker= '|', color='crimson')
 
     ax.set_xlabel(xlabel)

@@ -3,6 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from matplotlib.backends.backend_pdf import PdfPages
 from itertools import combinations
 from sklearn.neighbors import NearestNeighbors
@@ -11,6 +12,9 @@ from scipy.stats import gaussian_kde
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import QuantileTransformer
 from collections import Counter, defaultdict
+import hdbscan, itertools, pickle
+import logging
+logger = logging.getLogger(__name__)
 
 # endregion
 
@@ -498,7 +502,7 @@ def plot_gs_heatmaps(pdf, gs_params, results):
  
     # get lookup for full max row
     max_lookup = {(mcs, ms, cse): (mcs, ms, cse, n_clusters, noise_frac, validity) 
-                  for mcs, ms, cse, n_clusters, noise_frac, validity in results}   
+                  for _,mcs, ms, cse, n_clusters, noise_frac, validity in results}   
     # total possible combinations list
     plot_combos = list(combinations(sorted_params.keys(), 2))
 
@@ -509,9 +513,9 @@ def plot_gs_heatmaps(pdf, gs_params, results):
 
         # get the metric we are coloring heatmap by
         if metric == 'validity':
-            lookup = {(mcs, ms, cse): validity for mcs, ms, cse, n_clusters, noise_frac, validity in results}
+            lookup = {(mcs, ms, cse): validity for _, mcs, ms, cse, _, _, validity in results}
         elif metric == 'noise_frac':
-            lookup = {(mcs, ms, cse): noise_frac for mcs, ms, cse, n_clusters, noise_frac, validity in results}
+            lookup = {(mcs, ms, cse): noise_frac for _, mcs, ms, cse, _, noise_frac, _ in results}
         else:
             raise ValueError('Unknown metric specified')
         
@@ -523,7 +527,7 @@ def plot_gs_heatmaps(pdf, gs_params, results):
             n_facets = len(sorted_params[k])
 
             # facet by eps because it is a 'secondary' metric
-            if k != 'eps':
+            if k != 'eps' or k != 'cse':
                 continue
 
             # calculate number of rows/cols for faceted heatmap display
@@ -585,16 +589,80 @@ def plot_gs_heatmaps(pdf, gs_params, results):
     table_data = [list(row) for row in maxes]
     plot_table(pdf, f"Best Combinations per-facet per-metric", table_data, results_labels)
 
-def plot_hdbscan_summary(pdf, results, top_n=3, n_clusters_max=5):
+def faceted_heatmap(pdf, results_dict, x_metric, y_metric, facet_metric, heat_metric, annotate_metric=None):
     """
-    plots summary statistics for a given gridsearch of a given 
+    generates a faceted heatmap from a dict
     """
 
-    # pull out data from results
-    results_matrix = np.array(results)
-    results_matrix = results_matrix[~np.isnan(results_matrix[:6])]
+    x_metrics = np.sort(np.unique(results_dict[x_metric]))
+    y_metrics = np.sort(np.unique(results_dict[y_metric]))
+    facets = np.sort(np.unique(results_dict[facet_metric]))
+    n_facets = len(facets)
+
+    x_map = {val:i for i,val in enumerate(x_metrics)}
+    y_map = {val:i for i,val in enumerate(y_metrics)}
+
+    n_rows = int(np.ceil(np.sqrt(n_facets)))
+    n_cols = int(np.ceil(n_facets / n_rows))
+
+    fig,axes = plt.subplots(n_rows, n_cols, squeeze=False, figsize=(6*n_cols, 5*n_rows))
+
+    for idx,facet in enumerate(facets):
+
+        row,col = np.divmod(idx, n_cols)
+        ax = axes[row,col]
+
+        im = np.full((len(x_metrics),len(y_metrics)), fill_value=np.nan, dtype=float)
+        annotate = np.full((len(x_metrics),len(y_metrics)), fill_value=np.nan, dtype=object)
+
+        for i in range(len(results_dict[x_metric])):
+
+            if results_dict[facet_metric][i] != facet:
+                continue
+
+            x_val = x_map[results_dict[x_metric][i]]
+            y_val = y_map[results_dict[y_metric][i]]
+
+            heat = results_dict[heat_metric][i]
+            im[x_val,y_val] = heat if heat is not None else np.nan
+
+            if annotate_metric is not None:
+                ann_val = results_dict[annotate_metric][i]
+                annotate[x_val,y_val] = ann_val
+
+        ax.imshow(im, cmap='viridis', aspect='auto')
+
+        if annotate_metric is not None:
+            for xi in range(len(x_metrics)):
+                for yi in range(len(y_metrics)):
+                    if not np.isnan(annotate[xi,yi]):
+                        ax.text(yi,xi, annotate[xi,yi], ha='center', va='center', color='white',
+                                fontsize=7)
+
+        ax.set_yticks(range(len(x_metrics))); ax.set_yticklabels(x_metrics)
+        ax.set_xticks(range(len(y_metrics))); ax.set_xticklabels(y_metrics)
+        ax.set_ylabel(x_metric); ax.set_xlabel(y_metric)
+        ax.set_title(f'{facet_metric}={facet}')
+
+    for idx in range(n_facets, n_rows*n_cols):
+        row,col = divmod(idx,n_cols)
+        axes[row,col].axis('off')
+
+    fig.suptitle(f'{x_metric} vs {y_metric} {heat_metric} faceted by {facet_metric}', fontsize=10)
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+def hdbscan_fullmatrix(pdf, param_grid, results_matrix, top_k=5, n_clusters_max=5):
+    """
+    Summary report for full matrix hdsbscan gridsearch
+    """
+    # initial data cleaning
+    results_matrix = results_matrix[~np.isnan(results_matrix[:,6])]
     if len(results_matrix) == 0:
         return
+    # generate matrix row lookup dict
+    lookup = {(seed,mcs,ms,cse): idx for idx,(seed,mcs,ms,cse,_,_,_) in enumerate(results_matrix)}
 
     seeds = results_matrix[:,0]
     mcs_vals = results_matrix[:,1]
@@ -617,5 +685,200 @@ def plot_hdbscan_summary(pdf, results, top_n=3, n_clusters_max=5):
     validity_f = validity_vals[cluster_mask]
     seeds_f = seeds[cluster_mask]
 
+    # combine all parameter combinations
+    combos = list(zip(mcs_f,ms_f,cse_f))
 
+    # identify best candidates for parameter combinations based on mean validity if combo
+    # is in top 1/2 of most persistent combos and 
+    validity_tracker = defaultdict(list)
+    seed_tracker = defaultdict(list)
+    for combo, v, s in zip(combos, validity_f, seeds_f):
+        validity_tracker[combo].append(v)
+        seed_tracker[combo].append(s)
+
+    counts = np.array([len(vals) for vals in validity_tracker.values()])
+    count_cutoff = np.percentile(counts, 50)
+
+    candidates = {
+        combo: vals for combo, vals in validity_tracker.items()
+        if len(vals) >= count_cutoff
+    }
+    ranked = sorted(candidates.items(), key=lambda kv: np.nanmedian(kv[1]), reverse=True)
+    top_candidates = ranked[:15]
+
+    # generate violin plots of top_candidates and table to display values
+    top_candidates_violin(pdf, top_candidates)
+
+    # find how often each combo occurs in the top_k of every searched seed
+    top_k_counts = Counter()
+    for seed in np.unique(seeds_f):
+        idx = np.where(seeds_f == seed)[0]
+        order = idx[np.argsort(validity_f[idx])[::-1][:top_k]]
+        for i in order:
+            top_k_counts[combos[i]] += 1
+    topk_barplot(pdf, top_k_counts, top_k=top_k)
+
+    # plot validity vs noise frac, colored by n_clusters
+    plot_scatter(pdf, 'Validity vs Noise Fraction colored by n_clusters', 'Validity', 'Noise Fraction',
+                 validity_vals, noise_frac_vals, n_cluster_vals)
+
+    # plot a heatmap of mcs vs ms averaged across all seeds
+    seeds = np.unique(seeds)
+    heatmap_results = defaultdict(list)
+    for mcs in param_grid['min_cluster_size']:
+        for ms in param_grid['min_samples']:
+            for cse in param_grid['eps']:
+                mask = np.where((ms_vals == ms) & (mcs_vals == mcs) & (cse_vals == cse))
+                mean_val = np.nanmean(validity_vals[mask])
+                if mean_val != 0:
+                    err_val = f'{(100*np.nanstd(validity_vals[mask]) / mean_val):.1f}'
+                else:
+                    err_val = None
+                heatmap_results['mcs'].append(mcs)
+                heatmap_results['ms'].append(ms)
+                heatmap_results['cse'].append(cse)
+                heatmap_results['avg'].append(mean_val)
+                heatmap_results['pct_err'].append(err_val)
+    x_metric = 'mcs'
+    y_metric = 'ms'
+    faceted_heatmap(pdf, heatmap_results, x_metric, y_metric, facet_metric='cse', 
+                    heat_metric='avg', annotate_metric='pct_err')
+
+def topk_barplot(pdf, dict, top_k = 5):
+    """
+    generates a barplot from a dict of data for mse, ms, cse combinations from
+    hdbscan optimization
+    """
+
+    items = sorted(dict.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
+    labels = [f"mcs={c[0]:.0f};ms={c[1]:.0f};cse={c[2]:.0f}" for c,_ in items]
+    values = [v for _,v in items]
+
+    fig,ax = plt.subplots(figsize=(10,6))
+    ax.bar(range(len(labels)), values)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=60, ha='right')
+    ax.set_ylabel(f'Top K frequency (k={top_k})')
+    ax.set_title(f'Frequency of combo occurance in top k results of all seed\n(k={top_k})')
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+def top_candidates_violin(pdf, top_candidates):
+
+    candidates = []
+    validitiy_lists = []
+    median_vals = []
+    for entry in top_candidates:
+        candidates.append(entry[0])
+        validitiy_lists.append(entry[1])
+        median_vals.append(np.nanmedian[entry[1]])
+
+    fig,ax = plt.subplots(figsize=(10,6))
+
+    ax.violinplot(validitiy_lists, showmedians=True)
+    for i,val in enumerate(median_vals):
+        ax.text(i,val, f'{val:.3f}', ha='center', va='bottom', fontsize=7)
+
+    ax.set_xticks(1, len(candidates)+1)
+    ax.set_xticklabels([f'mcs={c[0]:.0f};ms={c[1]:.0f};cse={c[2]:.0f}' for c in candidates],
+                       rotation=60, ha='right')
+    ax.set_ylabel('Validity')
+    ax.set_title('Top candidate combos by median validity')
+
+    plt.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+def hdbscan_perion(pdf, param_grid, results_dir, top_k=5, n_clusters_max=5):
+    """
+    Summary report for per-ion hdbscan gridsarch
+    """
+    files = list(results_dir.glob("*.pk1"))
+
+    for file in files:
+
+        # get ion
+        filename = Path(file).stem
+        ion_section = filename.split("_")[-1]
+        ion = int(ion_section[3:])
+
+        # read file
+        with open(file, 'rb') as f:
+            gs_results = pickle.load(f)
+
+def hdbscan_gs(X, param_grid, distance_metric, n_samples=250_000, ion=None, seed=None):
+    """
+    Runds a Gridsearched HDBSCAN and returns results list
+    """
+    # output information
+    gs_results = []
+
+    # find how much duplication there is in X
+    # vals=(n_unique, n_features) list of unique features
+    # inverse=(n_rows) list of which val this row belongs to
+    # counts=(n_unique,) counts of each unique val
+    vals, inverse, counts = np.unique(X, axis=0, return_inverse=True, return_counts=True)
+
+    # find the domianant index value
+    dominant_idx = counts.argmax()
+    # if there is a dominant group mask it for sampling
+    if counts[dominant_idx]/len(X) >= 0.1:
+        noise_mask = (inverse == dominant_idx)
+        noise_indices = np.where(noise_mask)[0]
+        signal_indices = np.where(~noise_mask)[0]
+    # if no dominant group then don't mask it
+    else:
+        noise_indices = np.array([], dtype=int)
+        signal_indices = np.arange(len(X))
+
+    # sampling
+    if seed is None:
+        sample_idx = signal_indices
+    else:
+        rng = np.random.default_rng(seed)
+        sample_idx = rng.choice(signal_indices, size=min(n_samples, len(signal_indices)), replace=False)
+
+    # sample X for PCA/DBSCAN
+    x_sample = X[sample_idx]
+
+    for mcs, ms, cse in itertools.product(param_grid['min_cluster_size'],param_grid['min_samples'],param_grid['eps']):
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=ms, cluster_selection_epsilon=cse, 
+                                    gen_min_span_tree=True, prediction_data=False, metric=distance_metric,
+                                    core_dist_n_jobs=1)
+        test_labels = clusterer.fit_predict(x_sample)
+
+        n_clusters = len(set(test_labels)) - (1 if -1 in test_labels else 0)
+        noise_frac = (test_labels == -1).sum() / len(test_labels)
+        validity = getattr(clusterer, 'relative_validity_', None) # DBCV-like internal metric
+
+        if ion is not None:
+            gs_results.append((ion, seed, mcs, ms, cse, n_clusters, noise_frac, validity))
+        else:
+            gs_results.append((seed, mcs, ms, cse, n_clusters, noise_frac, validity))
+
+    return gs_results
+
+def hdbscan_gs_saveshard(X, param_grid, distance_metric, out_dir, n_samples=250_000, ion=None, seed=None):
+
+    shard_file = out_dir / f"{distance_metric}_ion{ion}.pk1"
+
+    if shard_file.exists():
+        with open(shard_file, 'rb') as f:
+            return pickle.load(f)
+
+    gs_results = hdbscan_gs(X, param_grid, distance_metric, n_samples, ion=ion, seed=seed)
+
+    with open(shard_file, 'wb') as f:
+        pickle.dump(gs_results, f)
+
+    return gs_results
+
+def load_test_matrices(data_path):
+    data = np.load(data_path)
+    matrices = {}
+    for sample_name in data.files:
+        matrices[sample_name] = data[sample_name]
+    return matrices
 

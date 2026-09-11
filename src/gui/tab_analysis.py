@@ -27,10 +27,10 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 
-from src.plotting import plot_pca, plot_scree_bar
-import src.plotting as plotting_module
+from src.main_pipeline.plotting import plot_pca, plot_scree_bar
+import src.main_pipeline.plotting as plotting_module
 
-from src.analysis import pca
+from src.gui.analysis import pca
 
 logging.basicConfig(
     level=logging.INFO,

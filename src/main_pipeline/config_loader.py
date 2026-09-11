@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import yaml, shutil
 from openpyxl import load_workbook
-from src.utils import get_app_dir
+from src.main_pipeline.utils import get_app_dir
 
 # logging
 import logging

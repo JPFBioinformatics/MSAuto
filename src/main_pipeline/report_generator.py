@@ -15,7 +15,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from src.config_loader import ConfigLoader
+from src.main_pipeline.config_loader import ConfigLoader
 
 # logging
 import logging

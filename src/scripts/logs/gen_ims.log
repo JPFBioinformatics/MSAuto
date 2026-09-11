@@ -1,0 +1,9 @@
+2026-09-03 14:07:30,206 [INFO] src.main_pipeline.mzml_processor: mzML files processed
+2026-09-03 14:16:50,994 [INFO] src.main_pipeline.mzml_processor: mzML files processed
+2026-09-03 14:25:59,525 [INFO] src.main_pipeline.mzml_processor: mzML files processed
+2026-09-03 14:26:06,748 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 1.mzML: list indices must be integers or slices, not WindowsPath
+2026-09-03 14:26:12,524 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 10.mzML: list indices must be integers or slices, not WindowsPath
+2026-09-03 14:26:17,668 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 2.mzML: list indices must be integers or slices, not WindowsPath
+2026-09-03 14:26:23,250 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 3.mzML: list indices must be integers or slices, not WindowsPath
+2026-09-03 14:26:29,400 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 4.mzML: list indices must be integers or slices, not WindowsPath
+2026-09-03 14:26:35,068 [INFO] src.main_pipeline.mzml_processor: Failed to process Int 5.mzML: list indices must be integers or slices, not WindowsPath

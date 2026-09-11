@@ -9,13 +9,13 @@ Data container for loading a given run from database to feed to GUI, used for vi
 import shutil
 import numpy as np
 from pathlib import Path
-from src.db import get_run_samples, get_run_molecules
-from src.intensity_matrix import IntensityMatrix as IM
-from src.config_loader import ConfigLoader
-from src.data_matrix import DataMatrix as DM
-from src.db import connect
-from src.utils import get_proj_db, get_run_dir
-from src.db import insert_peak_batch, insert_im, insert_run, insert_molecule, insert_sample
+from src.main_pipeline.db import get_run_samples, get_run_molecules
+from src.main_pipeline.intensity_matrix import IntensityMatrix as IM
+from src.main_pipeline.config_loader import ConfigLoader
+from src.gui.data_matrix import DataMatrix as DM
+from src.main_pipeline.db import connect
+from src.main_pipeline.utils import get_proj_db, get_run_dir
+from src.main_pipeline.db import insert_peak_batch, insert_im, insert_run, insert_molecule, insert_sample
 
 # logging
 import logging

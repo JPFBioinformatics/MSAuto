@@ -97,7 +97,7 @@ from scipy.stats import ttest_ind, mannwhitneyu, f_oneway, kruskal, spearmanr, p
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
-from src.config_loader import ConfigLoader
+from src.main_pipeline.config_loader import ConfigLoader
 
 
 # logging

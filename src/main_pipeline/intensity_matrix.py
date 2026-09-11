@@ -11,9 +11,10 @@ import numpy as np
 from scipy.signal import find_peaks, savgol_filter
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, uniform_filter1d
 import matplotlib.pyplot as plt
-from src.config_loader import ConfigLoader
-from src.utils import get_run_dir, get_proj_dir, get_run_cfg_path
-from src.db import insert_im
+
+from src.main_pipeline.config_loader import ConfigLoader
+from src.main_pipeline.utils import get_run_dir, get_proj_dir, get_run_cfg_path
+from src.main_pipeline.db import insert_im
 
 # logging
 import logging
@@ -23,13 +24,14 @@ logger = logging.getLogger(__name__)
 
 # Class for storage and cleaning of intensity matrix extracted by mzml_processor
 class IntensityMatrix:
-    def __init__(self, intensity_matrix: np.ndarray,
+    def __init__(self, 
+                 intensity_matrix: np.ndarray,
                  unique_mzs: list,
                  cfg: ConfigLoader,
                  sample_name: str = None,
                  time_map: dict = None,
                  matrix_type: str = None,
-                 detect_peaks: bool = False,
+                 detect_peaks: bool = True,
                  apply_threshold: bool = True):
         
         self.intensity_matrix = intensity_matrix
@@ -47,6 +49,9 @@ class IntensityMatrix:
         self.matrix_type = matrix_type
         self.height_thresholds = None
         self.ridge_widths = None
+
+        self.saturation_ceiling = self._detect_saturation_ceiling()
+        logger.info(f"Saturation Ceiling: {self.saturation_ceiling:.2e}")
 
         # embedding matrices
         self.first_derivs = np.zeros_like(intensity_matrix, dtype=float)
@@ -299,8 +304,6 @@ class IntensityMatrix:
         maxima                          list of peaks for this ion's row array
         """
         sn_threshold = self.cfg.get('sn_threshold')
-        
-        vr = self.cfg.get('valley_ratio')
 
         # find maxima
         if mode == 'prom':
@@ -308,10 +311,10 @@ class IntensityMatrix:
             median = np.nanmedian(array)
             mad = np.nanmedian(np.abs(array - median))
             prom = (median +  mad) * prom_mult
-            max_idxs, left_bounds, right_bounds, sn_ratios, scores, scales, ridge_span = self._find_maxima_prom(array, prom)
+            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span = self._find_maxima_prom(array, prom)
 
         elif mode == 'cwt':
-            max_idxs, left_bounds, right_bounds, sn_ratios, scores, scales, ridge_span, bl_mask = self._find_maxima_cwt(array, ion)
+            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, bl_mask = self._find_maxima_cwt(array, ion)
 
         # list to hold dictionary entries containing left_bound, right_bound and center for each maxima
         maxima = []
@@ -328,9 +331,6 @@ class IntensityMatrix:
             right_bound = right_bounds[i]
             if right_bound - left_bound < 3:
                 continue
-
-            # sn_ratio
-            sn = sn_ratios[i]
 
             # detect flat top peaks
             max_val = array[peak_max]
@@ -352,14 +352,13 @@ class IntensityMatrix:
                 'raw_height': fit['y_values'][1],
                 'ion': ion,
                 'flat_top': flat_top,
-                'cluster': None,
                 'valid': True,
                 'processed': False,
                 'fwhh': np.nan,
                 'feature': None,
                 'valley_ratio': None,
                 'tailing_factor': np.nan,
-                'sn_ratio': sn,
+                'sn_ratio': np.nan,
                 'height': np.nan,
                 'baseline': None,
                 'bl_slope': np.nan,
@@ -373,11 +372,15 @@ class IntensityMatrix:
                 'ridge_span': ridge_span[i]
             })
 
+        # sort maxima by position
+        maxima.sort(key=lambda p: p['center'])
+
         # get noise mask for this row
         if mode == 'prom':
             row_nm = self.noise_mask(maxima)
         elif mode == 'cwt':
             row_nm = bl_mask
+        row_nm = self._fill_short_noise(row_nm, gap_tol=3)
         bl_indices = np.where(row_nm)[0]
 
         # get median/mad of baseline to use in height filter
@@ -387,134 +390,38 @@ class IntensityMatrix:
         height_multiplier = self.cfg.get("height_multiplier")
         height_threshold = height_multiplier * (mad)
 
-        # second pass, finds baseline and other relevant features
-        n_clusters = 1
-        time_map = self.time_map
-        for i,peak in enumerate(maxima):
+        # assign peak basleines
+        self._generate_basline(array, maxima, row_nm, gap_tol=3, window_size=3)
 
-            # if baseline already set then skip this peak, it's already been handled
-            if peak['processed']:
-                continue
-
-            # set initial anchors
-            l_anchor = peak['left_bound']
-            r_anchor = peak['right_bound']
-
-            # check right bound because peaks are processed left to right
-            j = i
-            min_vr = 1.0
-            while j < len(maxima) - 1:
-                
-                next_peak = maxima[j+1]
-
-                # exit loop if peak bounds do not overlap
-                if maxima[j]['right_bound'] != next_peak['left_bound']:
-                    break
-                
-                # caluclate valley ratio
-                valley_height = array[maxima[j]['right_bound']]
-                denom = min(array[peak['center']], array[next_peak['center']])
-                if denom <= 0:
-                    break
-                valley_ratio = valley_height / denom
-
-                # break if the valley ratio is small (cluster ends)
-                if valley_ratio < vr:
-                    break
-
-                # get min_vr for cluster
-                min_vr = min(min_vr, valley_ratio)
-
-                # if still overlapping then extend right anchor and keep walking
-                r_anchor = next_peak['right_bound']
-                j += 1
-
-            # get baseline for culster
-            baseline = self.tentative_baseline(l_anchor, r_anchor, array)
-            bl_array = baseline['baseline_array']
-
-            # handle cluster value assignments
-            cluster_peaks = maxima[i:j+1]
-            for entry in cluster_peaks:
-
-                # assign valley ratio
-                entry['valley_ratio'] = min_vr if j > i else None
-
-                # calculate sharpness/conv value
-                conv = self.convolution_value(entry,array)
-                entry['conv'] = conv
-
-                # assign cluster identity
-                if j > i:
-                    entry['cluster'] = n_clusters
-
-                # assign baseline array
-                bl_start = entry['left_bound'] - l_anchor
-                bl_end = entry['right_bound'] - l_anchor +1
-                bl = bl_array[bl_start:bl_end]
-                entry['baseline'] = bl
-                entry['bl_slope'] = (bl[-1] - bl[0]) / (len(bl) - 1) if len(bl) > 1 else 0.0
-                entry['bl_yint'] = bl[0]
-
-                # find which two scans the percise max lives between
-                center = entry['center']
-                rt = entry['rt']
-                c_time = time_map[center]
-                if rt > c_time:
-                    time1 = c_time
-                    time2 = time_map[center+1]
-                    scan1 = center
-                    scan2 = center+1
-                elif rt < c_time:
-                    time1 = time_map[center-1]
-                    time2 = c_time
-                    scan1 = center-1
-                    scan2 = center
-                else:
-                    time1 = time2 = c_time
-                    scan1 = scan2 = center
-
-                # if maximizes directly on scan then handle, else linear impute
-                if scan1 == scan2 or scan1 < entry['left_bound'] or scan2 > entry['right_bound']:
-                    bl_i = center - entry['left_bound']
-                    bl_norm = bl[bl_i]
-                else:
-                    frac = (rt - time1) / (time2 - time1)
-                    bl_i1 = scan1 - entry['left_bound']
-                    bl_i2 = scan2 - entry['left_bound']
-                    bl_norm = bl[bl_i1] + frac * (bl[bl_i2] - bl[bl_i1])
-                
-                # assign height and check if its above threshold
-                entry['height'] = entry['raw_height'] - bl_norm
-                """height_count = 0
-                if entry['height'] < height_threshold:
-                    entry['valid'] = False
-                    height_count += 1"""
-
-                # calculate signal to noise ratio
-                if mode == 'prom':
-                    sn_ratio = self.calculate_sn(entry, array, bl_indices)
-                    entry['sn_ratio'] = sn_ratio
-
-                # S/N check
-                sn_count = 0
-                if abs(entry['sn_ratio']) < sn_threshold or np.isnan(entry['sn_ratio']):
-                    entry['valid'] = False
-                    sn_count +=1
-                entry['processed'] = True
-
-            # update cluster counter
-            if j > i:
-                n_clusters += 1
-
-        # filter valid/invalid peaks, return only valid peaks and count for logs
+        # filter invalid peaks
         valid_peaks = []
-        for peak in maxima:
-            if peak.get('valid', True):
-                self.integrate_peak(peak,array)
-                valid_peaks.append(peak)
-                peak['tailing_factor'] = self.calculate_tailing(peak,array)
-                peak['fwhh'] = self.calculate_fwhh(peak,array)
+        sn_count, height_count = 0,0
+        for entry in maxima:
+
+            # get bl_value at precise rt
+            bl_norm = self._interpolate_baseline_at_rt(entry)
+            
+            # assign height and check if its above threshold
+            entry['height'] = entry['raw_height'] - bl_norm
+            height_count = 0
+            if entry['height'] < height_threshold:
+                entry['valid'] = False
+                height_count += 1
+
+            # calculate s/n ratio of entry
+            sn_ratio = self.calculate_sn(entry, mad)
+            entry['sn_ratio'] = sn_ratio
+            if entry['sn_ratio'] < sn_threshold:
+                entry['valid'] = False
+                sn_count += 1
+
+            # add valid entries to new list
+            if entry.get('valid', True):
+                self.integrate_peak(entry,array)
+                entry['tailing_factor'] = self.calculate_tailing(entry,array)
+                entry['fwhh'] = self.calculate_fwhh(entry,array)
+                entry['conv'] = self.convolution_value(entry,array)
+                valid_peaks.append(entry)
                 
         # reccalculate noise mask based on valid peaks
         valid_nm = self.noise_mask(valid_peaks)
@@ -532,7 +439,151 @@ class IntensityMatrix:
             peak['peak_idx'] = idx
             peak['feature'] = None
 
+        self._refine_bounds(maxima, ion)
+
         return valid_peaks, valid_nm, height_threshold
+
+    def _interpolate_baseline_at_rt(self, peak):
+        """
+        interpolates the baseline value at the precise retention time of the peak
+        """
+        # calculate prcise bl value for the peak
+        center = peak['center']
+        rt = peak['rt']
+        c_time = self.time_map[center]
+
+        # find the scans that the rt falls between
+        if rt > c_time:
+            time1,time2 = c_time, self.time_map[center+1]
+            scan1,scan2 = center, center+1
+        else:
+            time1, time2 = self.time_map[center-1], c_time
+            scan1, scan2 = center-1, center
+
+        bl = peak['baseline']
+
+        # if peak maximizes directly on a scan then just take its value
+        if scan1 == scan2 or scan1 < peak['left_bound'] or scan2 > peak['right_bound']:
+            bl_i = center - peak['left_bound']
+            return bl[bl_i]
+
+        # if not then inerpolate value
+        frac = (rt-time1) / (time2-time1)
+        bl_i1 = scan1 - peak['left_bound']
+        bl_i2 = scan2 - peak['left_bound']
+        return bl[bl_i1] + frac * (bl[bl_i2] - bl[bl_i1])
+
+    def _generate_basline(self, signal, maxima, bl_mask, gap_tol=3, window_size=3):
+        """
+        adds baseline arrays to a set of maxima by looking at the nearest baseline section on either side
+        of a section of signal, finding the minimal value and generating a linaer fit between these two points
+        """
+
+        # ensure window_size/gap_tol consistency
+        if window_size > gap_tol:
+            logger.info(f'Warning: Baseline window_size {window_size} > gap_tol {gap_tol}, reducing window_size to gap_tol')
+            window_size = gap_tol
+
+        # get median row value
+        bl_signal_vals = signal[bl_mask.astype(bool)]
+        if len(bl_signal_vals) > 0:
+            median = np.median(bl_signal_vals)
+        else:
+            median = np.median(signal)
+
+        # find start end ednpoins of signal segments
+        edges = np.diff(bl_mask.astype(int))
+        starts = np.where(edges == -1)[0] + 1
+        ends = np.where(edges == 1)[0]
+        if not bl_mask[0]:
+            starts = np.concatenate([[0], starts])
+        if not bl_mask[-1]:
+            ends = np.concatenate([ends, [len(bl_mask)-1]])
+
+        # calculate baseline values for signal segments
+        bl_values = np.zeros_like(signal)
+        for start,end in zip(starts,ends):
+
+            # left points for baseline fit
+            left_idxs = self._nearest_bl_indices(bl_mask, start-1, -1, window_size)
+            if len(left_idxs) > 0:
+                x_vals = [left_idxs]
+                y_vals = [signal[left_idxs]]
+            else:
+                synth_x = np.arange(start-window_size, start)
+                x_vals = [synth_x]
+                y_vals = [np.full(window_size, median)]
+
+            # signal points for baseline fit
+            segment = signal[start:end+1]
+            n_internal = 2*window_size
+            n_internal = min(n_internal, len(segment) // 2)
+            internal_idxs = np.argsort(segment)[:n_internal]+start
+            x_vals.append(internal_idxs)
+            y_vals.append(signal[internal_idxs])
+
+            # right points for baseline fit
+            right_idxs = self._nearest_bl_indices(bl_mask, end+1, 1, window_size)
+            if len(right_idxs) > 0:
+                x_vals.append(right_idxs)
+                y_vals.append(signal[right_idxs])
+            else:
+                synth_x = np.arange(end + 1, end + 1 + window_size)
+                x_vals.append(synth_x)
+                y_vals.append(np.full(window_size, median))
+
+            # genreate fit for baseline
+            xs = np.concatenate(x_vals)
+            ys = np.concatenate(y_vals)
+            m,b = np.polyfit(xs,ys,1)
+
+            # save baseline to array
+            bl_values[start:end+1] = m * np.arange(start,end+1) + b
+
+            # shift bl down if it peaks above any real values
+            diffs = bl_values[start:end+1] - signal[start:end+1]
+            if diffs.max() > 0:
+                bl_values[start:end+1] -= diffs.max(0)
+
+        # assign baseline to each peak
+        for peak in maxima:
+            peak_bl = bl_values[peak['left_bound']:peak['right_bound']+1]
+            peak['baseline'] = peak_bl
+
+    def _nearest_bl_indices(self, bl_mask, start_pos, step, window_size):
+        """
+        finds the window_size nearest baseline indices to start pos in a given direction controlled by step,
+        -1 is left +1 is right
+        """
+        idx = start_pos
+        found = []
+        while 0 <= idx < len(bl_mask) and bl_mask[idx] and len(found) < window_size:
+            found.append(idx)
+            idx+=step
+        return np.array(found)
+
+    def _fill_short_noise(self, noise_mask, gap_tol=3):
+        """
+        Fills in noise segments as signal if the number of consecutive noise points is less than gap_tol
+        noise is true/1 and signal is false/0 in noise_mask
+        """
+        mask = noise_mask.astype(bool).copy()
+
+        edges = np.diff(mask.astype(int))
+        starts = np.where(edges == 1)[0] + 1
+        ends = np.where(edges == -1)[0]
+
+        if mask[0]:
+            starts = np.concatenate([[0],starts])
+        if mask[-1]:
+            ends = np.concatenate([ends, [len(mask)-1]])
+
+        for start,end in zip(starts,ends):
+            seg_len = end - start + 1
+            if seg_len < gap_tol:
+                mask[start:end+1] = True
+
+        return mask.astype(noise_mask.dtype)
 
     def _find_maxima_prom(self, array, prom):
 
@@ -544,18 +595,17 @@ class IntensityMatrix:
         left_bounds = [self.find_bound(array,m,-1) for m in max_idxs]
         right_bounds = [self.find_bound(array,m,1) for m in max_idxs]
 
-        sn = np.full(len(max_idxs), np.nan)
         scores = np.full(len(max_idxs), np.nan)
         scales = np.full(len(max_idxs), np.nan)
         ridge_span = np.full(len(max_idxs), np.nan)
 
-        return max_idxs, left_bounds, right_bounds, sn, scores, scales, ridge_span
+        return max_idxs, left_bounds, right_bounds, scores, scales, ridge_span
 
     def _find_maxima_cwt(self, array, ion):
 
         max_info, bl_mask = self.find_peaks_cwt(array, ion, wavelet='mexh')
 
-        return (max_info['maxima'], max_info['l_bounds'], max_info['r_bounds'], max_info['sn_ratios'],
+        return (max_info['maxima'], max_info['l_bounds'], max_info['r_bounds'],
                 max_info['scores'], max_info['scales'], max_info['scale_ranges'], bl_mask)
 
     def find_peaks_cwt(self, array, ion, wavelet='mexh'):
@@ -616,14 +666,13 @@ class IntensityMatrix:
         self.cwt_scales[self.ion_map[ion]] = max_scales
 
         # get ridge coordinates
-        ridge_info = self._trace_ridges(R, scales, ridge_tol=1, gap_tol=3)
+        ridge_info, rejected_ridges = self._trace_ridges(R, scales, ridge_tol=1, gap_tol=3)
 
         # process ridges for endpoints and maxima
         max_info = {
             'maxima': [],
             'l_bounds': [],
             'r_bounds': [],
-            'sn_ratios': [],
             'scales': [],
             'scores': [],
             'n_ridges': [],
@@ -724,63 +773,36 @@ class IntensityMatrix:
                             col_max_a = a_max
                             col_max_c = c_max
 
-            # exclude ridges whose max col is too close to edges of the row
-            if max_col < 12 or max_col >= coefficients.shape[1] - 12:
+            # exclude ridges whose abs(max_score) is less than 1
+            if abs(col_max_c) < 1:
                 continue
 
-            # find nearest local max + mins
-            max_scan, l, r = self._nearest_local_max(ion, signal, max_col, local_max_idxs)
-            if max_scan is None:
-                continue
+            # finalize candidate ridges and save to max_info
+            self._finalize_candidate(max_col, max_scale, max_c, scale_range, ion, signal,
+                                     local_max_idxs, min_masks, coefficients, bl_mask, 
+                                     max_info, scan_to_idx, can_type = 'ridge')
 
-            # exclude max scans that are too far to the edge
-            if max_scan < 12 or max_scan >= coefficients.shape[1] - 12:
-                continue
+            """# revoer wide, flat-topped peaks whose edges were traced as two seperate ridges
+            for seed_col, combined_scale_range, a, b in self._pair_edge_ridges(rejected_ridges, signal):
+                max_c = np.nanargmax(coefficients[0, a:b+1])
+                self._finalize_candidate(seed_col, None, max_c, combined_scale_range, ion, signal,
+                                         local_max_idxs, min_masks, coefficients, bl_mask,
+                                         max_info, scan_to_idx)"""
 
-            # calculate bounds
-            l_bound, r_bound = self._nearest_bounds(signal, max_scan, max_scale,
-                                                    min_masks, l, r)
-            if ion == 147 and self.time_map[max_scan] - 5.7593 < 0.1:
-                logger.info(f"Left Bound: {l_bound} Max Scan: {max_scan} Right Bound: {r_bound}")
-
-            # reject + log bad peaks
-            if l_bound > max_scan or r_bound < max_scan or r_bound <= l_bound:
-                logger.info(f"Rejected bad bounds: l={l_bound} r={r_bound} max={max_scan}")
-                continue
-
-            # update bl_mask
-            bl_mask[l_bound:r_bound+1] = 0
-
-            # save data, merging ridges if they have the same maxima and incrementing n_ridges
-            if max_scan in scan_to_idx:
-                idx = scan_to_idx[max_scan]
-                max_info['n_ridges'][idx] += 1
-                max_info['l_bounds'][idx] = min(max_info['l_bounds'][idx], l_bound)
-                max_info['r_bounds'][idx] = max(max_info['r_bounds'][idx], r_bound)
-                if max_c > max_info['scores'][idx]:
-                    max_info['scales'][idx] = max_scale if max_scale is not None else np.nan
-                    max_info['scores'][idx] = max_c
-                if scale_range > max_info['scale_ranges'][idx]:
-                    max_info['scale_ranges'][idx] = scale_range
-            else:
-                scan_to_idx[max_scan] = len(max_info['maxima'])
-                max_info['scale_ranges'].append(scale_range)
-                max_info['maxima'].append(max_scan)
-                max_info['l_bounds'].append(l_bound)
-                max_info['r_bounds'].append(r_bound)
-                max_info['scales'].append(max_scale if max_scale is not None else np.nan)
-                max_info['scores'].append(max_c)
-                max_info['n_ridges'].append(1)
-
-        # calculate s/n raito of peak
-        bl_idxs = np.where(bl_mask)[0]
-        for i,maxima in enumerate(max_info['maxima']):
-            max_info['sn_ratios'].append(self._cwt_sn_ratio(coefficients[0,:],
-                                                            maxima,
-                                                            max_info['scores'][i],
-                                                            bl_idxs,
-                                                            n_closest=20,
-                                                            mode='mad'))
+        # look for flat-topped peaks at saturation maximum
+        saturated_rows = self._find_saturated_rows(self.intensity_matrix[self.ion_map[ion]],
+                                                    tol_frac=0.001)
+        if ion == 147:
+            logger.info(f"Ion 147 Saturation:\n{saturated_rows}")
+        for start,end in saturated_rows:
+            seed_col = (start + end) // 2
+            sub_coeffs = coefficients[:, start:end+1]
+            max_a_idx, max_col_idx = np.unravel_index(np.nanargmax(sub_coeffs), sub_coeffs.shape)
+            max_c = sub_coeffs[max_a_idx,max_col_idx]
+            max_scale = scales[max_a_idx]
+            self._finalize_candidate(seed_col, max_scale, max_c, end-start, ion, signal, 
+                                     local_max_idxs, min_masks, coefficients, bl_mask,
+                                     max_info, scan_to_idx, can_type = 'flat')
         
         return max_info, bl_mask
 
@@ -821,6 +843,136 @@ class IntensityMatrix:
         r_bound = local_min_idxs[insert_idx] + low if insert_idx < len(local_min_idxs) else high-1
 
         return l_bound, r_bound
+
+    def _nearest_bounds_fwhh(self, signal, max_scan, min_masks, l=None, r=None):
+
+        # get min/max filter sizes
+        min_filter = self.cfg.get('min_bound_filter_size')
+        max_filter = self.cfg.get('max_bound_filter_size')
+
+        # define l/r points to start search
+        if l is None:
+            l = max_scan
+        if r is None:
+            r = max_scan
+
+        # estimate local baseline
+        local_baseline, n_expansions = self._estimate_local_bl(signal, l, r, max_filter=max_filter,
+                                                 max_expansions=4)
+        saerch_range = max_filter * (n_expansions+1)
+        if l == 457 and r == 475:
+            logger.info(f"Local_baseline: {local_baseline}")
+
+        # compute estimated fwhh
+        half_max = local_baseline + (signal[max_scan] - local_baseline) / 2
+
+        left = max_scan
+        steps = 0
+        while left > 0 and signal[left] > half_max and steps < saerch_range+2:
+            left -= 1
+            steps += 1
+
+        right = max_scan
+        steps = 0
+        while right < len(signal)-1 and signal[right] > half_max and steps < saerch_range+2:
+            right += 1
+            steps += 1
+
+        fwhh = right - left
+
+        # use fwhh to get filter window
+        filter_window = int(fwhh)*2 + 1
+        filter_window = max(filter_window, 5)
+
+        # find bounds to slice the local window
+        low = max(0, l - filter_window*2)
+        high = min(r + filter_window*2, len(signal) - 1)
+
+        # find filter_size based on fwhh
+        if int(fwhh) % 2 == 0:
+            filter_size = int(fwhh) + 1
+        else:
+            filter_size = int(fwhh)
+        filter_size = max(filter_size, min_filter)
+        filter_size = min(filter_size, max_filter)
+
+        # choose min_mask based on filter_size
+        local_min_mask = min_masks[filter_size][low:high+1]
+        local_min_idxs = np.where(local_min_mask)[0]
+
+        # exclude local_min_idxs which are equal in hieght to the maxima
+        peak_val = signal[max_scan]
+        abs_idxs = local_min_idxs + low
+        local_min_idxs = local_min_idxs[signal[abs_idxs] < peak_val * 0.999]
+
+        # find nearest local minima
+        local_max_scan = max_scan - low
+        insert_idx = np.searchsorted(local_min_idxs, local_max_scan, side='right')
+        l_bound = local_min_idxs[insert_idx-1] + low if insert_idx > 0 else low
+        r_bound = local_min_idxs[insert_idx] + low if insert_idx < len(local_min_idxs) else high-1
+
+        return l_bound, r_bound
+
+    def _estimate_local_bl(self, signal, l, r, max_filter, max_expansions=4):
+
+        # get margin for baseline searching
+        margin = max_filter
+
+        # find the value at which the peak maximizes
+        peak_val = signal[(l+r)//2] if l!= r else signal[l]
+
+        # calculate local baseine, increasing margin until it is sufficiently below peak max
+        for n_expansions in range(max_expansions):
+
+            # calculate local_baseline
+            lo_peek = max(0, l-margin)
+            hi_peek = min(len(signal)-1, r+margin)
+            local_baseline = np.nanmin(signal[lo_peek:hi_peek])
+
+            # if not flat-topped then just return local_baseline
+            if peak_val <= self.saturation_ceiling * 0.9:
+                return local_baseline, 0
+
+            # if bl far enough from peak then we allow it to pass
+            if peak_val - local_baseline > (peak_val*0.1) or (lo_peek == 0 and hi_peek == len(signal)-1):
+                return local_baseline, n_expansions
+
+            margin += max_filter
+
+        return local_baseline, n_expansions
+
+    def _refine_bounds(self, peak_list, ion):
+        """
+        Takes a peak list and examines them in order, resolving overlapping endpoints to
+        be the absolute lowest point between the two endpoints (endpoints inclusive)
+        """
+
+        array = self.intensity_matrix[self.ion_map[ion]]
+
+        count = 0
+        for i,_ in enumerate(peak_list):
+
+            # if no next peak then continue
+            if i == len(peak_list) - 1:
+                continue
+
+            # find bounds to compare
+            peak_i_right = peak_list[i]['right_bound']
+            peak_next_left = peak_list[i+1]['left_bound']
+
+            # adjust endpoints to smallest value between the two peak's maxima
+            if peak_i_right > peak_next_left:
+
+                apex_i = peak_list[i]['center']
+                apex_next = peak_list[i+1]['center']
+
+                search_slice = array[apex_i:apex_next+1]
+                valley_idx = np.nanargmin(search_slice) + apex_i
+
+                peak_list[i]['right_bound'] = valley_idx
+                peak_list[i+1]['left_bound'] = valley_idx
+
+                count += 1
 
     def _nearest_bounds_new(self, signal, max_scan, max_scale, first_deriv, min_masks, l = None, r = None):
         """
@@ -980,6 +1132,46 @@ class IntensityMatrix:
         j -= step
         return j    # return endpoint if no true hit
 
+    def _detect_saturation_ceiling(self):
+        """
+        finds instrument's saturation ceiling as matrix-wide max value
+        """
+        matrix = self.intensity_matrix[:-1]
+        global_max = np.nanmax(matrix)
+        hit_count = np.sum(self.intensity_matrix >= global_max*0.999)
+        if hit_count < 2:
+            return None
+        return global_max
+
+    def _find_saturated_rows(self, row, tol_frac = 0.001):
+        """
+        uses saturation ceilng to find flat topped peaks that hit saturation maximum
+        """
+        # get ceiling
+        ceiling = self.saturation_ceiling
+
+        # return none if no ceiling
+        if ceiling is None:
+            return []
+
+        # get mask where value is at approx ceiling
+        mask = row >= ceiling * (1-tol_frac)
+        if not mask.any():
+            return []
+
+        # detect edges of ceiling-ed sections
+        edges = np.diff(mask.astype(int))
+        starts = np.where(edges == 1)[0] + 1
+        ends = np.where(edges == -1)[0]
+
+        # add start and endpoints if thye are at ceiling
+        if mask[0]:
+            starts = np.concatenate([[0], starts])
+        if mask[-1]:
+            ends = np.concatenate([ends, [len(mask)-1]])
+
+        return list(zip(starts,ends))
+
     def _trace_ridges(self, R, scales, ridge_tol: int=1, gap_tol: int=3):
         """
         Takes the R matrix and returns a list of ridges (each ridge is a list of i,j coordinates)
@@ -997,6 +1189,7 @@ class IntensityMatrix:
         # ridge data, lists of dicts with points: [i,j pairs], current_scan: most recently added j, gap_count: gap counter
         active_ridges = []
         completed_ridges = []
+        rejected_ridges = []
         seen_ridge_keys = set()
 
         # get minimum range of scales a ridge must cross to be considered valid
@@ -1046,6 +1239,8 @@ class IntensityMatrix:
                             if key not in seen_ridge_keys:
                                 seen_ridge_keys.add(key)
                                 completed_ridges.append((ridge['points'], scale_range))
+                        else:
+                            rejected_ridges.append((ridge['points'], scale_range))
 
             # update active ridges 
             active_ridges = still_active
@@ -1068,7 +1263,9 @@ class IntensityMatrix:
                 if key not in seen_ridge_keys:
                     seen_ridge_keys.add(key)
                     completed_ridges.append((ridge['points'], scale_range))
-
+            else:
+                rejected_ridges.append((ridge['points'], scale_range))
+    
         # compute ridge widths
         ridge_widths = [max(j for _,j in points) - min(j for _,j in points) 
                         for points,_ in completed_ridges]
@@ -1076,7 +1273,94 @@ class IntensityMatrix:
             self.ridge_widths = []
         self.ridge_widths.extend(ridge_widths)
 
-        return completed_ridges
+        return completed_ridges, rejected_ridges
+
+    def _pair_edge_ridges(self, rejected_ridges, signal, flat_tol_frac:float = 0.02):
+        """
+        Looks at rejected ridges and pairs ridges that appear to be the edges of a wide,
+        flat topped peak
+        """
+        # get max flat top width
+        max_gap = self.cfg.get('max_flat_top_width')
+
+        # find largest scale range in columns of rejected ridges
+        col_scale_range = {}
+        for points, scale_range in rejected_ridges:
+            col = points[-1][1]
+            if col not in col_scale_range or scale_range > col_scale_range[col]:
+                col_scale_range[col] = scale_range
+    
+        # get candidate points
+        candidates = sorted(col_scale_range.keys())
+
+        seed_cols = []
+        for a,b in zip(candidates[:-1], candidates[1:]):
+
+            gap = b-a
+
+            if gap < 2 or gap > max_gap:
+                continue
+
+            between = signal[a:b+1]
+            local_baseline = min(signal[a], signal[b])
+            plateau_height = np.max(between) - local_baseline
+            if plateau_height <= 0:
+                continue
+
+            flat_tol = plateau_height * flat_tol_frac
+            if (np.max(between) - np.min(between)) > flat_tol:
+                continue
+
+            combined_scale_range = max(col_scale_range[a], col_scale_range[b])
+            seed_cols.append(((a+b)//2, combined_scale_range, a,b))
+
+        return seed_cols
+
+    def _finalize_candidate(self, max_col, max_scale, max_c, scale_range, ion, signal,
+                            local_max_idxs, min_masks, coefficients, bl_mask, max_info, 
+                            scan_to_idx, can_type='ridge'):
+
+        cwt_min_scale = self.cfg.get('cwt_min_scale')
+        if can_type == 'ridge':
+            if max_scale is not None and max_scale <= cwt_min_scale:
+                return
+
+        if max_col < 12 or max_col >= coefficients.shape[1] - 12:
+            return
+
+        max_scan, l, r = self._nearest_local_max(ion, signal, max_col, local_max_idxs)
+        if max_scan is None:
+            return
+
+        if max_scan < 12 or max_scan >= coefficients.shape[1] - 12:
+            return
+
+        l_bound, r_bound = self._nearest_bounds_fwhh(signal, max_scan, min_masks, l, r)
+
+        if l_bound > max_scan or r_bound < max_scan or r_bound <= l_bound:
+            return
+
+        bl_mask[l_bound:r_bound+1] = 0
+
+        if max_scan in scan_to_idx:
+            idx = scan_to_idx[max_scan]
+            max_info['n_ridges'][idx] += 1
+            max_info['l_bounds'][idx] = min(max_info['l_bounds'][idx], l_bound)
+            max_info['r_bounds'][idx] = max(max_info['r_bounds'][idx], r_bound)
+            if max_c > max_info['scores'][idx]:
+                max_info['scales'][idx] = max_scale if max_scale is not None else np.nan
+                max_info['scores'][idx] = max_c
+            if scale_range > max_info['scale_ranges'][idx]:
+                max_info['scale_ranges'][idx] = scale_range
+        else:
+            scan_to_idx[max_scan] = len(max_info['maxima'])
+            max_info['scale_ranges'].append(scale_range)
+            max_info['maxima'].append(max_scan)
+            max_info['l_bounds'].append(l_bound)
+            max_info['r_bounds'].append(r_bound)
+            max_info['scales'].append(max_scale if max_scale is not None else np.nan)
+            max_info['scores'].append(max_c)
+            max_info['n_ridges'].append(1)      
 
     def _get_ridge_scale_range(self,ridge,scales):
         scale_idxs = [i for (i,_) in ridge['points']]
@@ -1318,7 +1602,7 @@ class IntensityMatrix:
 
         return rate_sum
 
-    def calculate_sn(self, peak: dict, row_array: np.ndarray, bl_indices: np.ndarray, n_closest: int = 20, mode='mad'):
+    def calculate_sn(self, peak: dict, mad):
         """
         Calculates S/N ratio for a given peak using the baseline mask to determine local
         noise. If this calculation fails then falls back to avereage noise level for
@@ -1327,34 +1611,22 @@ class IntensityMatrix:
         Params
         ------
         peak                            peak to calculate S/N for
-        row_array                       array for this row of intensity matrix
-        bl_indices                      indices where row noise mask is valid (noise point indices)
-        n_closest                       how far in each direction from center to use for calculation
+        mad                             median absolute deviation for the row
 
         Returns
         -------
         sn_ratio                        signal to noise ratio for this peak
         """
-        
-        center = peak['center']
 
-        # determine n_closest points from baseline mask on either side of our peak
-        left_bl = bl_indices[bl_indices < center][-n_closest:]
-        right_bl = bl_indices[bl_indices > center][:n_closest]
-        local_bl = np.concatenate([left_bl,right_bl])
+        if mad == 0:
+            mad = 1
 
-        if len(local_bl) == 0:
-            return np.nan
-        
-        # calculate RMS deviation
-        bl_signal = row_array[local_bl]
-        noise = np.max(bl_signal) - np.min(bl_signal)       # peak to peak noise, not stdev
+        sn = peak['height'] / mad
 
-        # fallback if baseline for noise has no variation
-        if noise == 0:
-            noise = 1.0
-
-        return peak['height'] / noise
+        if sn > 1000:
+            return 1000
+        else:
+            return sn
 
     def calculate_fwhh(self, peak: dict, row_array: np.ndarray):
         """
@@ -1473,6 +1745,8 @@ class IntensityMatrix:
 
         # if peak is flat top then assign the max to the midpoint
         if max_idx == 0 or max_idx == (right_bound - left_bound):
+            logger.info(f"tentative_baseline: left_bound={left_bound} right_bound={right_bound} "
+                        f"width={right_bound-left_bound} raw_max_idx={max_idx + left_bound}")
             max_idx = (right_bound - left_bound) // 2 
         
         # get the index values of the minimum on the left and on the right of the max

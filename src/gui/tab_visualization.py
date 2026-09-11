@@ -24,8 +24,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-from src.plotting import plot_boxplot, plot_scatter, plot_heatmap, plot_violin, plot_histogram, plot_bar, plot_pdf_table
-import src.plotting as plotting_module
+from src.main_pipeline.plotting import plot_boxplot, plot_scatter, plot_heatmap, plot_violin, plot_histogram, plot_bar, plot_pdf_table
+import src.main_pipeline.plotting as plotting_module
 
 logging.basicConfig(
     level=logging.INFO,

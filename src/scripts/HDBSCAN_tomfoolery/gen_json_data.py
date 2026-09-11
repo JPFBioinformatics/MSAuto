@@ -2,11 +2,11 @@
 # region Imports
 from pathlib import Path
 from datetime import datetime
-from src.mzml_processor import create_scan_matrix
-from src.config_loader import ConfigLoader
+from src.main_pipeline.mzml_processor import create_scan_matrix
+from src.main_pipeline.config_loader import ConfigLoader
 import json
 
-from src.intensity_matrix import IntensityMatrix as IM
+from src.main_pipeline.intensity_matrix import IntensityMatrix as IM
 
 # endregion
 
