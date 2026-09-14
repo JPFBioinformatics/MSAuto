@@ -53,12 +53,12 @@ class IntensityMatrix:
         self.saturation_ceiling = self._detect_saturation_ceiling()
         logger.info(f"Saturation Ceiling: {self.saturation_ceiling:.2e}")
 
-        # embedding matrices
+        """# embedding matrices
         self.first_derivs = np.zeros_like(intensity_matrix, dtype=float)
         self.second_derivs = np.zeros_like(intensity_matrix, dtype=float)
         self.smoothed_signal = np.zeros_like(intensity_matrix, dtype=float)
         self.cwt_scores = np.zeros_like(intensity_matrix, dtype=float)
-        self.cwt_scales = np.zeros_like(intensity_matrix, dtype=float)
+        self.cwt_scales = np.zeros_like(intensity_matrix, dtype=float)"""
 
         # calculate and apply abundnace threshold transformation to intensity matrix
         self.calculate_threshold()
@@ -369,11 +369,15 @@ class IntensityMatrix:
                 'cluster': None,
                 'cwt_score': scores[i],
                 'cwt_scale': scales[i],
-                'ridge_span': ridge_span[i]
+                'ridge_span': ridge_span[i],
+                'dropped': None
             })
 
         # sort maxima by position
         maxima.sort(key=lambda p: p['center'])
+
+        # refine bounds
+        self._refine_bounds(maxima, ion)
 
         # get noise mask for this row
         if mode == 'prom':
@@ -406,6 +410,7 @@ class IntensityMatrix:
             height_count = 0
             if entry['height'] < height_threshold:
                 entry['valid'] = False
+                entry['dropped'] = 'height'
                 height_count += 1
 
             # calculate s/n ratio of entry
@@ -413,6 +418,10 @@ class IntensityMatrix:
             entry['sn_ratio'] = sn_ratio
             if entry['sn_ratio'] < sn_threshold:
                 entry['valid'] = False
+                if entry['dropped'] is None:
+                    entry['dropped'] = 'sn'
+                else:
+                    entry['dropped'] = 'both'
                 sn_count += 1
 
             # add valid entries to new list
@@ -434,12 +443,13 @@ class IntensityMatrix:
         # sort peaks by RT
         valid_peaks = sorted(valid_peaks, key=lambda p: p['center'])
 
+        # reassign baselines
+        self._generate_basline(array, valid_peaks, valid_nm, gap_tol=3, window_size=3)
+
         # get peak indices and finish analysis
         for idx, peak in enumerate(valid_peaks):
             peak['peak_idx'] = idx
             peak['feature'] = None
-
-        self._refine_bounds(maxima, ion)
 
         return valid_peaks, valid_nm, height_threshold
 
@@ -473,7 +483,7 @@ class IntensityMatrix:
         bl_i2 = scan2 - peak['left_bound']
         return bl[bl_i1] + frac * (bl[bl_i2] - bl[bl_i1])
 
-    def _generate_basline(self, signal, maxima, bl_mask, gap_tol=3, window_size=3):
+    def _generate_basline(self, signal, maxima, bl_mask, gap_tol=2, window_size=2):
         """
         adds baseline arrays to a set of maxima by looking at the nearest baseline section on either side
         of a section of signal, finding the minimal value and generating a linaer fit between these two points
@@ -508,7 +518,8 @@ class IntensityMatrix:
             left_idxs = self._nearest_bl_indices(bl_mask, start-1, -1, window_size)
             if len(left_idxs) > 0:
                 x_vals = [left_idxs]
-                y_vals = [signal[left_idxs]]
+                min_left = np.nanmin(signal[left_idxs])
+                y_vals = [np.full(len(left_idxs), min_left)]
             else:
                 synth_x = np.arange(start-window_size, start)
                 x_vals = [synth_x]
@@ -526,7 +537,8 @@ class IntensityMatrix:
             right_idxs = self._nearest_bl_indices(bl_mask, end+1, 1, window_size)
             if len(right_idxs) > 0:
                 x_vals.append(right_idxs)
-                y_vals.append(signal[right_idxs])
+                min_right = np.nanmin(signal[right_idxs])
+                y_vals.append(np.full(len(right_idxs), min_right))
             else:
                 synth_x = np.arange(end + 1, end + 1 + window_size)
                 x_vals.append(synth_x)
@@ -662,8 +674,8 @@ class IntensityMatrix:
 
         # get our RVZ matrices
         R, V, Z, max_scores, max_scales = self._create_RVZ_matrices(coefficients, scales)
-        self.cwt_scores[self.ion_map[ion]] = max_scores
-        self.cwt_scales[self.ion_map[ion]] = max_scales
+        """self.cwt_scores[self.ion_map[ion]] = max_scores
+        self.cwt_scales[self.ion_map[ion]] = max_scales"""
 
         # get ridge coordinates
         ridge_info, rejected_ridges = self._trace_ridges(R, scales, ridge_tol=1, gap_tol=3)
@@ -688,9 +700,9 @@ class IntensityMatrix:
 
         # smooth signal and comptue derivatives
         signal = savgol_filter(raw, window_length=5, polyorder=2)
-        self.first_derivs[self.ion_map[ion]] = savgol_filter(raw, window_length=5, polyorder=2, deriv=1)
+        """self.first_derivs[self.ion_map[ion]] = savgol_filter(raw, window_length=5, polyorder=2, deriv=1)
         self.second_derivs[self.ion_map[ion]] = savgol_filter(raw, window_length=5, polyorder=2, deriv=2)
-        self.smoothed_signal[self.ion_map[ion]] = signal
+        self.smoothed_signal[self.ion_map[ion]] = signal"""
 
         # find local maxima
         local_max_mask = signal == maximum_filter1d(signal,size=5)
@@ -792,8 +804,6 @@ class IntensityMatrix:
         # look for flat-topped peaks at saturation maximum
         saturated_rows = self._find_saturated_rows(self.intensity_matrix[self.ion_map[ion]],
                                                     tol_frac=0.001)
-        if ion == 147:
-            logger.info(f"Ion 147 Saturation:\n{saturated_rows}")
         for start,end in saturated_rows:
             seed_col = (start + end) // 2
             sub_coeffs = coefficients[:, start:end+1]
@@ -845,7 +855,10 @@ class IntensityMatrix:
         return l_bound, r_bound
 
     def _nearest_bounds_fwhh(self, signal, max_scan, min_masks, l=None, r=None):
-
+        """
+        estimates FWHH of peak and uses this to set a filter size for endpoint detection, then uses the valley
+        ratio to 
+        """
         # get min/max filter sizes
         min_filter = self.cfg.get('min_bound_filter_size')
         max_filter = self.cfg.get('max_bound_filter_size')
@@ -858,10 +871,8 @@ class IntensityMatrix:
 
         # estimate local baseline
         local_baseline, n_expansions = self._estimate_local_bl(signal, l, r, max_filter=max_filter,
-                                                 max_expansions=4)
+                                                               max_expansions=4)
         saerch_range = max_filter * (n_expansions+1)
-        if l == 457 and r == 475:
-            logger.info(f"Local_baseline: {local_baseline}")
 
         # compute estimated fwhh
         half_max = local_baseline + (signal[max_scan] - local_baseline) / 2
@@ -905,13 +916,69 @@ class IntensityMatrix:
         abs_idxs = local_min_idxs + low
         local_min_idxs = local_min_idxs[signal[abs_idxs] < peak_val * 0.999]
 
-        # find nearest local minima
+        # get min_mask for lowest filter size for vr check
+        vr_min_mask = min_masks[min_filter][low:high+1]
+        vr_min_idxs = np.where(vr_min_mask)[0]
+
+        # find local minima idxs
         local_max_scan = max_scan - low
         insert_idx = np.searchsorted(local_min_idxs, local_max_scan, side='right')
+
+        # find best left bound
         l_bound = local_min_idxs[insert_idx-1] + low if insert_idx > 0 else low
+        if l_bound > low:
+            l_vr = (signal[l_bound] - local_baseline) / (peak_val - local_baseline + 1e-9)
+            if l_vr > 0.1:
+                l_pos = np.searchsorted(vr_min_idxs, l_bound-low)
+                l_bound = self._find_better_valley(vr_min_idxs, l_pos, -1, signal, low, peak_val, local_baseline,
+                                                l_vr, l_bound, min_improvement=0.2, max_steps=2)
+
+        # find best right bound
         r_bound = local_min_idxs[insert_idx] + low if insert_idx < len(local_min_idxs) else high-1
+        if r_bound < high-1:
+            r_vr = (signal[r_bound] - local_baseline) / (peak_val - local_baseline + 1e-9)
+            if r_vr > 0.1:
+                r_pos = np.searchsorted(vr_min_idxs, r_bound-low)
+                r_bound = self._find_better_valley(vr_min_idxs, r_pos, 1, signal, low, peak_val, local_baseline,
+                                                        r_vr, r_bound, min_improvement=0.2, max_steps=2)
 
         return l_bound, r_bound
+
+    def _find_better_valley(self, local_min_idxs, start_pos, direction, signal, low, peak_val, local_baseline,
+                            current_ratio, fallback_val, min_improvement=0.2, max_steps=2):
+        """
+        Walks out from start position in direction -1 or 1 through local_min_idxs (not full row, local window)
+        looking for a candidate minima which is meaningfully better (smaller valley ratio) than the current
+        one. Returns the best candidate or the origonal if nothing better is found wihin max_steps in the window
+        """
+        if start_pos < 0 or start_pos >= len(local_min_idxs):
+            return fallback_val
+        
+        best_pos = None
+        best_ratio = current_ratio
+
+        pos = start_pos + direction
+        steps = 0
+        while 0 <= pos < len(local_min_idxs) and steps < max_steps:
+
+            if best_ratio <= 1e-4:
+                break
+
+            candidate_idx = local_min_idxs[pos] + low
+            candidate_ratio = (signal[candidate_idx] - local_baseline) / (peak_val - local_baseline + 1e-9)
+
+            if candidate_ratio < best_ratio:
+                improvement = (best_ratio - candidate_ratio) / best_ratio
+                if improvement >= min_improvement:
+                    best_pos = pos
+                    best_ratio = candidate_ratio
+
+            pos += direction
+            steps += 1
+
+        if best_pos is None:
+            return fallback_val
+        return local_min_idxs[best_pos] + low
 
     def _estimate_local_bl(self, signal, l, r, max_filter, max_expansions=4):
 
@@ -1319,6 +1386,9 @@ class IntensityMatrix:
     def _finalize_candidate(self, max_col, max_scale, max_c, scale_range, ion, signal,
                             local_max_idxs, min_masks, coefficients, bl_mask, max_info, 
                             scan_to_idx, can_type='ridge'):
+        """
+        Takes a candidate ridge and tries to define its maxima and endpoints
+        """
 
         cwt_min_scale = self.cfg.get('cwt_min_scale')
         if can_type == 'ridge':

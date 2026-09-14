@@ -785,7 +785,7 @@ def plot_chromatogram(time_array: np.ndarray, intensity_array: np.ndarray,
                 ax.scatter(time_array[rb], intensity_array[rb], color='crimson')
 
             if bl_array is not None:
-                x = np.array([time_array[lb], time_array[rb]])
+                x = np.array(time_array[lb:rb+1])
                 y = bl_array
                 ax.plot(x, y, color = 'crimson', linestyle='--')
 
