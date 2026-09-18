@@ -51,7 +51,8 @@ class IntensityMatrix:
         self.ridge_widths = None
 
         self.saturation_ceiling = self._detect_saturation_ceiling()
-        logger.info(f"Saturation Ceiling: {self.saturation_ceiling:.2e}")
+        logger.info(f"Max signal: {self.saturation_ceiling:.2e}")
+        logger.info(f"Min signal: {np.nanmin(self.intensity_matrix):.2e}")
 
         """# embedding matrices
         self.first_derivs = np.zeros_like(intensity_matrix, dtype=float)
@@ -1693,10 +1694,7 @@ class IntensityMatrix:
 
         sn = peak['height'] / mad
 
-        if sn > 1000:
-            return 1000
-        else:
-            return sn
+        return sn
 
     def calculate_fwhh(self, peak: dict, row_array: np.ndarray):
         """
