@@ -125,26 +125,17 @@ Main Competitors ---------------------------------------------------------------
         WiPP
         MassCube
 
-highest height thresholds with signal areas removed
+Noise Model ---------------------------------------------------------------------------------------------------
 
-Ion 9999: height_threshold = 143960.09321594238
-Ion 147: height_threshold = 21990.48046875
-Ion 129: height_threshold = 2868.9627685546875
-Ion 148: height_threshold = 2845.57275390625
-Ion 299: height_threshold = 2773.58203125
-Ion 103: height_threshold = 2316.093017578125
-Ion 135: height_threshold = 2088.944091796875
-Ion 117: height_threshold = 2066.28857421875
-Ion 133: height_threshold = 1833.7333984375
-Ion 131: height_threshold = 1789.1259765625
-
-Ion 9999: height_threshold = 272595.93475341797
-Ion 147: height_threshold = 38804.724609375
-Ion 148: height_threshold = 6148.37353515625
-Ion 129: height_threshold = 5471.3212890625
-Ion 133: height_threshold = 4767.58740234375
-Ion 103: height_threshold = 4615.4091796875
-Ion 117: height_threshold = 4547.10791015625
-Ion 217: height_threshold = 4088.549560546875
-Ion 149: height_threshold = 3883.076171875
-Ion 131: height_threshold = 3747.10888671875
+We have paried baseline and noise models now, still need to write them to disk for later loading/sampling
+    Metrics to plot:
+        area under BL vs MAD noise
+        Euclidean/Manhattan/Cos distance between BL arrays?
+        n peaks vs area under Bl 
+        n peaks vs MAD noise
+        hihgest area under BL and highest MAD noise rows (top 10)
+        n noise points vs n signal points
+        n fewest noise points ions (top 10)
+    
+We still need to work on the peak model now, we don't need to align peaks for this (implement later).  We will
+take peaks and sample amplitude (height) 

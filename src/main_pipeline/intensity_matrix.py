@@ -11,10 +11,14 @@ import numpy as np
 from scipy.signal import find_peaks, savgol_filter
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, uniform_filter1d
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 from src.main_pipeline.config_loader import ConfigLoader
 from src.main_pipeline.utils import get_run_dir, get_proj_dir, get_run_cfg_path
 from src.main_pipeline.db import insert_im
+from src.main_pipeline.utils import get_app_dir
+
+from src.scripts.helpers import plot_histogram
 
 # logging
 import logging
@@ -71,6 +75,13 @@ class IntensityMatrix:
         peak_mode = cfg.get('peak_mode')
         if detect_peaks:
             self.identify_peaks(self.intensity_matrix, peak_mode)
+
+        # plot distributions of peaks
+        pdf_file = get_app_dir() / 'feature_diagnostics.pdf'
+        peak_counts, cum_heights, bin_starts = self.feature_distributions(resolution_mod=10)
+        with PdfPages(pdf_file) as pdf:
+            features = self.define_features(cum_heights=cum_heights, counts = peak_counts, 
+                                            bin_starts=bin_starts, c_thresh=0, pdf=pdf)
 
     # region                       ---------- Utils ----------
 
@@ -674,7 +685,7 @@ class IntensityMatrix:
         """
 
         # get our RVZ matrices
-        R, V, Z, max_scores, max_scales = self._create_RVZ_matrices(coefficients, scales)
+        R = self._create_R_matrix(coefficients, scales)
         """self.cwt_scores[self.ion_map[ion]] = max_scores
         self.cwt_scales[self.ion_map[ion]] = max_scales"""
 
@@ -699,11 +710,8 @@ class IntensityMatrix:
         # get raw signal
         raw = self.intensity_matrix[self.ion_map[ion]]
 
-        # smooth signal and comptue derivatives
+        # smooth signal
         signal = savgol_filter(raw, window_length=5, polyorder=2)
-        """self.first_derivs[self.ion_map[ion]] = savgol_filter(raw, window_length=5, polyorder=2, deriv=1)
-        self.second_derivs[self.ion_map[ion]] = savgol_filter(raw, window_length=5, polyorder=2, deriv=2)
-        self.smoothed_signal[self.ion_map[ion]] = signal"""
 
         # find local maxima
         local_max_mask = signal == maximum_filter1d(signal,size=5)
@@ -1438,62 +1446,40 @@ class IntensityMatrix:
         scale_range = (scales[np.nanmax(scale_idxs)] - scales[np.nanmin(scale_idxs)])
         return scale_range
 
-    def _create_RVZ_matrices(self, coefficients, scales):
+    def _create_R_matrix(self, coefficients, scales):
         """
         Takes coefficient matrix and identifies Ridge Valley and Zero-crossing positions, storing them
         in R, V, and Z bool matrices respectively
         """
         # initialize bool matrices
         R = np.zeros_like(coefficients, dtype=bool)
-        V = np.zeros_like(coefficients, dtype=bool)
-        Z = np.zeros_like(coefficients, dtype=bool)
 
         # row-by row process coefficients matrix
         smoothed_matrix = np.zeros_like(coefficients)
         for i,row in enumerate(coefficients):
 
-            # get the scale for this row and use it to generate window/power for SG filter
-            """
+            # get scale and pad size
             scale = scales[i]
             k = int(scale)
-            window = k + 1
-            if window % 2 == 0:
-                window += 1
-            order = 1 if window == 3 else 2
-            """
             window = 3
             order = 1
-            k = 1
 
             # SG smooth the row
             smoothed = savgol_filter(row, window_length=window, polyorder=order)
             smoothed_matrix[i] = smoothed
 
-            # find zero crossings
-            signs = np.sign(smoothed)
-            z_row = np.zeros_like(smoothed, dtype=bool)
-            z_row[1:] = signs[1:] != signs[:-1]
-
-            # find local max/min values
+            # find local max values
             local_max = maximum_filter1d(smoothed, size=window)
-            local_min = minimum_filter1d(smoothed, size=window)
             r_row = (smoothed == local_max)
-            v_row = (smoothed == local_min)
 
             # mask first scale (half window) values in r and v rows to False due to implicit padding in filter1d
             r_row[:k] = False
             r_row[-k:] = False
-            v_row[:k] = False
-            v_row[-k:] = False
 
             # save values
-            Z[i,:] = z_row
             R[i,:] = r_row
-            V[i,:] = v_row
-        
-        max_scores, max_scales = self._max_scores_and_scales(smoothed_matrix, scales)
 
-        return R, V, Z, max_scores, max_scales
+        return R
 
     # finds the left or right deconvolution bound for a given maxima, step = 1 for right bound step = -1 for left bound
     def find_bound(self, array, center, step, frac: float = 0.01, max_width: int = 25, sustain_n: int = 3):
@@ -1855,6 +1841,190 @@ class IntensityMatrix:
             'right_bound': right_bound
         }
         return output
+
+    # endregion
+
+    # region                 ---------- Feature Selection -----------
+
+    def _get_allpeaks(self):
+        """
+        generates a flat list of all peaks from the peak dict
+        """
+        allpeaks = []
+        for _, peak_list in self.peak_dict.items():
+            allpeaks.extend(peak_list)
+        return allpeaks
+
+    def feature_distributions(self, resolution_mod:int = 10):
+        """
+        Generates peak count, cumulative height distributions for scans split into resolution_mod sub-bins as
+        well as the start times for these new bins
+
+        Params
+        ------
+        resolution_mod                      number of bins to split each scan into
+
+        Returns
+        -------
+        peak_counts                         number of peaks maximized in each bin
+        cum_heights                         cumulative height of all peaks that maximize in each bin
+        bin_starts                          start time for each bin
+        """
+
+        # get time array for run
+        n_scans = len(self.time_map)
+        times = np.array([self.time_map[i] for i in sorted(self.time_map.keys())])
+
+        # pull out allpeaks and get rt and height arrays (defensive clip rts to min/max time measured)
+        allpeaks = self._get_allpeaks()
+        peak_rts = np.array([peak['rt'] for peak in allpeaks])
+        heights = np.array([peak['height'] for peak in allpeaks])
+        peak_rts = np.clip(peak_rts, times[0], times[-1])
+
+        # find the scan interval each peak's rt exists within (defeinsive clip to 0/second-to-last scan)
+        scan_idxs = np.searchsorted(times, peak_rts, side='right') - 1
+        scan_idxs = np.clip(scan_idxs, 0, len(times)-2)
+
+        # bin to resolution_mod sub-scan intervals
+        scan_duration = times[scan_idxs+1] - times[scan_idxs]
+        frac = (peak_rts - times[scan_idxs]) / scan_duration
+        sub_bin = np.clip((frac*resolution_mod).astype(int), 0, resolution_mod-1)
+
+        # flatten scan_idx, sub_bin into one global bin index
+        global_idx = scan_idxs * resolution_mod + sub_bin
+        n_bins = n_scans * resolution_mod
+
+        # get start times for sub-scan resolution bins
+        scan_starts = times[:-1]
+        scan_ends = times[1:]
+        bin_starts = np.linspace(scan_starts, scan_ends, resolution_mod, endpoint=False, axis=1).ravel()
+        
+        # generate districtuions
+        peak_counts = np.bincount(global_idx, minlength=n_bins)
+        cum_heights = np.bincount(global_idx, weights=heights, minlength=n_bins)
+    
+        # remove last bin from peak_counts and cum_heights because no defined end time for last scan
+        # making it match bin_starts array
+        peak_counts = peak_counts[:len(bin_starts)]
+        cum_heights = cum_heights[:len(bin_starts)]
+
+        return peak_counts, cum_heights, bin_starts
+
+    def define_features(self, cum_heights: np.ndarray, counts: np.ndarray, bin_starts: np.ndarray, c_thresh: float=3, pdf=None):
+        """
+        Uses CWT based peak detection architecture to detect peaks in the cumulative height histogram
+        in order to determine the number of unique clusters in a given full intensity matrix object.
+        CWT is used over prominance to detect overlapping feature distributions more effectively
+        
+        Params
+        ------
+        cum_heights                         cumulative height distributuion for the object
+
+        Returns
+        -------
+        feature_dict                        dictionary of features k:v feature_id : feature_information
+        """
+
+        # get scale array
+        min_a = self.cfg.get('min_a')
+        max_a = self.cfg.get('max_a')
+        max_a /= 2
+        n_scales = self.cfg.get('n_scales')
+        scales = self.get_cwt_scales(min_a,max_a,n_scales)
+
+        # pad array
+        margin = int(8 * np.nanmax(scales))
+        c = np.nanmin(cum_heights)
+        left_pad = np.full(margin,c)
+        right_pad = np.full(margin,c)
+        padded = np.concatenate([left_pad,cum_heights,right_pad])
+
+        # preform CWT transformation, gives coefficients matrix of len(scales) x len(array[12:-12])
+        coefficients, _ = pywt.cwt(padded, scales, wavelet='mexh', method='fft')
+
+        # remove padded sections
+        coefficients = coefficients[:,margin:-margin]
+
+        # generate ridge matrix and trace
+        R = self._create_R_matrix(coefficients, scales)
+        completed_ridges, _ = self._trace_ridges(R, scales, ridge_tol=1, gap_tol=3)
+
+        # generate features based on traced ridges
+        features = []
+        max_cs = []
+        max_as = []
+        scale_ranges = []
+        nsf_count = 0
+        total_ridges = 0
+        for ridge_points, scale_range in completed_ridges:
+            nsf = False
+            cols = {}
+            for (i,j) in ridge_points:
+                coeff = coefficients[i,j]
+                if coeff < 0 and not nsf:
+                    nsf = True
+                cols.setdefault(j, {'coeffs':[], 'scales': []})
+                cols[j]['coeffs'].append(coeff)
+                cols[j]['scales'].append(scales[i])
+
+            max_col, col_max_c, col_max_a, max_count = None, float('-inf'), 0, -1
+            for j, entry in cols.items():
+                c_max = np.nanmax(entry['coeffs'])
+                a_max = entry['scales'][np.nanargmax(entry['coeffs'])]
+                count = len(entry['coeffs'])
+                if count > max_count:
+                    max_col, col_max_a, col_max_c, max_count = j, a_max, c_max, count
+                elif count == max_count:
+                    if c_max > col_max_c:
+                        max_col, col_max_a, col_max_c = j, a_max, c_max
+                    elif c_max == col_max_c and a_max < col_max_a:
+                        max_col, col_max_a = j, a_max
+
+            scale_ranges.append(scale_range)
+            max_cs.append(col_max_c)
+            max_as.append(col_max_a)
+            if nsf:
+                nsf_count += 1
+            total_ridges += 1
+
+            if abs(col_max_c) < c_thresh:
+                continue
+
+            js = [j for _, j in ridge_points]
+            features.append({
+                'center_bin': max_col,
+                'center_time': bin_starts[max_col],
+                'c_max': col_max_c,
+                'a_max': col_max_a,
+                'left_bin': min(js),
+                'right_bin': max(js),
+                'neg_scale_flag': nsf
+            })
+
+        if pdf is not None:
+            plot_histogram(pdf,
+                           f"Ridge Max C\nn_ridges={total_ridges} | neg-c count={nsf_count} | neg frac = {(nsf_count / total_ridges):.2f}",
+                           "c_max", np.array(max_cs), symlog=True)
+            plot_histogram(pdf, f"Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
+            plot_histogram(pdf, f"Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
+
+            for i,val_array in enumerate([cum_heights, counts]):
+                fig,ax = plt.subplots()
+                ax.bar(bin_starts, val_array, width=bin_starts[1] - bin_starts[0])
+                if i==0:
+                    ylabel = 'Cumulative Height'
+                    title = f'Cumulative Heights\nMax={np.nanmax(val_array)} Med={np.nanmedian(val_array)}'
+                else:
+                    ylabel = 'Count'
+                    title = f'Maxima Counts\nMax={np.nanmax(val_array)} Med={np.nanmedian(val_array)}'
+                ax.set_xlabel('Position')
+                ax.set_ylabel(ylabel)
+                ax.set_title(title)
+                pdf.savefig(fig)
+                plt.close(fig)
+
+        return sorted(features, key=lambda f: f['center_bin'])
+
 
     # endregion
 

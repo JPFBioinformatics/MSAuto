@@ -32,9 +32,9 @@ def symlog_bins(values, linthresh=1.0, n_bins=30):
     return np.unique(np.concatenate(edges))
 
 def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values, 
-                   bin_size: int = None, n_bins: int = None, 
+                   bin_size: int = None, n_bins: int = None,
                    symlog: bool = False, linthresh: float = 1.0, 
-                   log: bool = False,rotate_labels: bool = False):
+                   log: bool = False, rotate_labels: bool = False):
     
     fig, ax = plt.subplots()
 
@@ -886,4 +886,3 @@ def load_test_matrices(data_path):
     for sample_name in data.files:
         matrices[sample_name] = data[sample_name]
     return matrices
-

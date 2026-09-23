@@ -162,3 +162,75 @@ Total Scans: 8196
 Avg Time per Scan: 0.005722041239629088
 Stdev: 7.790390331171385e-06
 Pct Err: 0.14
+2026-09-22 14:41:14,032 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-22 14:41:14,978 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-22 14:41:15,696 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-22 14:41:15,698 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-22 14:47:13,525 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-22 14:47:14,677 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-22 14:47:15,458 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-22 14:47:15,460 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-22 14:52:07,761 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-22 14:52:07,763 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-09-22 14:54:50,295 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-22 14:54:51,264 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-22 14:54:51,963 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-22 14:54:51,964 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-22 15:00:04,098 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-22 15:00:04,100 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-09-22 15:20:39,000 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-22 15:20:39,945 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-22 15:20:40,659 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-22 15:20:40,660 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-22 15:25:31,216 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-22 15:25:31,218 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-09-23 14:28:18,384 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-23 14:28:19,604 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-23 14:28:20,700 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-23 14:28:20,704 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-23 14:44:09,850 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-23 14:44:11,953 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-23 14:44:13,264 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-23 14:44:13,267 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-23 15:00:56,806 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-23 15:00:56,810 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-09-23 16:08:00,255 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-23 16:08:01,223 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-23 16:08:01,928 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-23 16:08:01,930 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-23 16:14:09,013 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-23 16:14:09,016 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14
+2026-09-23 16:25:55,093 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-23 16:25:56,202 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-23 16:25:56,988 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-23 16:25:56,990 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-23 16:26:41,944 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Identified
+2026-09-23 16:26:42,904 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 Finsihed mzML parse
+2026-09-23 16:26:43,611 [INFO] src.main_pipeline.intensity_matrix: Max signal: 8.39e+06
+2026-09-23 16:26:43,613 [INFO] src.main_pipeline.intensity_matrix: Min signal: 0.00e+00
+2026-09-23 16:32:51,066 [INFO] src.main_pipeline.mzml_processor: Sample: Int 1 IntensityMatrix Created
+2026-09-23 16:32:51,069 [INFO] src.main_pipeline.mzml_processor: 
+Total Scans: 8196
+Avg Time per Scan: 0.005722041239629088
+Stdev: 7.790390331171385e-06
+Pct Err: 0.14

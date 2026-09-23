@@ -432,7 +432,6 @@ class NoiseModel:
         ol_title = f"Outlier Locations\nTotal Outliers:{n_outliers} Outlier Pct Median:{ol_med:.2f} Outlier Pct MAD:{ol_mad:.2f}"
         plot_histogram(pdf, ol_title, "Scan Idx", self.outlier_locations, bin_size=1)
 
-
         inv_map = {v:k for k,v in self.intensity_matrix.ion_map.items()}
         top10_ol_pct_idxs = np.argsort(ol_pcts)[-10:][::-1]
         top10_ol_pcts = ol_pcts[top10_ol_pct_idxs]

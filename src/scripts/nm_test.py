@@ -21,7 +21,7 @@ def main():
 
     im = create_intensity_matrix(mzml_path, cfg, apply_threshold=True, detect_peaks=True)
 
-    noise_model = NM(intensity_matrix=im, model_name='first_test')
+    #noise_model = NM(intensity_matrix=im, model_name='first_test')
 
 if __name__ == '__main__':
     main()
