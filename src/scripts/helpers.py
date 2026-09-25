@@ -35,6 +35,12 @@ def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values,
                    bin_size: int = None, n_bins: int = None,
                    symlog: bool = False, linthresh: float = 1.0, 
                    log: bool = False, rotate_labels: bool = False):
+
+    values = np.asarray(values)
+
+    if np.any(np.isnan(values)):
+        mask = ~np.isnan(values)
+        values = values[mask]
     
     fig, ax = plt.subplots()
 
@@ -51,11 +57,11 @@ def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values,
     elif n_bins is not None:
         bins = n_bins
     elif bin_size is not None:
-        vmin,vmax = min(values), max(values)
+        vmin,vmax = np.nanmin(values), np.nanmax(values)
         if vmin == vmax:
             bins = [vmin - bin_size /2, vmin + bin_size / 2]
         else:
-            bins = np.arange(min(values), max(values) + bin_size, bin_size)
+            bins = np.arange(np.nanmin(values), np.nanmax(values) + bin_size, bin_size)
     else:
         bins = 'auto'
     if rotate_labels:

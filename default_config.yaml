@@ -33,9 +33,14 @@ height_multiplier: 3                # threshold * MAD noise in local baseline fo
 min_scale_range: 2                  # minimum range of scale values a ridge must pass over to be included as not noise
 min_bound_filter_size: 5            # minimum size for minimum_filter1D size parameter when detecting endpoints
 max_bound_filter_size: 11           # maximum size for minimum_filter1D size parameter when detecting endpoints
-cwt_min_score: 1                    # minimum score from cwt matrix for a ridge to be considered
-cwt_min_scale: 2                    # minimum scale at which a peak maximizes to be considered non-noise
+cwt_min_score: 0                    # minimum score from cwt matrix for a ridge to be considered
+cwt_min_scale: 0                    # minimum scale at which a peak maximizes to be considered non-noise
 max_flat_top_width: 7               # max width in scans that a flat-topped peak would be
+min_width: 2
+
+# feature generation
+# possible 1000 cumheight gate
+
 
 # preprocessing settings
 sparseness_threshold: 0.5           # if ALL groups have >= this fraction of missing data then drop the feature from future analysis

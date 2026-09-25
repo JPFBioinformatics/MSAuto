@@ -55,3 +55,6 @@ peak_metrics_data/
 .venv
 env/
 venv/
+
+# logs
+*.log

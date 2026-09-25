@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
+plot_combos = False
+
 # iteration counter and number of samples
 iter = 1
 n_samples = 250_000
@@ -38,8 +40,9 @@ ms = 100
 cse = 1
 
 # paths
+in_path = Path(r'C:\Jack\Projects\IlyaAura Mouse Labelling\7_10_int1\Int 1.D')
 json_path = Path(f'im_data.json')
-out_path = Path(f'HDBSCAN_optimization_{n_samples/1000}k_{iter}.pdf')
+out_path = Path(f'peak_metrics{n_samples/1000}k_{iter}.pdf')
 
 # region data loading
 
@@ -71,43 +74,20 @@ cwt_max_scores_norm = quantile_normalization(cwt_max_scores)
 cwt_max_scales = np.array(data['cwt_max_scales'], dtype=float)
 cwt_scales_norm = normalize_matrix(cwt_max_scales)
 
-first_derivs = np.array(data['first_derivs'], dtype=float)
-fd_trend = rolling_median_2d(first_derivs, window=51)
-first_derivs_norm = normalize_matrix(first_derivs-fd_trend)
-
-second_derivs = np.array(data['second_derivs'], dtype=float)
-second_derivs_norm = normalize_matrix(second_derivs)
-
-smoothed_signal = np.array(data['smoothed_signal'], dtype=float)
-sm_trend = rolling_median_2d(smoothed_signal, window=51)
-smoothed_signal_norm = normalize_matrix(smoothed_signal-sm_trend)
-
 logger.info("Matrices normalized")
 
 # get shape of the matrices
-n_rows,n_cols = first_derivs_norm.shape
+n_rows,n_cols = cwt_max_scales.shape
 
 # Build a three row matrix to represent each point as a column of 1d, 2d, and signal
 X = np.column_stack([
-    first_derivs_norm.ravel(),
-    second_derivs_norm.ravel(),
-    smoothed_signal_norm.ravel(),
-    #cwt_scales_norm.ravel(),
-    #cwt_scores_norm.ravel()
+    data['height'],
+    data['widths'],
+    data['sn_ratios'],
+    data['cwt_scores'],
+    data['cwt_scales'],
+    data['ridge_spans']
 ])
-names = ['First Derivatives', 'Second Derivatives', 'Smoothed Signal', 'CWT Scales', 'CWT Scores']
-matrices = [first_derivs, second_derivs, smoothed_signal, cwt_max_scales, cwt_max_scores]
-mads = []
-for i,matrix in enumerate(matrices):
-    name = names[i]
-    med = np.nanmedian(matrix, axis=1, keepdims=True)
-    mad = np.nanmedian(np.abs(matrix - med), axis=1, keepdims=True) * 1.4826
-    zoomed = mad[(mad <= 1)]
-    mads.append(zoomed)
-    print(f"\n\nFeature: {name}")
-    print(f"Min MAD across rows: {mad.min()}")
-    print(f"Absolute Min Median across rows: {abs(med).min()}")
-    print(f"Rows with mad < 1e-6: {(mad<1e-6).sum()}")
 
 # sample for dbscan, plotting, and pca
 n_samples = 250_000
@@ -146,29 +126,29 @@ logger.info("PCA Complete")
 
 with PdfPages(out_path) as pdf:
 
-    for i in range(len(mads)):
-        if len(mads[i]) == 0:
-            continue
-        nonzero = mads[i][mads[i] > 0]
-        linthresh = nonzero.min() if len(nonzero) > 0 else 1e-9
-
-        plot_histogram(pdf, title=f'{names[i]} per-ion signal MAD distribution (n={len(mads[i])})',
-                        xlabel='MAD', values=mads[i], symlog=True, linthresh=linthresh, rotate_labels=True)
-
     # d_distance plot 
-    plot_k_distance(pdf, min_samples=20, x_sample=x_sample, trim_pct=99.5, include_table=True, feature_names=names, raw_score_sample=raw_score_sample)
+    feature_names = ['Height', 'Width', 'SN Ratio' 'CWT Scale', 'CWT Score', 'Ridge Span']
+    plot_k_distance(pdf, min_samples=20, x_sample=x_sample, trim_pct=99.5, include_table=True, feature_names=feature_names, raw_score_sample=raw_score_sample)
     logger.info('K Distances Plotted')
 
-    feature_names = ['First Deriv (norm)', 'Second Deriv (norm)', 'Signal (norm)'] #, 'CWT Scale (norm)', 'CWT Score (norm)']
+    if plot_combos:
 
-    # plot pariwise scatter plots of first/second deriv and signal (all normalized)
-    features = [first_derivs_norm.ravel(), second_derivs_norm.ravel(), smoothed_signal_norm.ravel()] #, cwt_scales_norm.ravel(), cwt_scores_norm.ravel()]
-    for i,j in combinations(range(3),2):
-        plot_cluster_hexbin_facets(
-            pdf, f"HDBSCAN Clusters: {feature_names[j]} vs {feature_names[i]}",
-            feature_names[i], feature_names[j],
-            features[i], features[j], labels.ravel()
-        )
+        feature_names = ['Height', 'Width', 'SN Ratio' 'CWT Scale', 'CWT Score', 'Ridge Span']
+        # plot clusters
+        features = [
+            data['height'],
+            data['widths'],
+            data['sn_ratios'],
+            data['cwt_scores'],
+            data['cwt_scales'],
+            data['ridge_spans']
+        ]
+        for i,j in combinations(range(3),2):
+            plot_cluster_hexbin_facets(
+                pdf, f"HDBSCAN Clusters: {feature_names[j]} vs {feature_names[i]}",
+                feature_names[i], feature_names[j],
+                features[i], features[j], labels.ravel()
+            )
 
     # plot multicluster hexbins/scatter on PCA axes
     plot_multicluster_hexbins(pdf, "HDBSCAN Clusters (PCA, full dataset)", "PC1", "PC2",

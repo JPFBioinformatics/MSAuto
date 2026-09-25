@@ -53,6 +53,7 @@ from scipy.stats import gaussian_kde
 from scipy.signal import savgol_filter
 import critband
 from matplotlib.backends.backend_pdf import PdfPages
+from lmfit.models import ExponentialGaussianModel
 
 from src.scripts.helpers import (rolling_median_2d, normalize_matrix)
 from src.main_pipeline.mzml_processor import (full_bulk_convert)
@@ -69,11 +70,6 @@ from pybaselines import Baseline
 # region logging
 
 import logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    filename=Path(__file__).parent.parent / "logs" / "noise_model.log"
-)
 logger = logging.getLogger(__name__)
 
 # endregion
@@ -378,15 +374,11 @@ class NoiseModel:
     def __init__(self,
                  intensity_matrix:IM,
                  model_name:str,
+                 fit_thresh:float = 0.8
                  ):
-
-        # paths
-        self.out_dir = get_app_dir() / 'databases' / 'noise_models' / model_name
-        self.out_dir.mkdir(parents=True, exist_ok=True)
 
         # obj info
         self.model_name = model_name
-        self.intensity_matrix = intensity_matrix
         self.n_rows, self.n_cols = intensity_matrix.intensity_matrix.shape
         self.n_rows -= 1
 
@@ -396,21 +388,71 @@ class NoiseModel:
         self.kde_bandwiths = np.full(self.n_rows, np.nan, dtype=float)
 
         # calculate baseline and noise models, save them and then plot values
-        for ion, i in self.intensity_matrix.ion_map.items():
+        bl_models, noise_models = [], []
+        amplitudes, sigmas, gammas, r2s = [], [], [], []
+        bl_counts, signal_counts = [], []
+        n_peaks = []
+        logger.info("Began Model Fitting")
+        for ion, i in intensity_matrix.ion_map.items():
+
+            # pass if TIC
             if ion == 9999:
                 continue
-            raw_signal = self.intensity_matrix.intensity_matrix[i]
-            noise_mask = self.intensity_matrix.baseline_mask[i].astype(bool)
-            at_start_idxs = self.intensity_matrix.abundance_threshold['start_idxs']
-            at_vals = self.intensity_matrix.abundance_threshold['values'][i]
-            _,_ = self.calculate_bl_and_noise(raw_signal, noise_mask, at_start_idxs, at_vals, ion,
-                                              seg_size=13, end_window=5, outlier_threshold=3.5)
 
-        pdf_file = self.out_dir / 'oc_h_data.pdf'
+            # get raw signal
+            raw_signal = intensity_matrix.intensity_matrix[i]
+
+            # fit baseline/noise models
+            noise_mask = intensity_matrix.baseline_mask[i].astype(bool)
+            bl_counts.append(np.sum(noise_mask))
+            signal_counts.append(len(noise_mask) - np.sum(noise_mask))
+            ion_idx = intensity_matrix.ion_map[ion]
+            at_start_idxs = intensity_matrix.abundance_threshold['start_idxs']
+            at_vals = intensity_matrix.abundance_threshold['values'][i]
+            bl_model, noise_model = self.gen_bl_and_noise_models(raw_signal, noise_mask, at_start_idxs, 
+                                                                 at_vals, ion_idx, seg_size=13, end_window=5, 
+                                                                 outlier_threshold=3.5)
+
+            # fit peak model
+            peak_list = intensity_matrix.peak_dict[ion]
+            n_peaks.append(len(peak_list))
+            for peak in peak_list:
+                a, s, g, r2 = self.gen_peak_model(peak, raw_signal)
+                r2s.append(r2)
+                #if r2 > fit_thresh:
+                amplitudes.append(a)
+                sigmas.append(s)
+                gammas.append(g)
+
+        logger.info("Finished Model Fitting")
+
+        r2s = np.asarray(r2s)
+        amplitudes = np.asarray(amplitudes)
+        sigmas = np.asarray(sigmas)
+        gammas = np.asarray(gammas)
+
+        type_mask = np.array(r2s) == 0
+
+        inf_gammas = gammas[type_mask]
+        logger.info(f"Unique Informed Gammas:\n{np.unique(inf_gammas)}")
+        def_gammas = gammas[~type_mask]
+        logger.info(f"Uniuqe Deefault Gammas:\n{np.unique(def_gammas)}")
+
+        pdf_file = get_app_dir() / 'nm_metrics.pdf'
         with PdfPages(pdf_file) as pdf:
-            self.plot_oc_and_h(pdf)
+            self.plot_oc_and_h(intensity_matrix.ion_map, intensity_matrix.baseline_mask, pdf)
 
-    def plot_oc_and_h(self, pdf):
+            plot_histogram(pdf, "Baseline Points per-row", "N Points", bl_counts)
+            plot_histogram(pdf, "Signal Points per-row", "N Points", signal_counts)
+            plot_histogram(pdf, "Peak Count per-row", "N Peaks", n_peaks)
+
+            #plot_histogram(pdf, "Reduced Chi Squares of EMG Fits", "R2", r2s, log=True)
+            plot_histogram(pdf, "EMG Amplitudes", "Amplitdue", amplitudes, log=True)
+            plot_histogram(pdf, "EMG Sigmas", "Sigma", sigmas, log=True)
+            plot_histogram(pdf, "EMG Gammas Informed", "Gamma", gammas[type_mask], log=True)
+            plot_histogram(pdf, "EMG Gammas Default", "Gamma", gammas[~type_mask], log=True)
+
+    def plot_oc_and_h(self, ion_map, baseline_mask, pdf):
         """
         plots a histogram and table of outliers in KDE and Outleir count values
         """
@@ -424,7 +466,7 @@ class NoiseModel:
         n_bls = np.zeros(self.n_rows)
         ol_pcts = np.zeros(self.n_rows)
         for i in range(self.n_rows):
-            n_bls[i] = np.sum(self.intensity_matrix.baseline_mask[i])
+            n_bls[i] = np.sum(baseline_mask[i])
             ol_pcts[i] = 100 * self.outlier_counts[i] / n_bls[i] if n_bls[i] > 0 else -1
         ol_med = np.nanmedian(ol_pcts)
         ol_mad = np.median(np.abs(ol_pcts - ol_med))
@@ -432,19 +474,19 @@ class NoiseModel:
         ol_title = f"Outlier Locations\nTotal Outliers:{n_outliers} Outlier Pct Median:{ol_med:.2f} Outlier Pct MAD:{ol_mad:.2f}"
         plot_histogram(pdf, ol_title, "Scan Idx", self.outlier_locations, bin_size=1)
 
-        inv_map = {v:k for k,v in self.intensity_matrix.ion_map.items()}
+        inv_map = {v:k for k,v in ion_map.items()}
         top10_ol_pct_idxs = np.argsort(ol_pcts)[-10:][::-1]
         top10_ol_pcts = ol_pcts[top10_ol_pct_idxs]
         top10_pct_ions = [inv_map[idx] for idx in top10_ol_pct_idxs]
         pct_labels = ['Ion', 'Outlier Pct', 'Num Noise Points']
         ol_pct_title = f"Top 10 Ions by Outlier Percent | Total Row Scans:{self.n_cols}"
-        plot_table(pdf,
+        """plot_table(pdf,
                    title=ol_pct_title,
                    data=[
                        [top10_pct_ions[j], f"{top10_ol_pcts[j]:.2f}", f"{n_bls[top10_ol_pct_idxs[j]]}"]
                        for j in range(len(top10_ol_pct_idxs))
                    ],
-                   collabels=pct_labels)
+                   collabels=pct_labels)"""
 
         h_data = self.kde_bandwiths
         h_clean = h_data[~np.isnan(h_data)]
@@ -459,16 +501,16 @@ class NoiseModel:
         top10_h = h_data[top10_h_idxs]
         top10_ions = [inv_map[idx] for idx in top10_h_idxs]
         labels = ['Ion', 'Bandwidth (h)']
-        plot_table(pdf,
+        """plot_table(pdf,
                    title='Top 10 Ions by Bandwith Value',
                    data=[
                        [f"{ion}", f"{val:.2f}"]
                        for ion,val in zip(top10_ions, top10_h)
                    ],
-                   collabels=labels)
+                   collabels=labels)"""
 
-    def calculate_bl_and_noise(self, raw_signal: np.ndarray, noise_mask: np.ndarray, at_start_idxs: list, 
-                                at_vals: np.ndarray, ion: int, seg_size: int=13, end_window: int=5, 
+    def gen_bl_and_noise_models(self, raw_signal: np.ndarray, noise_mask: np.ndarray, at_start_idxs: list, 
+                                at_vals: np.ndarray, ion_idx: int, seg_size: int=13, end_window: int=5, 
                                 outlier_threshold: float=3.5):
         """
         Produces a noise and baseline model for a given row of an intensity matrix
@@ -551,14 +593,91 @@ class NoiseModel:
             corrected_residuals = valid_censored
 
         # save outler info and kde bandwith info
-        row_idx = self.intensity_matrix.ion_map[ion]
-        self.outlier_counts[row_idx] = n_outliers
+        self.outlier_counts[ion_idx] = n_outliers
         self.outlier_locations += outliers
         h = NoiseModel._silverman_rot(corrected_residuals)
-        self.kde_bandwiths[row_idx] = h
+        self.kde_bandwiths[ion_idx] = h
 
         # return the baseline and corrected residuals
         return smoothed_baseline, corrected_residuals
+
+    def _estimate_emg_guess(self, peak):
+        """
+        Estimates satrting paramters for exponentially modified gaussian fit of a peak
+        """
+
+        height = peak['height']
+        fwhh = peak['fwhh']
+        tailing_factor = peak['tailing_factor']
+
+        A_guess = height
+
+        # gaussian estiamte of sigma
+        fwhh_to_sigma = 2 * np.sqrt(2*np.log(2))
+        sigma_guess = fwhh / fwhh_to_sigma
+
+        # estimate gamma from tailing factor (1=symmetric small=right tail large=left tail)
+        #excess_tailing = max(1.0 / tailing_factor - 1, 0.1)
+        excess_tailing = 1.0 / tailing_factor
+        tau_guess = sigma_guess * excess_tailing
+        gamma_guess = 1/tau_guess
+
+        center_guess = peak['center'] - peak['left_bound']
+
+        return A_guess, center_guess, sigma_guess, gamma_guess
+
+    def gen_peak_model(self, peak: dict, raw_signal: np.ndarray):
+        """
+        Models a given peak as an exponentially modified gaussian
+        """
+
+        # get EMG model
+        model = ExponentialGaussianModel()
+
+        # get peak segment and 
+        left = int(peak['left_bound'])
+        right = int(peak['right_bound'])
+        signal = raw_signal[left:right+1]
+        x = np.arange(len(signal))
+        y = signal - peak['baseline']
+
+        # get initial parameter guess
+        if not np.isnan(peak.get('fwhh', np.nan)) and not np.isnan(peak.get('tailing_factor', np.nan)):
+            A_guess, center_guess, sigma_guess, gamma_guess = self._estimate_emg_guess(peak)
+            params = model.make_params(amplitude=A_guess, center=center_guess, sigma=sigma_guess, gamma=gamma_guess)
+            type = 0
+        else:
+            params = model.guess(y,x=x)
+            type = 1
+
+        return(
+            params['amplitude'].value,
+            params['sigma'].value,
+            params['gamma'].value,
+            type
+        )
+
+        """# setup gamma/sigma maxes to prevent overflow
+        K = 20
+        sigma_max = len(y)
+        gamma_max = K / params['sigma'].value
+
+        # fit model
+        params['amplitude'].set(min=0)
+        params['sigma'].set(min=1e-3, max=sigma_max)
+        params['gamma'].set(min=1e-6, max=gamma_max)
+        result = model.fit(y,params,x=x)
+
+        # check for failure, return nothing if failed else return parameters and reduced chi squared measure
+        if not result.success:
+            return None
+        return(
+            result.params['amplitude'].value,
+            result.params['sigma'].value,
+            result.params['gamma'].value,
+            result.redchi
+        )"""
+        
 
     @ staticmethod
     def _detect_censored(raw_signal, abundance_thresholds, start_idxs):

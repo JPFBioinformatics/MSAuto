@@ -17,8 +17,9 @@ from src.main_pipeline.config_loader import ConfigLoader
 from src.main_pipeline.utils import get_run_dir, get_proj_dir, get_run_cfg_path
 from src.main_pipeline.db import insert_im
 from src.main_pipeline.utils import get_app_dir
+from src.main_pipeline.plotting import plot_violin
 
-from src.scripts.helpers import plot_histogram
+from src.scripts.helpers import (plot_histogram, plot_scatter)
 
 # logging
 import logging
@@ -80,8 +81,31 @@ class IntensityMatrix:
         pdf_file = get_app_dir() / 'feature_diagnostics.pdf'
         peak_counts, cum_heights, bin_starts = self.feature_distributions(resolution_mod=10)
         with PdfPages(pdf_file) as pdf:
-            features = self.define_features(cum_heights=cum_heights, counts = peak_counts, 
-                                            bin_starts=bin_starts, c_thresh=0, pdf=pdf)
+            features = self.define_features(cum_heights=cum_heights, counts=peak_counts, 
+                                            bin_starts=bin_starts, pdf=pdf)
+            fwhh_vals = []
+            amp_vals = []
+            tf_vals = []
+            width_vals = []
+            for _, peak_list in self.peak_dict.items():
+                for peak in peak_list:
+                    fwhh_vals.append(peak['fwhh'])
+                    amp_vals.append(peak['height'])
+                    tf_vals.append(peak['tailing_factor'])
+                    width_vals.append(self.time_map[peak['right_bound']] - self.time_map[peak['left_bound']])
+
+            plot_scatter(pdf, "Peak Amplitude vs FWHH by Tailing factor", "FWHH", "log(Amplitude)",
+                         fwhh_vals, amp_vals, tf_vals, 'Tailing Factor Value', yscale='log', xscale='log')
+
+            fwhh_nan = np.sum(np.isnan(fwhh_vals)) / len(fwhh_vals)
+            amp_nan = np.sum(np.isnan(amp_vals)) / len(amp_vals)
+            tf_nan = np.sum(np.isnan(tf_vals)) / len(tf_vals)
+            width_nan = np.sum(np.isnan(width_vals)) / len(width_vals)
+
+            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f}", "FWHH (Min)", fwhh_vals, log=True)
+            plot_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Min)", width_vals, log=True)
+            plot_histogram(pdf, f"Amplitude Distribution\nNaN Frac={amp_nan:.2f}", "Amplitdue", amp_vals, log=True)
+            plot_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor", tf_vals, log=True)
 
     # region                       ---------- Utils ----------
 
@@ -316,6 +340,7 @@ class IntensityMatrix:
         maxima                          list of peaks for this ion's row array
         """
         sn_threshold = self.cfg.get('sn_threshold')
+        width_threshold = self.cfg.get('min_width')
 
         # find maxima
         if mode == 'prom':
@@ -355,6 +380,12 @@ class IntensityMatrix:
                 flat_top = False
                 if abs(l_val-max_val) <= tol or abs(r_val-max_val) <= tol:
                     flat_top = True
+
+            # width filter
+            l_width = peak_max - left_bound
+            r_width = right_bound - peak_max
+            if max(l_width, r_width) < width_threshold:
+                continue
 
             maxima.append({
                 'center': peak_max,
@@ -1400,8 +1431,12 @@ class IntensityMatrix:
         """
 
         cwt_min_scale = self.cfg.get('cwt_min_scale')
+        cwt_min_score = self.cfg.get('cwt_min_score')
+
         if can_type == 'ridge':
-            if max_scale is not None and max_scale <= cwt_min_scale:
+            if max_scale is not None and max_scale < cwt_min_scale:
+                return
+            if max_c is not None and max_c < cwt_min_score:
                 return
 
         if max_col < 12 or max_col >= coefficients.shape[1] - 12:
@@ -1910,7 +1945,7 @@ class IntensityMatrix:
 
         return peak_counts, cum_heights, bin_starts
 
-    def define_features(self, cum_heights: np.ndarray, counts: np.ndarray, bin_starts: np.ndarray, c_thresh: float=3, pdf=None):
+    def define_features(self, cum_heights: np.ndarray, counts: np.ndarray, bin_starts: np.ndarray, pdf=None):
         """
         Uses CWT based peak detection architecture to detect peaks in the cumulative height histogram
         in order to determine the number of unique clusters in a given full intensity matrix object.
@@ -1924,6 +1959,10 @@ class IntensityMatrix:
         -------
         feature_dict                        dictionary of features k:v feature_id : feature_information
         """
+
+        # get params
+        c_thresh = self.cfg.get('cwt_min_score')
+        a_thresh = self.cfg.get('cwt_min_scale')
 
         # get scale array
         min_a = self.cfg.get('min_a')
@@ -1954,9 +1993,11 @@ class IntensityMatrix:
         max_cs = []
         max_as = []
         scale_ranges = []
+        c_mask = np.zeros(len(completed_ridges), dtype=bool)
+        a_mask = np.zeros(len(completed_ridges), dtype=bool)
         nsf_count = 0
         total_ridges = 0
-        for ridge_points, scale_range in completed_ridges:
+        for i,(ridge_points, scale_range) in enumerate(completed_ridges):
             nsf = False
             cols = {}
             for (i,j) in ridge_points:
@@ -1988,6 +2029,11 @@ class IntensityMatrix:
             total_ridges += 1
 
             if abs(col_max_c) < c_thresh:
+                c_mask[i] = 0
+            if col_max_a < a_thresh:
+                a_mask[i] = 0
+
+            if not c_mask[i] or not a_mask[i]:
                 continue
 
             js = [j for _, j in ridge_points]
@@ -2002,29 +2048,34 @@ class IntensityMatrix:
             })
 
         if pdf is not None:
+
             plot_histogram(pdf,
                            f"Ridge Max C\nn_ridges={total_ridges} | neg-c count={nsf_count} | neg frac = {(nsf_count / total_ridges):.2f}",
                            "c_max", np.array(max_cs), symlog=True)
             plot_histogram(pdf, f"Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
             plot_histogram(pdf, f"Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
 
-            for i,val_array in enumerate([cum_heights, counts]):
-                fig,ax = plt.subplots()
-                ax.bar(bin_starts, val_array, width=bin_starts[1] - bin_starts[0])
-                if i==0:
-                    ylabel = 'Cumulative Height'
-                    title = f'Cumulative Heights\nMax={np.nanmax(val_array)} Med={np.nanmedian(val_array)}'
-                else:
-                    ylabel = 'Count'
-                    title = f'Maxima Counts\nMax={np.nanmax(val_array)} Med={np.nanmedian(val_array)}'
-                ax.set_xlabel('Position')
-                ax.set_ylabel(ylabel)
-                ax.set_title(title)
-                pdf.savefig(fig)
-                plt.close(fig)
+            count_mask = counts >= 5
+            cum_heights = cum_heights[count_mask]
+            counts = counts[count_mask]
+
+            nonzero_ch = cum_heights[cum_heights > 0]
+            max_ch = np.nanmax(nonzero_ch)
+            min_ch = np.nanmin(nonzero_ch)
+            med_ch = np.nanmedian(nonzero_ch)
+            mad_ch = np.nanmedian(np.abs(nonzero_ch - med_ch))
+            zero_frac  = 1- len(nonzero_ch) / len(cum_heights)
+            nonzero_counts = counts[counts > 0]
+            max_c = np.nanmax(nonzero_counts)
+            min_c = np.nanmin(nonzero_counts)
+            med_c = np.nanmedian(nonzero_counts)
+            mad_c = np.nanmedian(np.abs(nonzero_counts - med_c))
+            plot_histogram(pdf, f"Cumulative Height Distribution Zero_frac={zero_frac:.2f}\nMax={max_ch:.0f} Min={min_ch:.0f} Med={med_ch:.0f} MAD={mad_ch:.0f}",
+                           "Cumulative Height", nonzero_ch, log=True)
+            plot_histogram(pdf, f"Maxima Count Distribtuion Zero_frac={zero_frac:.2f}\nMax={max_c:.0f} Min={min_c:.0f} Med={med_c:.0f} MAD={mad_c:.0f}",
+                           "Maxima Count", nonzero_counts, bin_size=1)
 
         return sorted(features, key=lambda f: f['center_bin'])
-
 
     # endregion
 

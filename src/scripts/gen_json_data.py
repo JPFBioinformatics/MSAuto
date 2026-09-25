@@ -2,7 +2,7 @@
 # region Imports
 from pathlib import Path
 from datetime import datetime
-from src.main_pipeline.mzml_processor import create_scan_matrix
+from src.main_pipeline.mzml_processor import create_intensity_matrix
 from src.main_pipeline.config_loader import ConfigLoader
 import json
 
@@ -16,7 +16,7 @@ import logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    filename=Path(__file__).parent / "logs" / "gen_json_data.log"
+    filename=Path(__file__).parent.parent / "logs" / "gen_json_data.log"
 )
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ peak_mode = cfg.get('peak_mode')
 
 starttime = datetime.now()
 
-im = create_scan_matrix(file_path, cfg=cfg, apply_threshold = False)
+im = create_intensity_matrix(file_path, cfg=cfg, apply_threshold=True, detect_peaks=True)
 
 endtime = datetime.now()
 
@@ -62,12 +62,7 @@ data = {
     'heights': heights,
     'widths': widths,
     'height_thresholds': height_thresholds,
-    'mzs': [int(mz) for mz in im.unique_mzs],
-    'first_derivs': im.first_derivs.tolist(),
-    'second_derivs': im.second_derivs.tolist(),
-    'smoothed_signal': im.smoothed_signal.tolist(),
-    'cwt_max_scores': im.cwt_scores.tolist(),
-    'cwt_max_scales': im.cwt_scales.tolist()
+    'mzs': [int(mz) for mz in im.unique_mzs]
 }
 
 with open(json_path, 'w') as f:
