@@ -83,16 +83,19 @@ class IntensityMatrix:
         with PdfPages(pdf_file) as pdf:
             features = self.define_features(cum_heights=cum_heights, counts=peak_counts, 
                                             bin_starts=bin_starts, pdf=pdf)
-            fwhh_vals = []
-            amp_vals = []
-            tf_vals = []
-            width_vals = []
+
+            tf_vals, width_vals, amp_vals, fwhh_vals = [], [], [], []
+            cwt_c, cwt_a, ridge_spans = [], [], []
             for _, peak_list in self.peak_dict.items():
                 for peak in peak_list:
                     fwhh_vals.append(peak['fwhh'])
                     amp_vals.append(peak['height'])
                     tf_vals.append(peak['tailing_factor'])
                     width_vals.append(self.time_map[peak['right_bound']] - self.time_map[peak['left_bound']])
+                    cwt_c.append(peak['cwt_score'])
+                    cwt_a.append(peak['cwt_scale'])
+                    ridge_spans.append(peak['ridge_span'])
+
 
             plot_scatter(pdf, "Peak Amplitude vs FWHH by Tailing factor", "FWHH", "log(Amplitude)",
                          fwhh_vals, amp_vals, tf_vals, 'Tailing Factor Value', yscale='log', xscale='log')
@@ -102,10 +105,14 @@ class IntensityMatrix:
             tf_nan = np.sum(np.isnan(tf_vals)) / len(tf_vals)
             width_nan = np.sum(np.isnan(width_vals)) / len(width_vals)
 
-            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f}", "FWHH (Min)", fwhh_vals, log=True)
+            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f} Min={np.nanmin(fwhh_vals)}", "FWHH (Min)", fwhh_vals, log=True)
             plot_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Min)", width_vals, log=True)
             plot_histogram(pdf, f"Amplitude Distribution\nNaN Frac={amp_nan:.2f}", "Amplitdue", amp_vals, log=True)
             plot_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor", tf_vals, log=True)
+            plot_histogram(pdf, f"CWT Max Score distribution\nMax={np.nanmax(cwt_c):.2f}, Med={np.nanmedian(cwt_c):.2f} Min={np.nanmin(cwt_c):.2f}", 
+                           "CWT Max Score", cwt_c, symlog=True)
+            plot_histogram(pdf, f"CWT Max Scale Distribution", "CWT Max Scale", cwt_a, bin_size=1)
+            plot_histogram(pdf, f"CWT Ridge Span Distribution", "Ridge Span", ridge_spans, bin_size=1)
 
     # region                       ---------- Utils ----------
 
@@ -348,10 +355,10 @@ class IntensityMatrix:
             median = np.nanmedian(array)
             mad = np.nanmedian(np.abs(array - median))
             prom = (median +  mad) * prom_mult
-            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span = self._find_maxima_prom(array, prom)
+            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, cwt_neg = self._find_maxima_prom(array, prom)
 
         elif mode == 'cwt':
-            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, bl_mask = self._find_maxima_cwt(array, ion)
+            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, cwt_neg, bl_mask = self._find_maxima_cwt(array, ion)
 
         # list to hold dictionary entries containing left_bound, right_bound and center for each maxima
         maxima = []
@@ -413,6 +420,7 @@ class IntensityMatrix:
                 'cwt_score': scores[i],
                 'cwt_scale': scales[i],
                 'ridge_span': ridge_span[i],
+                'cwt_neg': cwt_neg[i],
                 'dropped': None
             })
 
@@ -653,6 +661,7 @@ class IntensityMatrix:
         scores = np.full(len(max_idxs), np.nan)
         scales = np.full(len(max_idxs), np.nan)
         ridge_span = np.full(len(max_idxs), np.nan)
+        neg_ridges = np.zeros(len(max_idxs), dtype=bool)
 
         return max_idxs, left_bounds, right_bounds, scores, scales, ridge_span
 
@@ -661,7 +670,8 @@ class IntensityMatrix:
         max_info, bl_mask = self.find_peaks_cwt(array, ion, wavelet='mexh')
 
         return (max_info['maxima'], max_info['l_bounds'], max_info['r_bounds'],
-                max_info['scores'], max_info['scales'], max_info['scale_ranges'], bl_mask)
+                max_info['scores'], max_info['scales'], max_info['scale_ranges'],
+                max_info['neg_ridges'], bl_mask)
 
     def find_peaks_cwt(self, array, ion, wavelet='mexh'):
         """
@@ -731,7 +741,8 @@ class IntensityMatrix:
             'scales': [],
             'scores': [],
             'n_ridges': [],
-            'scale_ranges': []
+            'scale_ranges': [],
+            'neg_ridges': []
         }
         scan_to_idx = {}
 
@@ -769,6 +780,7 @@ class IntensityMatrix:
         for ridge, scale_range in ridge_info:
 
             # build dict of cols: points for this ridge
+            neg_ridge = False
             max_c = float('-inf')
             max_a_idx = None
             cols = {}
@@ -776,6 +788,8 @@ class IntensityMatrix:
 
                 # get scale and coefficients of the point
                 coeff = coefficients[i,j]
+                if coeff < 0:
+                    neg_ridge = True
 
                 # add new column if not present in cols
                 if j not in cols:
@@ -830,7 +844,7 @@ class IntensityMatrix:
                 continue
 
             # finalize candidate ridges and save to max_info
-            self._finalize_candidate(max_col, max_scale, max_c, scale_range, ion, signal,
+            self._finalize_candidate(max_col, max_scale, max_c, neg_ridge, scale_range, ion, signal,
                                      local_max_idxs, min_masks, coefficients, bl_mask, 
                                      max_info, scan_to_idx, can_type = 'ridge')
 
@@ -850,7 +864,7 @@ class IntensityMatrix:
             max_a_idx, max_col_idx = np.unravel_index(np.nanargmax(sub_coeffs), sub_coeffs.shape)
             max_c = sub_coeffs[max_a_idx,max_col_idx]
             max_scale = scales[max_a_idx]
-            self._finalize_candidate(seed_col, max_scale, max_c, end-start, ion, signal, 
+            self._finalize_candidate(seed_col, max_scale, max_c, neg_ridge, end-start, ion, signal, 
                                      local_max_idxs, min_masks, coefficients, bl_mask,
                                      max_info, scan_to_idx, can_type = 'flat')
         
@@ -1423,18 +1437,18 @@ class IntensityMatrix:
 
         return seed_cols
 
-    def _finalize_candidate(self, max_col, max_scale, max_c, scale_range, ion, signal,
+    def _finalize_candidate(self, max_col, max_scale, max_c, neg_ridge, scale_range, ion, signal,
                             local_max_idxs, min_masks, coefficients, bl_mask, max_info, 
                             scan_to_idx, can_type='ridge'):
         """
         Takes a candidate ridge and tries to define its maxima and endpoints
         """
 
-        cwt_min_scale = self.cfg.get('cwt_min_scale')
-        cwt_min_score = self.cfg.get('cwt_min_score')
+        cwt_min_scale = 0 #self.cfg.get('cwt_min_scale')
+        cwt_min_score = 0 #self.cfg.get('cwt_min_score')
 
         if can_type == 'ridge':
-            if max_scale is not None and max_scale < cwt_min_scale:
+            if max_scale is not None and abs(max_scale) < cwt_min_scale:
                 return
             if max_c is not None and max_c < cwt_min_score:
                 return
@@ -1461,6 +1475,7 @@ class IntensityMatrix:
             max_info['n_ridges'][idx] += 1
             max_info['l_bounds'][idx] = min(max_info['l_bounds'][idx], l_bound)
             max_info['r_bounds'][idx] = max(max_info['r_bounds'][idx], r_bound)
+            max_info['neg_ridges'][idx] = neg_ridge
             if max_c > max_info['scores'][idx]:
                 max_info['scales'][idx] = max_scale if max_scale is not None else np.nan
                 max_info['scores'][idx] = max_c
@@ -1472,6 +1487,7 @@ class IntensityMatrix:
             max_info['maxima'].append(max_scan)
             max_info['l_bounds'].append(l_bound)
             max_info['r_bounds'].append(r_bound)
+            max_info['neg_ridges'][idx] = neg_ridge
             max_info['scales'].append(max_scale if max_scale is not None else np.nan)
             max_info['scores'].append(max_c)
             max_info['n_ridges'].append(1)      
@@ -2050,10 +2066,10 @@ class IntensityMatrix:
         if pdf is not None:
 
             plot_histogram(pdf,
-                           f"Ridge Max C\nn_ridges={total_ridges} | neg-c count={nsf_count} | neg frac = {(nsf_count / total_ridges):.2f}",
+                           f"Feature Ridge Max C\nn_ridges={total_ridges} | neg-c count={nsf_count} | neg frac = {(nsf_count / total_ridges):.2f}",
                            "c_max", np.array(max_cs), symlog=True)
-            plot_histogram(pdf, f"Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
-            plot_histogram(pdf, f"Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
+            plot_histogram(pdf, f"Feature Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
+            plot_histogram(pdf, f"Feature Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
 
             count_mask = counts >= 5
             cum_heights = cum_heights[count_mask]
@@ -2070,13 +2086,103 @@ class IntensityMatrix:
             min_c = np.nanmin(nonzero_counts)
             med_c = np.nanmedian(nonzero_counts)
             mad_c = np.nanmedian(np.abs(nonzero_counts - med_c))
-            plot_histogram(pdf, f"Cumulative Height Distribution Zero_frac={zero_frac:.2f}\nMax={max_ch:.0f} Min={min_ch:.0f} Med={med_ch:.0f} MAD={mad_ch:.0f}",
+            plot_histogram(pdf, f"Feature Cumulative Height Distribution Zero_frac={zero_frac:.2f}\nMax={max_ch:.0f} Min={min_ch:.0f} Med={med_ch:.0f} MAD={mad_ch:.0f}",
                            "Cumulative Height", nonzero_ch, log=True)
-            plot_histogram(pdf, f"Maxima Count Distribtuion Zero_frac={zero_frac:.2f}\nMax={max_c:.0f} Min={min_c:.0f} Med={med_c:.0f} MAD={mad_c:.0f}",
+            plot_histogram(pdf, f"Feature Maxima Count Distribtuion Zero_frac={zero_frac:.2f}\nMax={max_c:.0f} Min={min_c:.0f} Med={med_c:.0f} MAD={mad_c:.0f}",
                            "Maxima Count", nonzero_counts, bin_size=1)
 
         return sorted(features, key=lambda f: f['center_bin'])
 
+    # endregion
+
+    # region                 ---------- Feature Selection -----------
+    
+    # methods of peaks being likely convoluted
+    def _missing_fwhh_tf(self, peak):
+        if np.isnan(peak.get('fwhh',np.nan)) or np.isnan(peak.get('tailing_factor', np.nan)):
+            return True
+        return False
+    def _has_hidden_feature_overlap(self, peak, features):
+        n_inside = sum(1 for f in features if peak['left_bound'] <= f['center_bin']//10 < peak['right_bound'])
+        return n_inside > 1
+    def _is_width_anomaly(self, peak, sigma_regression, residual_threshold):
+        expected_sigma = sigma_regression(peak['height'])
+        actual_sigma = peak['fwhh'] /  (2 * np.sqrt(2*np.log(2)))
+        return actual_sigma > expected_sigma * residual_threshold
+    def _is_extreme_tailing(self, peak, tf_threshold):
+        tf = peak['tailing_factor']
+        return tf < tf_threshold or tf > (1/ tf_threshold)
+    def _negative_scale(self, peak):
+        return peak['cwt_neg']
+
+    # checks if peak is a deconv candidate of any kind
+    def _is_deconv_candidate(self, peak, features, sigma_regression, tf_threshold, residual_threshold):
+        if self._missing_fwhh_tf(peak):
+            return 'missing_val'
+        if self._has_hidden_feature_overlap(peak, features):
+            return 'feature_overlap'
+        if self._is_width_anomaly(peak, sigma_regression, residual_threshold):
+            return 'width_anomaly'
+        if self._is_extreme_tailing(peak, tf_threshold):
+            return 'extreme_tailing'
+        if self._negative_scale(peak):
+            return 'negative_scale'
+        return False
+
+    def _bound_above_tf(self, peak_height, curr_peak, bound_scan, raw_signal):
+
+        tf_height = peak_height * 0.1
+        bl_at_bound = curr_peak['baseline'][bound_scan - curr_peak['left_bound']]
+        bound_height = raw_signal[bound_scan] - bl_at_bound
+
+        return bound_height > tf_height
+
+    def _find_cluster_span(self, candidate_idx, ion_peaks, fallback_margin=2):
+
+        n = len(ion_peaks)
+
+        left_idx = candidate_idx
+        left_bound_scan = ion_peaks[left_idx]['left_bound']
+        while left_idx > 0 and self._bound_above_tf(ion_peaks[left_idx]['height'],ion_peaks[left_idx-1]):
+            left_idx -= 1
+            if left_idx > 0:
+                left_bound_scan = ion_peaks[left_idx-1]['right_bound']
+            else:
+                left_bound_scan = ion_peaks[left_idx]['left_bound'] - fallback_margin
+        left_bound_scan = max(0,left_bound_scan)
+
+        right_idx = candidate_idx
+        right_bound_scan = ion_peaks[right_idx]['right_bound']
+        while right_idx < n-1 and self._missing_fwhh_tf(ion_peaks[right_idx+1]):
+            right_idx += 1
+            if right_idx < n-1:
+                right_bound_scan = ion_peaks[right_idx+1]['left_bound']
+            else:
+                right_bound_scan = ion_peaks[right_idx]['right_bound'] + fallback_margin
+        right_bound_scan = min(len(self.time_map)-1, right_bound_scan)
+
+        cluster_indices = list(range(left_idx, right_idx+1))
+        return left_bound_scan, right_bound_scan, cluster_indices
+
+    def _estimate_n_from_features(self, candidate_peak, ion_peaks, features, flag_reason):
+
+        idx = ion_peaks.index(candidate_peak)
+
+        if flag_reason in ['missing_val']:
+            # truncated to a point where fwhh/tf cannot be calculated
+            left_scan, right_scan, cluster_indices = self._find_cluster_span(idx, ion_peaks, fallback_margin=2)
+        else:
+            # we have a feature hidden under a larger peak
+            left_scan = candidate_peak['left_bound']
+            right_scan = candidate_peak['right_bound']
+            cluster_indices = [idx]
+
+        # estimate number of peaks that are convoluted
+        left_time = self.time_map[left_scan]
+        right_time = self.time_map[right_scan]
+        n_est = sum(1 for f in features if left_time <= f['center_time'] <= right_time)
+        return max(n_est, 1), cluster_indices
+    
     # endregion
 
     # region                 ---------- Data Collection ----------

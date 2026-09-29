@@ -389,9 +389,11 @@ class NoiseModel:
 
         # calculate baseline and noise models, save them and then plot values
         bl_models, noise_models = [], []
-        amplitudes, sigmas, gammas, r2s = [], [], [], []
+        amplitudes, sigmas, gammas, g_types = [], [], [], []
         bl_counts, signal_counts = [], []
         n_peaks = []
+        tg_fails = 0
+        sg_fails = 0
         logger.info("Began Model Fitting")
         for ion, i in intensity_matrix.ion_map.items():
 
@@ -417,21 +419,29 @@ class NoiseModel:
             peak_list = intensity_matrix.peak_dict[ion]
             n_peaks.append(len(peak_list))
             for peak in peak_list:
-                a, s, g, r2 = self.gen_peak_model(peak, raw_signal)
-                r2s.append(r2)
+                a, s, g, g_type, tg_fail, sg_fail = self.gen_peak_model(peak, raw_signal)
+                g_types.append(g_type)
                 #if r2 > fit_thresh:
                 amplitudes.append(a)
                 sigmas.append(s)
                 gammas.append(g)
+                if tg_fail:
+                    tg_fails += 1
+                if sg_fail:
+                    sg_fails += 1
 
         logger.info("Finished Model Fitting")
 
-        r2s = np.asarray(r2s)
+        g_types = np.asarray(g_types)
         amplitudes = np.asarray(amplitudes)
         sigmas = np.asarray(sigmas)
         gammas = np.asarray(gammas)
 
-        type_mask = np.array(r2s) == 0
+        type_mask = np.array(g_types) == 0
+        n_informed = np.sum(type_mask)
+
+        nan_mask = np.array(np.isnan(gammas))
+        nan_gammas = np.sum(nan_mask)
 
         inf_gammas = gammas[type_mask]
         logger.info(f"Unique Informed Gammas:\n{np.unique(inf_gammas)}")
@@ -448,9 +458,8 @@ class NoiseModel:
 
             #plot_histogram(pdf, "Reduced Chi Squares of EMG Fits", "R2", r2s, log=True)
             plot_histogram(pdf, "EMG Amplitudes", "Amplitdue", amplitudes, log=True)
-            plot_histogram(pdf, "EMG Sigmas", "Sigma", sigmas, log=True)
-            plot_histogram(pdf, "EMG Gammas Informed", "Gamma", gammas[type_mask], log=True)
-            plot_histogram(pdf, "EMG Gammas Default", "Gamma", gammas[~type_mask], log=True)
+            plot_histogram(pdf, f"EMG Sigmas\nMax={np.nanmax(sigmas)} Med={np.nanmedian(sigmas)}", "Sigma", sigmas, log=True)
+            plot_histogram(pdf, f"EMG Gammas\nn_informed={n_informed} n_uninformed={len(gammas)-n_informed} Max={np.nanmax(gammas)}\nTG_fails={tg_fails} SG_fails={sg_fails} Nans={nan_gammas}", "Gamma", gammas, log=True)
 
     def plot_oc_and_h(self, ion_map, baseline_mask, pdf):
         """
@@ -606,11 +615,17 @@ class NoiseModel:
         Estimates satrting paramters for exponentially modified gaussian fit of a peak
         """
 
+        # peak params
         height = peak['height']
         fwhh = peak['fwhh']
         tailing_factor = peak['tailing_factor']
 
+        # amplitude guess
         A_guess = height
+
+        # counters and base gamma_guess value
+        sg_fail = False
+        tg_fail = False
 
         # gaussian estiamte of sigma
         fwhh_to_sigma = 2 * np.sqrt(2*np.log(2))
@@ -618,13 +633,22 @@ class NoiseModel:
 
         # estimate gamma from tailing factor (1=symmetric small=right tail large=left tail)
         #excess_tailing = max(1.0 / tailing_factor - 1, 0.1)
-        excess_tailing = 1.0 / tailing_factor
+        excess_tailing = 1.0 / tailing_factor - 1
         tau_guess = sigma_guess * excess_tailing
-        gamma_guess = 1/tau_guess
+        if sigma_guess == 0:
+            sg_fail = True
+        if excess_tailing == 0:
+            tg_fail= True
+
+        # calculate gamma guess
+        if tau_guess == 0:
+            gamma_guess = np.nan
+        else:
+            gamma_guess = 1 / tau_guess
 
         center_guess = peak['center'] - peak['left_bound']
 
-        return A_guess, center_guess, sigma_guess, gamma_guess
+        return A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail
 
     def gen_peak_model(self, peak: dict, raw_signal: np.ndarray):
         """
@@ -641,20 +665,29 @@ class NoiseModel:
         x = np.arange(len(signal))
         y = signal - peak['baseline']
 
+        # add metric guess uability checks
+        fwhh_uable = not np.isnan(peak.get('fwhh', np.nan)) and peak['fwhh'] > 1e-9
+        tf_usable = not np.isnan(peak.get('tailing_factor', np.nan))
+
         # get initial parameter guess
-        if not np.isnan(peak.get('fwhh', np.nan)) and not np.isnan(peak.get('tailing_factor', np.nan)):
-            A_guess, center_guess, sigma_guess, gamma_guess = self._estimate_emg_guess(peak)
+        if fwhh_uable and tf_usable:
+            A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail = self._estimate_emg_guess(peak)
             params = model.make_params(amplitude=A_guess, center=center_guess, sigma=sigma_guess, gamma=gamma_guess)
+            params['gamma'].set(max=None)
             type = 0
         else:
             params = model.guess(y,x=x)
             type = 1
+            tg_fail = False
+            sg_fail = False
 
         return(
             params['amplitude'].value,
             params['sigma'].value,
             params['gamma'].value,
-            type
+            type,
+            tg_fail,
+            sg_fail
         )
 
         """# setup gamma/sigma maxes to prevent overflow
@@ -907,6 +940,7 @@ class NoiseModel:
         else:
             mad = np.nanmedian(np.abs(array - np.nanmedian(array))) * 1.4826
             return 0.9  * min(std, mad) * n**(-1/5)
+            
         
 
 # endregion
