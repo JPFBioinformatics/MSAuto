@@ -34,7 +34,8 @@ def symlog_bins(values, linthresh=1.0, n_bins=30):
 def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values, 
                    bin_size: int = None, n_bins: int = None,
                    symlog: bool = False, linthresh: float = 1.0, 
-                   log: bool = False, rotate_labels: bool = False):
+                   log: bool = False, rotate_labels: bool = False,
+                   title_fontsize: int=None):
 
     values = np.asarray(values)
 
@@ -47,8 +48,6 @@ def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values,
     if symlog:
         bins = symlog_bins(values, linthresh=linthresh, n_bins = n_bins or 30)
         ax.set_xscale('symlog', linthresh=linthresh)
-        if np.all(np.asarray(values) >= 0):
-            ax.set_xlim(left=0)
     elif log:
         vals = np.asarray(values)
         vals = vals[np.isfinite(vals) & (vals > 0)]
@@ -68,9 +67,11 @@ def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values,
         plt.setp(ax.get_xticklabels(), rotation=50, ha='right')
 
     ax.hist(values, bins=bins)
+    if symlog and np.all(values >= 0):
+        ax.set_xlim(left=0)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Count")
-    ax.set_title(title)
+    ax.set_title(title, fontsize=title_fontsize)
 
     pdf.savefig(fig)
     plt.close(fig)

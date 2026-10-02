@@ -45,6 +45,9 @@ PEAK MODEL
 """
 
 # region Imports
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import json
 from pathlib import Path
 from wqio.ros import ROS
 import pandas as pd
@@ -53,7 +56,10 @@ from scipy.stats import gaussian_kde
 from scipy.signal import savgol_filter
 import critband
 from matplotlib.backends.backend_pdf import PdfPages
-from lmfit.models import ExponentialGaussianModel
+from lmfit.models import GaussianModel
+from collections import Counter
+from scipy.special import erfc, erfcx
+from lmfit import Model
 
 from src.scripts.helpers import (rolling_median_2d, normalize_matrix)
 from src.main_pipeline.mzml_processor import (full_bulk_convert)
@@ -364,104 +370,218 @@ def calculate_arr_baseline(arr, min=0, max=12, n_tests=40, min_noise=1e-6):
 
     return baseline, l_lam, v_lam, relmad, curvature
 
-
-
 # endregion
 
 # region model production
 
 class NoiseModel:
     def __init__(self,
-                 intensity_matrix:IM,
+                 cache_dirs,
                  model_name:str,
-                 fit_thresh:float = 0.8
+                 bic_margin: float = 2.0,
+                 n_workers: int = None
                  ):
 
         # obj info
         self.model_name = model_name
-        self.n_rows, self.n_cols = intensity_matrix.intensity_matrix.shape
-        self.n_rows -= 1
+        self.bic_margin = bic_margin
+        cache_dirs = [Path(d) for d in cache_dirs]
 
-        # procesing data
-        self.outlier_counts = np.full(self.n_rows, np.nan, dtype=float)
-        self.outlier_locations = np.zeros(self.n_cols, dtype=int)
-        self.kde_bandwiths = np.full(self.n_rows, np.nan, dtype=float)
+        # per-sample info from cahce metadata
+        self.samples = {}
+        tasks = []
+        for d in cache_dirs:
+            with open (d / 'cache_meta.json') as f:
+                meta = json.load(f)
+            name = meta['sample']
+            if name in self.samples:
+                name = f"{name}_{d.name}"
+            self.samples[name] = {
+                'cache_dir': str(d),
+                'scan_interval': meta['scan_interval'],
+                'n_scans': meta['n_scans']
+            }
+            for ion, row in meta['ion_rows'].items():
+                tasks.append({
+                    'cache_dir': str(d),
+                    'sample': name,
+                    'ion': float(ion),
+                    'row': row,
+                    'n_peaks': meta['n_peaks_by_ion'][ion]
+                })
+        tasks.sort(key=lambda t: t['n_peaks'], reverse=True)  # process longest rows first
 
-        # calculate baseline and noise models, save them and then plot values
-        bl_models, noise_models = [], []
-        amplitudes, sigmas, gammas, g_types = [], [], [], []
-        bl_counts, signal_counts = [], []
-        n_peaks = []
-        tg_fails = 0
-        sg_fails = 0
-        logger.info("Began Model Fitting")
-        for ion, i in intensity_matrix.ion_map.items():
+        # one BLAS thread per worker (st before workers start)
+        os.environ['OMP_NUM_THREADS'] = '1'
+        os.environ['MKL_NUM_THREADS'] = '1'
+        os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-            # pass if TIC
-            if ion == 9999:
-                continue
-
-            # get raw signal
-            raw_signal = intensity_matrix.intensity_matrix[i]
-
-            # fit baseline/noise models
-            noise_mask = intensity_matrix.baseline_mask[i].astype(bool)
-            bl_counts.append(np.sum(noise_mask))
-            signal_counts.append(len(noise_mask) - np.sum(noise_mask))
-            ion_idx = intensity_matrix.ion_map[ion]
-            at_start_idxs = intensity_matrix.abundance_threshold['start_idxs']
-            at_vals = intensity_matrix.abundance_threshold['values'][i]
-            bl_model, noise_model = self.gen_bl_and_noise_models(raw_signal, noise_mask, at_start_idxs, 
-                                                                 at_vals, ion_idx, seg_size=13, end_window=5, 
-                                                                 outlier_threshold=3.5)
-
-            # fit peak model
-            peak_list = intensity_matrix.peak_dict[ion]
-            n_peaks.append(len(peak_list))
-            for peak in peak_list:
-                a, s, g, g_type, tg_fail, sg_fail = self.gen_peak_model(peak, raw_signal)
-                g_types.append(g_type)
-                #if r2 > fit_thresh:
-                amplitudes.append(a)
-                sigmas.append(s)
-                gammas.append(g)
-                if tg_fail:
-                    tg_fails += 1
-                if sg_fail:
-                    sg_fails += 1
-
+        # fit all rows of all samples in a single pool
+        n_workers = n_workers or max(1, (os.cpu_count() or 2) -1)
+        logger.info(f"Began Model Fitting: {len(self.samples)} samples, {len(tasks)} rows, {n_workers} workers")
+        results = []
+        with ProcessPoolExecutor(max_workers=n_workers, initializer=_init_worker,
+                                 initargs=(self.bic_margin,)) as ex:
+            futures = [ex.submit(_run_ion, t) for t in tasks]
+            for k,fut in enumerate(as_completed(futures), 1):
+                results.append(fut.result())
+                if k%50 == 0 or k == len(tasks):
+                    logger.info(f"{k}/{len(tasks)} rows done")
         logger.info("Finished Model Fitting")
 
-        g_types = np.asarray(g_types)
-        amplitudes = np.asarray(amplitudes)
-        sigmas = np.asarray(sigmas)
-        gammas = np.asarray(gammas)
+        # merge results
+        results.sort(key=lambda r: (r['sample'], r['row']))
+        self.exec_counter = Counter()
+        fits = []
+        self.bl_models, self.noise_models = {}, {}
+        self.at_vals = {}
+        max_scans = max(s['n_scans'] for s in self.samples.values())
+        self.outlier_locations = np.zeros(max_scans,dtype=int)
+        for r in results:
+            key = (r['sample'], r['ion'])
+            self.bl_models[key] = r['baseline']
+            self.noise_models[key] = r['residuals']
+            self.at_vals[key] = r['at_vals']
+            self.outlier_locations[:len(r['outliers'])] += r['outliers']
+            self.exec_counter.update(r['errors'])
+            fits.extend(r['fits'])
+        logger.info(f"Fit Errors:\n{self.exec_counter.most_common(10)}")
 
-        type_mask = np.array(g_types) == 0
-        n_informed = np.sum(type_mask)
+        # tables
+        row_cols = ('sample', 'ion', 'row', 'n_outliers', 'kde_h', 'bl_count', 'signal_count', 'n_peaks')
+        self.row_df = pd.DataFrame([{k: r[k] for k in row_cols} for r in results])
+        self.row_df['model_name'] = self.model_name
+        self.fits_df = pd.DataFrame(fits)
+        self.fits_df['model_name'] = self.model_name
 
-        nan_mask = np.array(np.isnan(gammas))
-        nan_gammas = np.sum(nan_mask)
+        # pooled arrays so plot_oc_and_h works unchanged
+        self.outlier_counts = self.row_df['n_outliers'].to_numpy(dtype=float)
+        self.kde_bandwiths = self.row_df['kde_h'].to_numpy(dtype=float)
+        self.n_rows = len(self.row_df)
 
-        inf_gammas = gammas[type_mask]
-        logger.info(f"Unique Informed Gammas:\n{np.unique(inf_gammas)}")
-        def_gammas = gammas[~type_mask]
-        logger.info(f"Uniuqe Deefault Gammas:\n{np.unique(def_gammas)}")
+        # collect fit resutls (shorter name for easy typing)
+        fits_df = self.fits_df
 
-        pdf_file = get_app_dir() / 'nm_metrics.pdf'
+        # save fit results
+        fits_file = get_app_dir() / 'databases' / 'noise_models' / f'{self.model_name}_peak_fits.csv'
+        fits_df.to_csv(fits_file, index=False)
+        logger.info(f"Saved {len(fits_df)} peak fits to {fits_file}")
+
+        # summary
+        is_emg = fits_df['model'] == 'emg'
+        is_gauss = fits_df['model'] == 'gauss'
+        is_front = fits_df['fronting'] & is_emg
+        logger.info(f"Fit status counts:\n{fits_df['status'].value_counts(dropna=False)}")
+        logger.info(f"Model Counts:\n{pd.crosstab(fits_df['model'], fits_df['fronting'])}")
+        logger.info(f"Fit Errors: {self.exec_counter.most_common(10)}")
+
+        # prepare fit result plotting info
+        df = fits_df
+        is_emg = is_emg.to_numpy()
+        is_gauss = is_gauss.to_numpy()
+        is_front = is_front.to_numpy()
+        is_tail = is_emg & ~is_front
+        fit_ok = df['status'].isin(['ok', 'no_errorbars']).to_numpy()
+
+        n_total = len(df)
+        n_informed = int((df['guess_type'] == 0).sum())
+        n_ok = int((df['status'] == 'ok').sum())
+        n_noerr = int((df['status'] == 'no_errorbars').sum())
+        n_failed = int((df['status'] == 'both_failed').sum())
+        n_short = int((df['status'] == 'short').sum())
+        tg_fails = int(df['tg_fail'].sum())
+        sg_fails = int(df['sg_fail'].sum())
+
+        # tail length relative to wdith, scale free shape metric (tau / sigma = 1 / (gamma * sigma))
+        tau_over_sigma = 1.0 / (df['gamma'] * df['sigma'])
+
+        # pct formatter
+        def pct(k):
+            return f"{100 * k / max(n_total,1):.2f}%"
+
+        # out directory
+        out_dir = get_app_dir()/ 'databases' / 'noise_models' / self.model_name
+        out_dir.mkdir(exist_ok=True, parents=True)
+        pdf_file = out_dir / 'nm_metrics.pdf'
+
         with PdfPages(pdf_file) as pdf:
-            self.plot_oc_and_h(intensity_matrix.ion_map, intensity_matrix.baseline_mask, pdf)
 
-            plot_histogram(pdf, "Baseline Points per-row", "N Points", bl_counts)
-            plot_histogram(pdf, "Signal Points per-row", "N Points", signal_counts)
-            plot_histogram(pdf, "Peak Count per-row", "N Peaks", n_peaks)
+            # plot outlier counts and KDE results
+            self.plot_oc_and_h(self.row_df['bl_count'].to_numpy(), pdf)
 
-            #plot_histogram(pdf, "Reduced Chi Squares of EMG Fits", "R2", r2s, log=True)
-            plot_histogram(pdf, "EMG Amplitudes", "Amplitdue", amplitudes, log=True)
-            plot_histogram(pdf, f"EMG Sigmas\nMax={np.nanmax(sigmas)} Med={np.nanmedian(sigmas)}", "Sigma", sigmas, log=True)
-            plot_histogram(pdf, f"EMG Gammas\nn_informed={n_informed} n_uninformed={len(gammas)-n_informed} Max={np.nanmax(gammas)}\nTG_fails={tg_fails} SG_fails={sg_fails} Nans={nan_gammas}", "Gamma", gammas, log=True)
+            # plot row information
+            plot_histogram(pdf, "Baseline Points per-row", "N Points", self.row_df['bl_count'])
+            plot_histogram(pdf, "Signal Points per-row", "N Points", self.row_df['signal_count'])
+            plot_histogram(pdf, "Peak Count per-row", "N Peaks", self.row_df['n_peaks'])
 
-    def plot_oc_and_h(self, ion_map, baseline_mask, pdf):
+
+            # fit outcome summary table
+            outcome = pd.crosstab(df['status'].fillna('none'),
+                                  df['model'].fillna('none'), margins=True)
+            plot_table(pdf, f"Peak Fit Outcomes (n={n_total}, informed={n_informed}, "
+                            f"TG_fails={tg_fails}, SG_fails={sg_fails})",
+                       [[idx] + list(row) for idx, row in outcome.iterrows()],
+                       ['status'] + list(outcome.columns))
+
+            # model choice
+            self._hist(pdf, f"Delta BIC (gauss - emg), >{bic_margin} = EMG chosen\n"
+                            f"EMG={is_emg.sum()} ({pct(is_emg.sum())}) "
+                            f"Gauss={is_gauss.sum()} ({pct(is_gauss.sum())}) "
+                            f"Fronting={is_front.sum()}",
+                       "Delta BIC", df['delta_bic'], symlog=True, title_fontsize=10)
+
+            # amplitudes
+            self._hist(pdf, f"Amplitudes (area), all fitted\nok={n_ok} no_errbars={n_noerr}",
+                       "Amplitude", df.loc[fit_ok, 'amplitude'], log=True)
+
+            # sigmas by model
+            for mask, name in [(is_gauss, "Gaussian"), (is_emg, "EMG")]:
+                s = df.loc[mask, 'sigma']
+                if len(s):
+                    self._hist(pdf, f"Sigma ({name}), n={len(s)}\n"
+                                    f"Med={np.nanmedian(s):.2f} Max={np.nanmax(s):.2f} scans",
+                               "Sigma (scans)", s, log=True)
+
+            # gammas by direction
+            for mask, name in [(is_tail, "tailing"), (is_front, "fronting")]:
+                g = df.loc[mask, 'gamma']
+                if len(g):
+                    at_bound = int((g >= 9.99).sum() + (g <= 0.0101).sum())
+                    self._hist(pdf, f"Gamma (EMG {name}), n={len(g)}\n"
+                                    f"Med={np.nanmedian(g):.2f} at_bounds={at_bound}",
+                               "Gamma (1/scans)", g, log=True)
+
+            # tail shape, scale-free
+            self._hist(pdf, "Tail length / width (tau/sigma), EMG only\n<0.3 ~ gaussian-like, >1 = strong tail",
+                       "tau / sigma", tau_over_sigma[is_emg], log=True)
+
+            # fit quality
+            self._hist(pdf, f"Reduced Chi-Squared (chosen model)\nok={n_ok} no_errbars={n_noerr} "
+                            f"both_failed={n_failed} short={n_short}",
+                       "Redchi", df.loc[fit_ok, 'redchi'], log=True, title_fontsize=10)
+
+            # where do failures come from
+            self._hist(pdf, f"Peak height: fitted (n={fit_ok.sum()})", "Height",
+                       df.loc[fit_ok, 'height'], log=True)
+            self._hist(pdf, f"Peak height: failed/short (n={(~fit_ok).sum()})", "Height",
+                       df.loc[~fit_ok, 'height'], log=True)
+            self._hist(pdf, f"Window size: failed/short (n={(~fit_ok).sum()})", "N points",
+                       df.loc[~fit_ok, 'n_points'], bin_size=1)
+    @staticmethod
+    def _hist(pdf, title, xlabel, values, **kwargs):
+        """
+        plot_hisogram wrapper that skips bad values
+        """
+        vals = np.asarray(values, dtype=float)
+        vals = vals[np.isfinite(vals)]
+        if kwargs.get('log'):
+            vals = vals[vals>0]
+        if len(vals) == 0:
+            logger.info(f"Skipped plot '{title.splitlines()[0]}' (no data)")
+            return
+        plot_histogram(pdf, title, xlabel, vals, **kwargs)
+
+    def plot_oc_and_h(self, baseline_mask, pdf):
         """
         plots a histogram and table of outliers in KDE and Outleir count values
         """
@@ -483,20 +603,6 @@ class NoiseModel:
         ol_title = f"Outlier Locations\nTotal Outliers:{n_outliers} Outlier Pct Median:{ol_med:.2f} Outlier Pct MAD:{ol_mad:.2f}"
         plot_histogram(pdf, ol_title, "Scan Idx", self.outlier_locations, bin_size=1)
 
-        inv_map = {v:k for k,v in ion_map.items()}
-        top10_ol_pct_idxs = np.argsort(ol_pcts)[-10:][::-1]
-        top10_ol_pcts = ol_pcts[top10_ol_pct_idxs]
-        top10_pct_ions = [inv_map[idx] for idx in top10_ol_pct_idxs]
-        pct_labels = ['Ion', 'Outlier Pct', 'Num Noise Points']
-        ol_pct_title = f"Top 10 Ions by Outlier Percent | Total Row Scans:{self.n_cols}"
-        """plot_table(pdf,
-                   title=ol_pct_title,
-                   data=[
-                       [top10_pct_ions[j], f"{top10_ol_pcts[j]:.2f}", f"{n_bls[top10_ol_pct_idxs[j]]}"]
-                       for j in range(len(top10_ol_pct_idxs))
-                   ],
-                   collabels=pct_labels)"""
-
         h_data = self.kde_bandwiths
         h_clean = h_data[~np.isnan(h_data)]
         h_nans = np.sum(np.isnan(h_data))
@@ -505,18 +611,6 @@ class NoiseModel:
         h_mad = np.nanmedian(np.abs(h_data - h_median))
         h_title = f"KDE h values NaN's:{h_nans} | Successes:{h_nums}\nMedian:{h_median:.2f} | MAD:{h_mad:.2f} | Min:{np.nanmin(h_clean):.2f} | Max:{np.nanmax(h_clean):.2f}"
         plot_histogram(pdf, h_title, "KDE Bandwithd (h)", h_clean, log=True)
-
-        top10_h_idxs = np.argsort(h_data)[-10:][::-1]
-        top10_h = h_data[top10_h_idxs]
-        top10_ions = [inv_map[idx] for idx in top10_h_idxs]
-        labels = ['Ion', 'Bandwidth (h)']
-        """plot_table(pdf,
-                   title='Top 10 Ions by Bandwith Value',
-                   data=[
-                       [f"{ion}", f"{val:.2f}"]
-                       for ion,val in zip(top10_ions, top10_h)
-                   ],
-                   collabels=labels)"""
 
     def gen_bl_and_noise_models(self, raw_signal: np.ndarray, noise_mask: np.ndarray, at_start_idxs: list, 
                                 at_vals: np.ndarray, ion_idx: int, seg_size: int=13, end_window: int=5, 
@@ -589,7 +683,7 @@ class NoiseModel:
         valid_censored = censored[valid]
         valid_residuals = residuals[valid]
         
-        if censored.any():
+        if censored.any() and len(valid_residuals) >= 3:
             df = pd.DataFrame({'residual': valid_residuals,
                               'censored': valid_censored})
             corrected_residuals = ROS(
@@ -599,20 +693,62 @@ class NoiseModel:
                 as_array=True
             )
         else:
-            corrected_residuals = valid_censored
+            corrected_residuals = valid_residuals
 
         # save outler info and kde bandwith info
-        self.outlier_counts[ion_idx] = n_outliers
-        self.outlier_locations += outliers
-        h = NoiseModel._silverman_rot(corrected_residuals)
-        self.kde_bandwiths[ion_idx] = h
+        h = NoiseModel._silverman_rot(corrected_residuals) if len(corrected_residuals) >= 2 else np.nan
 
         # return the baseline and corrected residuals
-        return smoothed_baseline, corrected_residuals
+        return smoothed_baseline, corrected_residuals, n_outliers, outliers, h
 
-    def _estimate_emg_guess(self, peak):
+    def save_data(self):
+        """
+        saves models to <app_dir>/noise_models/<model_name>/
+                        peak_fits.csv, row_stats.csv, model_meta.json, <sample>/bl_noise.npz
+        """
+        out_dir = get_app_dir() / 'noise_models' / self.model_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # combined tables
+        self.fits_df.to_csv(out_dir / 'peak_fits.csv', index=False)
+        self.row_df.to_csv(out_dir / 'row_stats.csv', index=False)
+
+        # per-sample baselines and residuals (scan counts can differ between samples)
+        for name in self.samples:
+            keys = [k for k in self.bl_models if k[0] == name]
+            ions = np.array([k[1] for k in keys])
+            residuals = [self.noise_models[k] for k in keys]
+            offsets = np.concatenate([[0], np.cumsum([len(r) for r in residuals])]).astype(np.int64)
+            at_start_idxs = np.load(Path(self.samples[name]['cache_dir']) / 'at_start_idxs.npy')
+
+            sample_dir = out_dir / name
+            sample_dir.mkdir(exist_ok=True)
+            np.savez_compressed(
+                sample_dir / 'bl_noise.npz',
+                ions=ions,
+                baselines=np.vstack([self.bl_models[k] for k in keys]),
+                at_values=np.vstack([self.at_vals[k] for k in keys]),
+                at_start_idxs=at_start_idxs,
+                residuals_flat=np.concatenate(residuals) if residuals else np.array([]),
+                residual_offsets=offsets,
+            )
+
+        meta = {
+            'model_name': self.model_name,
+            'bic_margin': self.bic_margin,
+            'samples': self.samples,                      # name -> scan_interval, n_scans
+            'n_rows': int(len(self.row_df)),
+            'n_peaks': int(len(self.fits_df)),
+        }
+        with open(out_dir / 'model_meta.json', 'w') as f:
+            json.dump(meta, f, indent=2)
+
+        logger.info(f"Saved noise model '{self.model_name}' ({len(self.samples)} samples) to {out_dir}")
+
+    def _estimate_emg_guess(self, peak, front_thresh=1.1):
         """
         Estimates satrting paramters for exponentially modified gaussian fit of a peak
+        USP Tailing factor, 1 = symmetric, > 1 = tailing, < 1 = fronting
         """
 
         # peak params
@@ -623,95 +759,185 @@ class NoiseModel:
         # amplitude guess
         A_guess = height
 
+        # center guess
+        center_guess = peak['center'] - peak['left_bound']
+        
         # counters and base gamma_guess value
         sg_fail = False
         tg_fail = False
 
         # gaussian estiamte of sigma
+        scan_interval = self.scan_interval
         fwhh_to_sigma = 2 * np.sqrt(2*np.log(2))
-        sigma_guess = fwhh / fwhh_to_sigma
-
-        # estimate gamma from tailing factor (1=symmetric small=right tail large=left tail)
-        #excess_tailing = max(1.0 / tailing_factor - 1, 0.1)
-        excess_tailing = 1.0 / tailing_factor - 1
-        tau_guess = sigma_guess * excess_tailing
+        sigma_guess = (fwhh / scan_interval) / fwhh_to_sigma
         if sigma_guess == 0:
             sg_fail = True
-        if excess_tailing == 0:
-            tg_fail= True
 
-        # calculate gamma guess
-        if tau_guess == 0:
+        # estimate gamma from tailing factor 
+        ratio = 2 * tailing_factor - 1
+        if ratio <= 0:
+            tg_fail = True
+            return A_guess, center_guess, sigma_guess, np.nan, tg_fail, sg_fail, False
+
+        fronting = ratio < 1 / front_thresh
+        excess_tailing = (1 / ratio - 1) if fronting else (ratio - 1)
+
+        if excess_tailing <= 0 or sigma_guess == 0:
+            tg_fail = excess_tailing == 0
             gamma_guess = np.nan
         else:
-            gamma_guess = 1 / tau_guess
+            gamma_guess = 1 / (sigma_guess * excess_tailing)
 
-        center_guess = peak['center'] - peak['left_bound']
+        # adjust center guess if fronting
+        if fronting:
+            n = peak['right_bound'] - peak['left_bound']
+            center_guess = (n - 1) - center_guess
 
-        return A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail
+        return A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail, fronting
 
-    def gen_peak_model(self, peak: dict, raw_signal: np.ndarray):
+    def _safe_fit(self, model, y, params, x):
         """
-        Models a given peak as an exponentially modified gaussian
+        Fits a model returns (result, None) on sccess or (None, reason) on a failure
         """
 
-        # get EMG model
-        model = ExponentialGaussianModel()
+        try:
+            result = model.fit(y, params, x=x)
+        except (ValueError, RuntimeError, FloatingPointError, TypeError) as e:
+            return None, f"{type(e).__name__}: {str(e)[:80]}"
+        if not result.success:
+            return None, f"no_converge {str(result.message)[:60]}"
+        return result, None
 
-        # get peak segment and 
+    @staticmethod
+    def emg_stable(x, amplitude=1.0, center=0.0, sigma=1.0, gamma=1.0):
+        """
+        Fits an EMG like lmfit expgaussain but prevents exp overflow to improve performance
+        """
+        z = (center + gamma * sigma**2 - x) / (np.sqrt(2.0) * sigma)
+        out = np.empty_like(z, dtype=float)
+        pos = z >= 0
+
+        out[pos] = np.exp(-(x[pos] - center)**2 / (2 * sigma**2)) * erfcx(z[pos])
+
+        arg1 = gamma * (center - x[~pos] + gamma * sigma**2 / 2)
+        out[~pos] = np.exp(arg1) * erfc(z[~pos])
+        
+        return amplitude * (gamma / 2) * out
+
+    def gen_peak_model(self, peak: dict, raw_signal: np.ndarray, bic_margin=2.0):
+        """
+        Models a given peak as an exponentially modified gaussian or gaussian depending on which
+        is a more accurate fit
+        """
+
+        # format outupt
+        out = {
+            # peak context
+            'height': peak['height'],
+            'ion': peak['ion'],
+            'center_scan': peak['center'],
+            'rt': peak['rt'],
+            'n_points': int(peak['right_bound'] - peak['left_bound']) + 1,
+            # fit results
+            'model': None,
+            'amplitude': np.nan,
+            'sigma': np.nan,
+            'gamma': np.nan,
+            'redchi': np.nan,
+            'delta_bic': np.nan,
+            'fronting': False,
+            # diagnostics
+            'guess_type': 1,
+            'tg_fail': False,
+            'sg_fail': False,
+            'status': None
+        }
+
+        # get peak segment
         left = int(peak['left_bound'])
         right = int(peak['right_bound'])
         signal = raw_signal[left:right+1]
-        x = np.arange(len(signal))
+        if len(signal) < 5:
+            out['status'] = 'short'
+            return out
+        x = np.arange(len(signal), dtype=float)
         y = signal - peak['baseline']
+        n = len(y)
 
-        # add metric guess uability checks
-        fwhh_uable = not np.isnan(peak.get('fwhh', np.nan)) and peak['fwhh'] > 1e-9
-        tf_usable = not np.isnan(peak.get('tailing_factor', np.nan))
+        # metric guess usability checks
+        fwhh_usable = np.isfinite(peak.get('fwhh', np.nan)) and peak['fwhh'] > 1e-9
+        tf_usable = np.isfinite(peak.get('tailing_factor', np.nan))
 
-        # get initial parameter guess
-        if fwhh_uable and tf_usable:
-            A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail = self._estimate_emg_guess(peak)
-            params = model.make_params(amplitude=A_guess, center=center_guess, sigma=sigma_guess, gamma=gamma_guess)
-            params['gamma'].set(max=None)
-            type = 0
+        # make initial parameter guesses
+        if fwhh_usable and tf_usable:
+            A_guess, center_guess, sigma_guess, gamma_guess, tg_fail, sg_fail, fronting = self._estimate_emg_guess(peak)
+            guess_type = 0
         else:
-            params = model.guess(y,x=x)
-            type = 1
+            center_guess = float(np.argmax(y))
+            sigma_guess = n/6
+            gamma_guess = 1.0
+            A_guess = y.max()
+            guess_type = 1
             tg_fail = False
             sg_fail = False
+            fronting = False
+        out.update(guess_type=guess_type, tg_fail=tg_fail, sg_fail=sg_fail, fronting=fronting)
 
-        return(
-            params['amplitude'].value,
-            params['sigma'].value,
-            params['gamma'].value,
-            type,
-            tg_fail,
-            sg_fail
-        )
+        # clip guesses within bounds
+        gamma_guess = np.clip(gamma_guess, 0.05, 8) if np.isfinite(gamma_guess) else 8
+        sigma_guess = np.clip(sigma_guess, 0.4, 0.45*n)
+        center_guess = np.clip(center_guess, 1, n-2)
 
-        """# setup gamma/sigma maxes to prevent overflow
-        K = 20
-        sigma_max = len(y)
-        gamma_max = K / params['sigma'].value
+        # convert a_guess from height to area
+        A_guess = A_guess if np.isfinite(A_guess) else y.max()
+        A_guess = max(A_guess, 1) * sigma_guess * np.sqrt(2*np.pi)
 
-        # fit model
-        params['amplitude'].set(min=0)
-        params['sigma'].set(min=1e-3, max=sigma_max)
-        params['gamma'].set(min=1e-6, max=gamma_max)
-        result = model.fit(y,params,x=x)
+        # gaussian fit
+        g_center = (n-1) - center_guess if fronting else center_guess
+        g_params = self.gauss_model.make_params(amplitude=A_guess, center=g_center, sigma=sigma_guess)
+        g_params['center'].set(min=0, max=n-1)
+        g_params['sigma'].set(min=0.3, max=n/2)
+        g_params['amplitude'].set(min=0)
+        g_res, g_err = self._safe_fit(self.gauss_model, y, g_params, x)
 
-        # check for failure, return nothing if failed else return parameters and reduced chi squared measure
-        if not result.success:
-            return None
-        return(
-            result.params['amplitude'].value,
-            result.params['sigma'].value,
-            result.params['gamma'].value,
-            result.redchi
-        )"""
+        # EMG fit
+        e_params = self.emg_model.make_params(amplitude=A_guess, center=center_guess, sigma=sigma_guess,
+                                              gamma=gamma_guess)
+        e_params['center'].set(min=0, max=n-1)
+        e_params['sigma'].set(min=0.3, max=n/2)
+        e_params['gamma'].set(min=0.01, max=10)
+        e_params['amplitude'].set(min=0)
+        y_fit = y[::-1] if fronting else y
+        e_res, e_err = self._safe_fit(self.emg_model, y_fit, e_params, x)
+
+        # tally features by model
+        if g_err is not None:
+            self.exec_counter[f"gauss | {g_err}"] += 1
+        if e_err is not None:
+            self.exec_counter[f"emg | {e_err}"] += 1
+
+        # choose best model
+        if g_res is None and e_res is None:
+            out['status'] = 'both_failed'
+            return out
+        if g_res is not None and e_res is not None:
+            out['delta_bic'] = g_res.bic - e_res.bic        # > 0 means EMG fits better
+        if e_res is not None and (g_res is None or out['delta_bic'] > bic_margin):
+            chosen = e_res
+            out['model'] = 'emg'
+            out['gamma'] = e_res.params['gamma'].value
+        else:
+            chosen = g_res
+            out['model'] = 'gauss'
+            out['fronting'] = False
+
+        out['amplitude'] = chosen.params['amplitude'].value
+        out['sigma'] = chosen.params['sigma'].value
+        out['redchi'] = chosen.redchi
+        out['status'] = 'ok' if chosen.errorbars else 'no_errorbars'
+
+        return out
         
-
     @ staticmethod
     def _detect_censored(raw_signal, abundance_thresholds, start_idxs):
         """
@@ -728,12 +954,8 @@ class NoiseModel:
         -------
         censored                        bool array len(raw_signal) where True = censored False = uncensored
         """
-        censored = np.zeros(len(raw_signal), dtype=bool)
-        for i, signal in enumerate(raw_signal):
-            seg_idx = np.searchsorted(start_idxs, i, side='right') - 1
-            floor = abundance_thresholds[seg_idx]
-            censored[i] = np.isclose(signal, floor)
-        return censored
+        seg_idx = np.searchsorted(start_idxs, np.arange(len(raw_signal)), side='right') - 1
+        return np.isclose(raw_signal, np.asarray(abundance_thresholds)[seg_idx])
 
     @staticmethod
     def _impute_missing_signal(raw_signal:np.ndarray, noise_mask:np.ndarray, window: int=5):
@@ -940,7 +1162,82 @@ class NoiseModel:
         else:
             mad = np.nanmedian(np.abs(array - np.nanmedian(array))) * 1.4826
             return 0.9  * min(std, mad) * n**(-1/5)
-            
-        
+
+    @classmethod
+    def _make_worker(cls, bic_margin):
+        """
+        lightweight instance for worker process, conifig + lmfit models only
+        """
+        w = cls.__new__(cls)
+        w.scan_interval = None
+        w.bic_margin = bic_margin
+        w.emg_model = Model(cls.emg_stable)
+        w.gauss_model = GaussianModel()
+        w.exec_counter = Counter()
+        return w
+
+    def process_ion(self, task):
+        """
+        fits baseline, noise, and peak models for one ion row, returns results for merging
+        """
+        self.scan_interval = task['scan_interval']
+        self.exec_counter = Counter()
+        bl, residuals, n_outliers, outliers, h = self.gen_bl_and_noise_models(
+            task['raw_signal'], task['noise_mask'], task['at_start_idxs'], task['at_vals'],
+            task['row'], seg_size=13, end_window=5, outlier_threshold=3.5)
+        fits = [self.gen_peak_model(p, task['raw_signal'], bic_margin=self.bic_margin)
+                for p in task['peaks']]
+        for f in fits:
+            f['sample'] = task['sample']
+        return {
+            'sample': task['sample'], 'ion': task['ion'], 'row': task['row'],
+            'baseline': bl, 'residuals': np.asarray(residuals, dtype=float),
+            'n_outliers': n_outliers, 'outliers': outliers, 'kde_h': h,
+            'fits': fits, 'errors': self.exec_counter,
+            'bl_count': int(task['noise_mask'].sum()),
+            'signal_count': int((~task['noise_mask']).sum()),
+            'n_peaks': len(task['peaks']),
+            'at_vals': np.asarray(task['at_vals'], dtype=float)
+        }
+
+    @staticmethod
+    def make_peak(x, height, center, model, sigma, gamma=np.nan, fronting=False):
+        """peak with a given apex height, placed so its EMG/gauss 'center' parameter sits at `center`"""
+        if model == 'gauss':
+            return height * np.exp(-(x - center)**2 / (2 * sigma**2))
+
+        # EMG: unit-area curve on a fine grid -> its maximum -> rescale to the requested height
+        grid = np.linspace(-6 * sigma, 6 * sigma + 10 / gamma, 4001)
+        unit_max = NoiseModel.emg_stable(grid, 1.0, 0.0, sigma, gamma).max()
+        xx = (center - x) if fronting else (x - center)            # mirror for fronting peaks
+        return (height / unit_max) * NoiseModel.emg_stable(xx, 1.0, 0.0, sigma, gamma)
+
+# endregion
+
+# region parallel workers
+
+from src.data_generator.sample_cache import load_sample
+
+_WORKER = None
+
+def _init_worker(bic_margin):
+    """runs once per worker process"""
+    global _WORKER
+    _WORKER = NoiseModel._make_worker(bic_margin)
+
+def _run_ion(task):
+    """loads one row from the sample cache and fits it"""
+    s = load_sample(task['cache_dir'])
+    row = task['row']
+    full_task = {
+        **task,
+        'scan_interval': s['meta']['scan_interval'],
+        'raw_signal': np.array(s['intensity'][row]),
+        'noise_mask': np.array(s['noise_mask'][row]),
+        'at_start_idxs': s['at_start_idxs'],
+        'at_vals': np.array(s['at_values'][row]),
+        'peaks': s['peaks_by_ion'].get(task['ion'], []),
+    }
+    return _WORKER.process_ion(full_task)
 
 # endregion

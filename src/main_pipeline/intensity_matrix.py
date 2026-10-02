@@ -12,6 +12,7 @@ from scipy.signal import find_peaks, savgol_filter
 from scipy.ndimage import maximum_filter1d, minimum_filter1d, uniform_filter1d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from datetime import datetime
 
 from src.main_pipeline.config_loader import ConfigLoader
 from src.main_pipeline.utils import get_run_dir, get_proj_dir, get_run_cfg_path
@@ -78,14 +79,17 @@ class IntensityMatrix:
             self.identify_peaks(self.intensity_matrix, peak_mode)
 
         # plot distributions of peaks
-        pdf_file = get_app_dir() / 'feature_diagnostics.pdf'
+        stamp = datetime.now().strftime("%Y_%m_%d")
+        out_dir = get_app_dir() / 'databases' / 'feature_diagnostics' 
+        out_dir.mkdir(exist_ok=True, parents=True)
+        pdf_file = out_dir / f'{self.sample_name}_{stamp}_featureinfo.pdf'
         peak_counts, cum_heights, bin_starts = self.feature_distributions(resolution_mod=10)
         with PdfPages(pdf_file) as pdf:
             features = self.define_features(cum_heights=cum_heights, counts=peak_counts, 
                                             bin_starts=bin_starts, pdf=pdf)
 
             tf_vals, width_vals, amp_vals, fwhh_vals = [], [], [], []
-            cwt_c, cwt_a, ridge_spans = [], [], []
+            cwt_c, cwt_a, ridge_spans, neg_scales = [], [], [], []
             for _, peak_list in self.peak_dict.items():
                 for peak in peak_list:
                     fwhh_vals.append(peak['fwhh'])
@@ -95,7 +99,7 @@ class IntensityMatrix:
                     cwt_c.append(peak['cwt_score'])
                     cwt_a.append(peak['cwt_scale'])
                     ridge_spans.append(peak['ridge_span'])
-
+                    neg_scales.extend(peak['neg_scales'])
 
             plot_scatter(pdf, "Peak Amplitude vs FWHH by Tailing factor", "FWHH", "log(Amplitude)",
                          fwhh_vals, amp_vals, tf_vals, 'Tailing Factor Value', yscale='log', xscale='log')
@@ -104,15 +108,21 @@ class IntensityMatrix:
             amp_nan = np.sum(np.isnan(amp_vals)) / len(amp_vals)
             tf_nan = np.sum(np.isnan(tf_vals)) / len(tf_vals)
             width_nan = np.sum(np.isnan(width_vals)) / len(width_vals)
+            ns_nan = np.sum(np.isnan(neg_scales))
 
-            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f} Min={np.nanmin(fwhh_vals)}", "FWHH (Min)", fwhh_vals, log=True)
-            plot_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Min)", width_vals, log=True)
+            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f}\nMax={np.nanmax(fwhh_vals):.2f} Med={np.nanmedian(fwhh_vals):.2f} Min={np.nanmin(fwhh_vals):.2f}",
+                           "FWHH (Minutes)", fwhh_vals, log=True)
+            plot_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Minutes)",
+                           width_vals, log=True)
             plot_histogram(pdf, f"Amplitude Distribution\nNaN Frac={amp_nan:.2f}", "Amplitdue", amp_vals, log=True)
-            plot_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor", tf_vals, log=True)
-            plot_histogram(pdf, f"CWT Max Score distribution\nMax={np.nanmax(cwt_c):.2f}, Med={np.nanmedian(cwt_c):.2f} Min={np.nanmin(cwt_c):.2f}", 
+            plot_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor",
+                           tf_vals, log=True)
+            plot_histogram(pdf, f"CWT Max Score distribution\nMax={np.nanmax(cwt_c):.0f} Med={np.nanmedian(cwt_c):.0f} Min={np.nanmin(np.abs(cwt_c)):.0f}", 
                            "CWT Max Score", cwt_c, symlog=True)
             plot_histogram(pdf, f"CWT Max Scale Distribution", "CWT Max Scale", cwt_a, bin_size=1)
             plot_histogram(pdf, f"CWT Ridge Span Distribution", "Ridge Span", ridge_spans, bin_size=1)
+            plot_histogram(pdf, f"Negative Scale Locations\nNan Count={ns_nan} Min={np.nanmin(neg_scales):.2f} Max={np.nanmax(neg_scales):.2f} Med={np.nanmedian(neg_scales):.2f}",
+                           "Scale", neg_scales, log=True)
 
     # region                       ---------- Utils ----------
 
@@ -358,7 +368,7 @@ class IntensityMatrix:
             max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, cwt_neg = self._find_maxima_prom(array, prom)
 
         elif mode == 'cwt':
-            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, cwt_neg, bl_mask = self._find_maxima_cwt(array, ion)
+            max_idxs, left_bounds, right_bounds, scores, scales, ridge_span, cwt_neg_scale, bl_mask = self._find_maxima_cwt(array, ion)
 
         # list to hold dictionary entries containing left_bound, right_bound and center for each maxima
         maxima = []
@@ -373,9 +383,7 @@ class IntensityMatrix:
             # bounds
             left_bound = left_bounds[i]
             right_bound = right_bounds[i]
-            if right_bound - left_bound < 3:
-                continue
-
+            
             # detect flat top peaks
             max_val = array[peak_max]
             if peak_max == left_bound or peak_max == right_bound:
@@ -411,8 +419,6 @@ class IntensityMatrix:
                 'sn_ratio': np.nan,
                 'height': np.nan,
                 'baseline': None,
-                'bl_slope': np.nan,
-                'bl_yint': np.nan,
                 'conv': np.nan,
                 'peak_idx': -1,
                 'molecule': None,
@@ -420,8 +426,10 @@ class IntensityMatrix:
                 'cwt_score': scores[i],
                 'cwt_scale': scales[i],
                 'ridge_span': ridge_span[i],
-                'cwt_neg': cwt_neg[i],
-                'dropped': None
+                'neg_scales': cwt_neg_scale[i],
+                'dropped': None,
+                'overlap_left': False,
+                'overlap_right': False
             })
 
         # sort maxima by position
@@ -452,13 +460,21 @@ class IntensityMatrix:
         valid_peaks = []
         sn_count, height_count = 0,0
         for entry in maxima:
+            
+            # re-check bounds
+            left_bound = entry['left_bound']
+            right_bound = entry['right_bound']
+            l_width = peak_max - left_bound
+            r_width = right_bound - peak_max
+            if max(l_width, r_width) < width_threshold:
+                entry['valid'] = False
+                continue
 
             # get bl_value at precise rt
             bl_norm = self._interpolate_baseline_at_rt(entry)
             
             # assign height and check if its above threshold
             entry['height'] = entry['raw_height'] - bl_norm
-            height_count = 0
             if entry['height'] < height_threshold:
                 entry['valid'] = False
                 entry['dropped'] = 'height'
@@ -780,7 +796,7 @@ class IntensityMatrix:
         for ridge, scale_range in ridge_info:
 
             # build dict of cols: points for this ridge
-            neg_ridge = False
+            neg_scale = []
             max_c = float('-inf')
             max_a_idx = None
             cols = {}
@@ -789,7 +805,7 @@ class IntensityMatrix:
                 # get scale and coefficients of the point
                 coeff = coefficients[i,j]
                 if coeff < 0:
-                    neg_ridge = True
+                    neg_scale.append(i)
 
                 # add new column if not present in cols
                 if j not in cols:
@@ -844,16 +860,9 @@ class IntensityMatrix:
                 continue
 
             # finalize candidate ridges and save to max_info
-            self._finalize_candidate(max_col, max_scale, max_c, neg_ridge, scale_range, ion, signal,
+            self._finalize_candidate(max_col, max_scale, max_c, neg_scale, scale_range, ion, signal,
                                      local_max_idxs, min_masks, coefficients, bl_mask, 
                                      max_info, scan_to_idx, can_type = 'ridge')
-
-            """# revoer wide, flat-topped peaks whose edges were traced as two seperate ridges
-            for seed_col, combined_scale_range, a, b in self._pair_edge_ridges(rejected_ridges, signal):
-                max_c = np.nanargmax(coefficients[0, a:b+1])
-                self._finalize_candidate(seed_col, None, max_c, combined_scale_range, ion, signal,
-                                         local_max_idxs, min_masks, coefficients, bl_mask,
-                                         max_info, scan_to_idx)"""
 
         # look for flat-topped peaks at saturation maximum
         saturated_rows = self._find_saturated_rows(self.intensity_matrix[self.ion_map[ion]],
@@ -864,11 +873,66 @@ class IntensityMatrix:
             max_a_idx, max_col_idx = np.unravel_index(np.nanargmax(sub_coeffs), sub_coeffs.shape)
             max_c = sub_coeffs[max_a_idx,max_col_idx]
             max_scale = scales[max_a_idx]
-            self._finalize_candidate(seed_col, max_scale, max_c, neg_ridge, end-start, ion, signal, 
+            self._finalize_candidate(seed_col, max_scale, max_c, neg_scale, end-start, ion, signal, 
                                      local_max_idxs, min_masks, coefficients, bl_mask,
                                      max_info, scan_to_idx, can_type = 'flat')
         
         return max_info, bl_mask
+    
+    def _finalize_candidate(self, max_col, max_scale, max_c, neg_scale, scale_range, ion, signal,
+                            local_max_idxs, min_masks, coefficients, bl_mask, max_info, 
+                            scan_to_idx, can_type='ridge'):
+        """
+        Takes a candidate ridge and tries to define its maxima and endpoints
+        """
+
+        cwt_min_scale = 0 #self.cfg.get('cwt_min_scale')
+        cwt_min_score = 0 #self.cfg.get('cwt_min_score')
+
+        if can_type == 'ridge':
+            if max_scale is not None and max_scale < cwt_min_scale:
+                return
+            if max_c is not None and abs(max_c) < cwt_min_score:
+                return
+
+        if max_col < 12 or max_col >= coefficients.shape[1] - 12:
+            return
+
+        max_scan, l, r = self._nearest_local_max(ion, signal, max_col, local_max_idxs)
+        if max_scan is None:
+            return
+
+        if max_scan < 12 or max_scan >= coefficients.shape[1] - 12:
+            return
+
+        l_bound, r_bound = self._nearest_bounds_fwhh(signal, max_scan, min_masks, l, r)
+
+        if l_bound > max_scan or r_bound < max_scan or r_bound <= l_bound:
+            return
+
+        bl_mask[l_bound:r_bound+1] = 0
+
+        if max_scan in scan_to_idx:
+            idx = scan_to_idx[max_scan]
+            max_info['n_ridges'][idx] += 1
+            max_info['l_bounds'][idx] = min(max_info['l_bounds'][idx], l_bound)
+            max_info['r_bounds'][idx] = max(max_info['r_bounds'][idx], r_bound)
+            max_info['neg_ridges'][idx] = neg_scale
+            if max_c > max_info['scores'][idx]:
+                max_info['scales'][idx] = max_scale if max_scale is not None else np.nan
+                max_info['scores'][idx] = max_c
+            if scale_range > max_info['scale_ranges'][idx]:
+                max_info['scale_ranges'][idx] = scale_range
+        else:
+            scan_to_idx[max_scan] = len(max_info['maxima'])
+            max_info['scale_ranges'].append(scale_range)
+            max_info['maxima'].append(max_scan)
+            max_info['l_bounds'].append(l_bound)
+            max_info['r_bounds'].append(r_bound)
+            max_info['neg_ridges'].append(neg_scale)
+            max_info['scales'].append(max_scale if max_scale is not None else np.nan)
+            max_info['scores'].append(max_c)
+            max_info['n_ridges'].append(1)
 
     def _nearest_bounds(self, signal, max_scan, max_scale, min_masks, l=None, r=None):
         
@@ -1071,7 +1135,7 @@ class IntensityMatrix:
         array = self.intensity_matrix[self.ion_map[ion]]
 
         count = 0
-        for i,_ in enumerate(peak_list):
+        for i in range(len(peak_list)):
 
             # if no next peak then continue
             if i == len(peak_list) - 1:
@@ -1091,7 +1155,9 @@ class IntensityMatrix:
                 valley_idx = np.nanargmin(search_slice) + apex_i
 
                 peak_list[i]['right_bound'] = valley_idx
+                peak_list[i]['overlap_right'] = True
                 peak_list[i+1]['left_bound'] = valley_idx
+                peak_list[i+1]['overlap_left'] = True
 
                 count += 1
 
@@ -1437,61 +1503,6 @@ class IntensityMatrix:
 
         return seed_cols
 
-    def _finalize_candidate(self, max_col, max_scale, max_c, neg_ridge, scale_range, ion, signal,
-                            local_max_idxs, min_masks, coefficients, bl_mask, max_info, 
-                            scan_to_idx, can_type='ridge'):
-        """
-        Takes a candidate ridge and tries to define its maxima and endpoints
-        """
-
-        cwt_min_scale = 0 #self.cfg.get('cwt_min_scale')
-        cwt_min_score = 0 #self.cfg.get('cwt_min_score')
-
-        if can_type == 'ridge':
-            if max_scale is not None and abs(max_scale) < cwt_min_scale:
-                return
-            if max_c is not None and max_c < cwt_min_score:
-                return
-
-        if max_col < 12 or max_col >= coefficients.shape[1] - 12:
-            return
-
-        max_scan, l, r = self._nearest_local_max(ion, signal, max_col, local_max_idxs)
-        if max_scan is None:
-            return
-
-        if max_scan < 12 or max_scan >= coefficients.shape[1] - 12:
-            return
-
-        l_bound, r_bound = self._nearest_bounds_fwhh(signal, max_scan, min_masks, l, r)
-
-        if l_bound > max_scan or r_bound < max_scan or r_bound <= l_bound:
-            return
-
-        bl_mask[l_bound:r_bound+1] = 0
-
-        if max_scan in scan_to_idx:
-            idx = scan_to_idx[max_scan]
-            max_info['n_ridges'][idx] += 1
-            max_info['l_bounds'][idx] = min(max_info['l_bounds'][idx], l_bound)
-            max_info['r_bounds'][idx] = max(max_info['r_bounds'][idx], r_bound)
-            max_info['neg_ridges'][idx] = neg_ridge
-            if max_c > max_info['scores'][idx]:
-                max_info['scales'][idx] = max_scale if max_scale is not None else np.nan
-                max_info['scores'][idx] = max_c
-            if scale_range > max_info['scale_ranges'][idx]:
-                max_info['scale_ranges'][idx] = scale_range
-        else:
-            scan_to_idx[max_scan] = len(max_info['maxima'])
-            max_info['scale_ranges'].append(scale_range)
-            max_info['maxima'].append(max_scan)
-            max_info['l_bounds'].append(l_bound)
-            max_info['r_bounds'].append(r_bound)
-            max_info['neg_ridges'][idx] = neg_ridge
-            max_info['scales'].append(max_scale if max_scale is not None else np.nan)
-            max_info['scores'].append(max_c)
-            max_info['n_ridges'].append(1)      
-
     def _get_ridge_scale_range(self,ridge,scales):
         scale_idxs = [i for (i,_) in ridge['points']]
         scale_range = (scales[np.nanmax(scale_idxs)] - scales[np.nanmin(scale_idxs)])
@@ -1607,42 +1618,16 @@ class IntensityMatrix:
         """
         Calculates quadratic fit through 3 points using closd-form quadradic approach
         """
-
-        """
-        Old function
-        # get map to convert scans to minutes
-        scan_map = self.time_map
-        # x values for fit, the center index and its two direct neighbors (in minutes)
-        x_points = np.array([scan_map[center-1], scan_map[center], scan_map[center+1]])
-        # y values for fit, from row corrosponding to x values
-        y_points = array[[center-1,center,center+1]]
-
-        # perform quadratic numpy polyfit, returning coefficients in a,b,c for ax^2 + bx + c form
-        coeffs = np.polyfit(x_points, y_points, 2)
-        a,b,c = coeffs
-
-        # calcluate the precise maxima of the fit
-        max_x = -b/(2*a)
-
-        # array of left point(max_x-1), max, and right point (max_x +1)
-        x_values = np.array([max_x-1, max_x, max_x+1]).astype(float)
-        # array of y values corrosponding to x_values 
-        y_values = a*x_values**2 + b*x_values + c
-
-        fit_result = {
-            'x_values' : x_values,
-            'y_values' : y_values,
-            'coeffs' : coeffs
-        }
-
-        return fit_result
-        """
-
         scan_map = self.time_map
         
         # get x,y values
         x0,x1,x2 = scan_map[center-1],scan_map[center],scan_map[center+1]
         y0,y1,y2 = array[center-1],array[center],array[center+1]
+        fallback = {
+                'x_values': np.array([x1-1,x1,x1+1]),
+                'y_values': np.array([y1,y1,y1]),
+                'coeffs': np.array([0.0,0.0,y1])
+            }
 
         # closed-from quadradic through 3 points
         f01 = (y1-y0) / (x1-x0)
@@ -1650,17 +1635,15 @@ class IntensityMatrix:
         a = (f12 - f01) / (x2-x0)
 
         # check for flat top (no curvature to interpolate)
-        if a == 0:
-            return {
-                'x_values': np.array([x1-1,x1,x1+1]),
-                'y_values': np.array([y1,y1,y1]),
-                'coeffs': np.array([0.0,0.0,y1])
-            }
-
+        if a >= 0:
+            return fallback
+        
         # calcualte rest
         b = f01 - a * (x0+x1)
         c = y0 - f01 * x0 + a * x0 * x1
         max_x = -b / (2*a)
+        if not (x0 <= max_x <= x1):
+            return fallback
 
         # apply the fit
         x_values = np.array([max_x-1,max_x,max_x+1])
@@ -1750,7 +1733,9 @@ class IntensityMatrix:
         # calculate signal array (bl corrected) and corrected center
         signal = row_array[left:right+1] - baseline
         center = peak['center'] - left
-
+        if signal[center] <= half_height:
+            return np.nan
+        
         # find left and right index directly after the half height value
         left_i = center
         while left_i > 0 and signal[left_i] > half_height:
@@ -1778,6 +1763,8 @@ class IntensityMatrix:
         time_r = self.time_map[left+right_i] - frac_r * (self.time_map[left+right_i] - self.time_map[left+right_i-1])
         
         fwhh = time_r - time_l
+        if fwhh <= 0:
+            return np.nan
 
         return fwhh
 
@@ -1788,7 +1775,7 @@ class IntensityMatrix:
         to right over twice the distance from center to left
         """
         # get peak values
-        tf_height = peak['height'] * 0.1
+        tf_height = peak['height'] * 0.05
         baseline = peak['baseline']
         left = peak['left_bound']
         right = peak['right_bound']
@@ -1800,6 +1787,8 @@ class IntensityMatrix:
         signal = row_array[left:right+1] - baseline
         center = peak['center'] - left
         center_time = peak['rt']
+        if signal[center] <= tf_height:
+            return np.nan
 
         # find left and right index directly after the tailing factor height value
         left_i = center
@@ -1830,6 +1819,8 @@ class IntensityMatrix:
         # calculate tailing factor
         a = center_time - time_l
         b = time_r - center_time
+        if a <= 0 or b<= 0:
+            return np.nan
 
         return (a+b)/(2*a)
 
@@ -2095,7 +2086,7 @@ class IntensityMatrix:
 
     # endregion
 
-    # region                 ---------- Feature Selection -----------
+    # region                 ---------- Deconvolution -----------
     
     # methods of peaks being likely convoluted
     def _missing_fwhh_tf(self, peak):
