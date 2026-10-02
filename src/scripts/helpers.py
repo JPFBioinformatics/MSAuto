@@ -18,19 +18,6 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-def symlog_bins(values, linthresh=1.0, n_bins=30):
-    values = np.asarray(values)
-    pos = values[values > linthresh]
-    neg = values[values < -linthresh]
-
-    edges = [np.linspace(-linthresh, linthresh, 5)]
-    if len(neg) > 0:
-        edges.insert(0, -np.geomspace(linthresh, abs(neg.min()), n_bins)[::-1])
-    if len(pos) > 0:
-        edges.append(np.geomspace(linthresh, pos.max(), n_bins))
-
-    return np.unique(np.concatenate(edges))
-
 def plot_histogram(pdf: PdfPages, title: str, xlabel: str, values, 
                    bin_size: int = None, n_bins: int = None,
                    symlog: bool = False, linthresh: float = 1.0, 
@@ -107,6 +94,19 @@ def plot_scatter(pdf, title, xlabel, ylabel, x_values, y_values,
 
     pdf.savefig(fig)
     plt.close(fig)
+
+def symlog_bins(values, linthresh=1.0, n_bins=30):
+    values = np.asarray(values)
+    pos = values[values > linthresh]
+    neg = values[values < -linthresh]
+
+    edges = [np.linspace(-linthresh, linthresh, 5)]
+    if len(neg) > 0:
+        edges.insert(0, -np.geomspace(linthresh, abs(neg.min()), n_bins)[::-1])
+    if len(pos) > 0:
+        edges.append(np.geomspace(linthresh, pos.max(), n_bins))
+
+    return np.unique(np.concatenate(edges))
 
 def plot_cluster_scatter(pdf, title, xlabel, ylabel, x_values, y_values,
                          labels, alpha=0.5):

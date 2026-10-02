@@ -7,15 +7,15 @@ objects.
 
 # region Imports
 
-import subprocess, base64, zlib, os, psutil, random
+import base64, zlib, os, psutil, random
 from pathlib import Path
 import numpy as np
 import xml.etree.ElementTree as ET
-from src.main_pipeline.intensity_matrix import IntensityMatrix
-from src.main_pipeline.config_loader import ConfigLoader
-from src.main_pipeline.utils import log_subprocess,delete_file
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+from src.main_pipeline.intensity_matrix import IntensityMatrix
 from src.main_pipeline.utils import get_run_dir, configure_run_logging
+from src.main_pipeline.im_store import write_sample
 
 # logging
 import logging
@@ -23,77 +23,64 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-def full_bulk_convert(input_dir: Path, file_type: str, cfg, serial=False, detect_peaks=False):
+def full_bulk_convert(mzml_dir: Path, cfg, store, serial=False, detect_peaks=False):
     """
-    Converts all compatible .d files in a directory to .mzml files and saves them to a directory in the input directory
+    Builds an IntensityMatrix for every .mzML file in mzml_dir and saves each to `store` as it
+    finishes. Samples already saved with the current config are skipped.
+    (.D -> .mzML conversion is done by the user beforehand, e.g. with msconvert)
+
     Returns:
-        mzml_dir                        location of mzml dir
-        matrices                        list of intensitymatrix objects created from all files in mzml
+        names                           sample names available in the store, in file order
     """
-    # stop any orphaned msconvert calls
-    kill_orphaned_msconvert()
+    mzml_dir = Path(mzml_dir)
 
-    # get input dir
-    input_dir = Path(input_dir)
-
-    # setup loger
+    # setup logger
     run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
     configure_run_logging(run_dir)
 
-    # check to see if mzml files are already converted
-    if file_type == '.D':
-        raw_files = list(input_dir.glob("*.D"))
-        tmpdir = input_dir / 'mzML_files'
-        for raw_file in raw_files:
-            if raw_file.is_dir():
-                cmd = [
-                    "msconvert",
-                    str(raw_file),
-                    "--mzML",
-                    "--outdir", str(tmpdir)
-                ]
-                proc = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-                try:
-                    proc.wait()
-                finally:
-                    if proc.poll() is None:
-                        proc.terminate()
-                        proc.wait()
-        files = list(tmpdir.glob("*.mzML"))
+    # find mzML files
+    if not mzml_dir.is_dir():
+        raise FileNotFoundError(f"mzML directory not found: {mzml_dir}")
+    files = sorted(mzml_dir.glob("*.mzML"), key=lambda f: f.stem)
+    if not files:
+        raise FileNotFoundError(f"No .mzML files found in {mzml_dir}")
+    logger.info(f"Found {len(files)} mzML files in {mzml_dir}")
 
-    elif file_type == '.mzML':
-        files = list(input_dir.glob("*.mzML"))
+    # skip samples already saved with this config
+    to_build = [f for f in files if not store.is_valid(f.stem)]
+    logger.info(f"{len(files) - len(to_build)} samples loaded from saved state, {len(to_build)} to build")
 
-    # sort mzml files
-    logger.info(f"mzML files processed")
-    files = sorted(files, key=lambda f: f.stem)
+    # determine max workers for this system (calibration builds + saves a few samples)
+    max_workers, built, success_count, fail_count = choose_max_workers(
+        to_build, cfg, store.samples_dir, calibration_n=3, headroom_gb=2,
+        serial=serial, detect_peaks=detect_peaks)
+    remaining_files = [f for f in to_build if f not in built]
 
-    # determine max workers for this system
-    max_workers, results, success_count, fail_count = choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2, serial=False, detect_peaks=detect_peaks)
-    remaining_files = [f for f in files if f not in results]
-
-    run_dir = get_run_dir(cfg.get("project_name"), cfg.get("run_name"))
-
-    with ProcessPoolExecutor(max_workers=max_workers, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
-        futures = {executor.submit(create_intensity_matrix, file, cfg, detect_peaks=detect_peaks): file for file in remaining_files}
+    # build the rest in parallel, each worker writes its own IM to disk
+    with ProcessPoolExecutor(max_workers=max_workers, initializer=configure_run_logging,
+                             initargs=(run_dir,)) as executor:
+        futures = {executor.submit(build_and_save, file, cfg, store.samples_dir, detect_peaks): file
+                   for file in remaining_files}
         for future in as_completed(futures):
             file = futures[future]
             try:
-                results[file] = future.result()
+                name, _ = future.result()
+                built[file] = name
                 logger.info(f"Created {file.name} IntensityMatrix")
                 success_count += 1
             except Exception as e:
                 logger.info(f"Failed to process {file.name}: {e}", exc_info=True)
                 fail_count += 1
 
-    matrices = [results[file] for file in files if file in results]
+    names = [f.stem for f in files if store.is_valid(f.stem)]
 
     logger.info(
-        "\n\n-------------------- Converstion to IntensityMatrix --------------------\n"
-        f"Total Converstions Attempted: {len(files)}\nSuccessful Conversions: {success_count}\nFailed Conversions: {fail_count}\nMatrices Output {len(matrices)}\n\n"
+        "\n\n-------------------- Conversion to IntensityMatrix --------------------\n"
+        f"Total Files: {len(files)}\nLoaded from saved state: {len(files) - len(to_build)}\n"
+        f"Successful Builds: {success_count}\nFailed Builds: {fail_count}\nSamples Available: {len(names)}\n\n"
     )
 
-    return matrices
+    return names
 
 def decode_binary_data(encoded_data, dtype, max_signal=None):
     """
@@ -475,45 +462,23 @@ def aq_type(mzml_path: Path):
         elif acc == "MS:1000579":
             return "SCAN"
 
-def kill_orphaned_msconvert():
+def build_and_save(mzml_path, cfg, samples_dir, detect_peaks):
     """
-    kills leftover msconvert processed left over from a failed run
+    worker: builds an IM, writes it to samples_dir, returns only its name + peak memory
+    (the IM itself never travels back to the main process)
     """
-
-    target_names = {
-        "msconvert.exe"
-    }
-
-    killed_pids = []
-    for proc in psutil.process_iter(['pid','name']):
-        try:
-            if proc.info['name'] and proc.info['name'].lower() in target_names:
-                proc.terminate()
-                killed_pids.append(proc.pid)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-
-    if killed_pids:
-        procs = [psutil.Process(pid) for pid in killed_pids if psutil.pid_exists(pid)]
-        _, alive = psutil.wait_procs(procs,timeout=5)
-        for p in alive:
-            p.kill()
-        logger.warning(f"Cleaned up {len(killed_pids)} orphaned process(es) from previous run: {killed_pids}")
-
-def create_im_with_mem(mzml_path, cfg, detect_peaks):
-    """
-    creates an intesnitymatrix object and returns the peak memroy needed for process
-    """
+    name = Path(mzml_path).stem
     matrix = create_intensity_matrix(mzml_path, cfg, detect_peaks=detect_peaks)
+    write_sample(matrix, samples_dir, cfg, name=name)
     peak_mem = psutil.Process(os.getpid()).memory_info().peak_wset
-    return matrix,peak_mem
+    return name, peak_mem
 
-def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0, serial=False, detect_peaks=True):
+def choose_max_workers(files, cfg, samples_dir, calibration_n=3, headroom_gb=2.0, serial=False, detect_peaks=True):
     """
     chooses a random number of files to use to test system and calibrate how many workers
     we can use to process samples based on availbe cpu cores and memory
     """
-    if serial:
+    if serial or not files:
         return 1, {}, 0, 0
     
     cpu_ceiling = max(1, os.cpu_count()-1)
@@ -530,9 +495,9 @@ def choose_max_workers(files, cfg, calibration_n=3, headroom_gb=2.0, serial=Fals
     with ProcessPoolExecutor(max_workers=1, initializer=configure_run_logging, initargs=(run_dir,)) as executor:
         for file in calibration_files:
             try:
-                matrix,mem = executor.submit(create_im_with_mem, file, cfg, detect_peaks).result()
+                name,mem = executor.submit(build_and_save, file, cfg, samples_dir, detect_peaks).result()
                 peak_mem_bytes = max(peak_mem_bytes, mem)
-                calibration_results[file] = matrix
+                calibration_results[file] = name
                 success_count += 1
             except Exception as e:
                 logger.warning(f"Failed to process {file.name} during calibration: {e}")

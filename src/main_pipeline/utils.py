@@ -6,7 +6,7 @@ miscelaneous utility functions for use across the project
 
 # region Imports
 
-import subprocess,json,shutil,sys,re
+import subprocess,json,shutil,sys,re,hashlib, os
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -17,6 +17,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # endregion
+
+APP_NAME = "MSAuto"
 
 def log_subprocess(result: subprocess.CompletedProcess, log_dir: Path, id: str):
     """
@@ -108,29 +110,62 @@ def delete_directory(dir_path: Path):
         print(f"Permission error deleting:\n{dir_path}\nError:\n{p}")
 
 def get_app_dir():
-    """
-    Gets the directroy for the appliation, if frozen (windows app) then put databases right
-    next to installation .exe, if scripting then put databases in root
-
-    Returns
-    -------
-    path to the application directory (root or .exe)
-    """
-    if getattr(sys,'frozen',False):
+    """folder the app runs from: repo root when scripting, the .exe's folder when frozen"""
+    if getattr(sys, 'frozen', False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent.parent
 
-def get_run_dir(proj_name, run_name):
-    return get_app_dir() / 'databases' / 'projects' / proj_name / run_name
+def resource_path(name):
+    """read-only file shipped with the app (PyInstaller unpacks these to sys._MEIPASS)"""
+    return Path(getattr(sys, '_MEIPASS', get_app_dir())) / name
 
-def get_proj_db(proj_name):
-    return get_app_dir() / 'databases' / 'projects' / proj_name / f"{proj_name}.db"
+def get_data_dir():
+    """writable per-user folder for everything the app creates"""
+    if getattr(sys, 'frozen', False):
+        base = Path(os.environ.get('LOCALAPPDATA', Path.home())) / APP_NAME
+    else:
+        base = get_app_dir() / 'databases'
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+def get_global_db():
+    return get_data_dir() / 'gcms.db'
 
 def get_proj_dir(proj_name):
-    return get_app_dir() / 'databases' / 'projects' / proj_name
+    return get_data_dir() / 'projects' / proj_name
+
+def get_run_dir(proj_name, run_name):
+    return get_proj_dir(proj_name) / run_name
 
 def get_run_cfg_path(proj_name, run_name):
     return get_run_dir(proj_name, run_name) / 'config.yaml'
+
+def get_log_dir():
+    d = get_data_dir() / 'logs'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def get_feature_diag_dir():
+    d = get_data_dir() / 'feature_diagnostics'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def get_noise_model_dir():
+    d = get_data_dir() / 'noise_models'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def get_schema_path():
+    return resource_path('GCMSdata.sql')
+
+def get_default_config_path():
+    return resource_path('default_config.yaml')
+
+def get_stylesheet_path():
+    return resource_path('style.css')
+
+def get_theme_dir():
+    return resource_path('theme')
 
 def configure_run_logging(run_dir: Path):
     """
@@ -174,4 +209,22 @@ def find_abandoned_runs(proj_dir: Path):
             abandoned.append(entry)
 
     return abandoned
-    
+
+CACHE_VERSION = 1
+
+def cfg_hash(cfg):
+    """fingerprint of the config contents (works for in-memory ConfigLoader objects too)"""
+    blob = json.dumps(cfg.config, sort_keys=True, default=str)
+    return hashlib.md5(f"{blob}|v{CACHE_VERSION}".encode()).hexdigest()[:8]
+
+def molecules_hash(molecules: dict):
+    """fingerprint of the fields that determine peak matching (name, ion, rt)"""
+    rows = sorted((str(m['molecule_name']), float(m['ion']), float(m['rt']))
+                  for m in molecules.values())
+    return hashlib.md5(json.dumps(rows).encode()).hexdigest()[:8]
+
+def get_global_db():
+    return get_app_dir() / 'databases' / 'gcms.db'
+
+def get_schema_path():
+    return get_app_dir() / 'GCMSdata.sql'

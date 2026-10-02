@@ -86,11 +86,6 @@ import matplotlib.gridspec as gridspec
 from src.main_pipeline.plotting import plot_boxplot, plot_scatter, plot_heatmap, plot_violin, plot_histogram, plot_bar, plot_pdf_table
 import src.main_pipeline.plotting as plotting_module
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    filename="debug.log"
-)
 logger = logging.getLogger(__name__)
 
 # endregion

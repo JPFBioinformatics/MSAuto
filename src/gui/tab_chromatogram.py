@@ -35,11 +35,6 @@ from matplotlib.figure import Figure
 from src.main_pipeline.plotting import plot_chromatogram, plot_peak, plot_spectrum
 from src.gui.run_data import RunData
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    filename="debug.log"
-)
 logger = logging.getLogger(__name__)
 
 # endregion
@@ -61,7 +56,7 @@ class ChromatogramTab(QWidget):
         self.molecule_list.insert(0, "None")
         self.molecule = "None"
 
-        self.intensity_matrix = self.run_data.intensity_matrices[self.sample]
+        self.intensity_matrix = self._load_sample(self.sample)
         self.ion_list = [str(x) for x in self.intensity_matrix.unique_mzs]
         self.ion_list[-1] = "TIC"
         self.ion = "TIC"
@@ -204,11 +199,8 @@ class ChromatogramTab(QWidget):
 
         # find peak
         self.peak_idx = self.get_peak_idx()
-        self.peak_list = self.intensity_matrix.peak_dict[self.ion][self.peak_idx]
-        if not self.peak_list:
-            self.peak = None
-        else:
-            self.peak = self.intensity_matrix.peak_dict[self.ion][self.peak_idx]
+        self.peak_list = self.intensity_matrix.peak_dict[self.ion]
+        self.peak = self.peak_list[self.peak_idx] if self.peak_list else None
 
         # update
         self.ion_dropdown.blockSignals(True)
@@ -221,7 +213,7 @@ class ChromatogramTab(QWidget):
     def on_sample_changed(self):
         # get sample and update intesntiy matrix
         self.sample = self.sample_dropdown.currentText()
-        self.intensity_matrix = self.run_data.intensity_matrices[self.sample]
+        self.intensity_matrix = self._load_sample(self.sample)
 
         # update ion list
         self.ion_list = [str(x) for x in self.intensity_matrix.unique_mzs]
@@ -289,10 +281,10 @@ class ChromatogramTab(QWidget):
             self.mol_dropdown.setCurrentIndex(mol_idx)
 
     def navigate_to(self, sample, molecule):
-        
+
         # sample state
         self.sample = sample
-        self.intensity_matrix = self.run_data.intensity_matrices[self.sample]
+        self.intensity_matrix = self._load_sample(self.sample)
         self.ion_list = [str(x) for x in self.intensity_matrix.unique_mzs]
         self.ion_list[-1] = 'TIC'
         self.sample_dropdown.blockSignals(True)
@@ -306,19 +298,47 @@ class ChromatogramTab(QWidget):
         # molecule state
         self.molecule = molecule
         self.ion = np.int64(self.run_data.molecules[molecule]['ion'])
-        self.peak_idx = self.get_peak_idx()
-        self.peak = self.intensity_matrix.peak_dict[self.ion if self.ion != 'TIC' else 9999][self.peak_idx]
         self.mol_dropdown.blockSignals(True)
         self.mol_dropdown.setCurrentText(molecule)
         self.mol_dropdown.blockSignals(False)
+
+        # ion not acquired in this sample -> fall back to the TIC with no peak selected
+        if self.ion not in self.intensity_matrix.peak_dict:
+            QMessageBox.warning(self, "Warning", f"Ion {self.ion} not present in {self.sample}, showing TIC")
+            self.ion = 'TIC'
+            self.peak_idx = 0
+            self.peak_list = self.intensity_matrix.peak_dict[9999]
+            self.peak = None
+        else:
+            self.peak_list = self.intensity_matrix.peak_dict[self.ion]
+            row_i = self.data_matrix.sample_map[self.sample]
+            col_i = self.data_matrix.mol_map[self.molecule]
+            found_idx = self.data_matrix.data['peak_idx'][row_i, col_i]
+            if found_idx == -1 or found_idx >= len(self.peak_list):
+                QMessageBox.warning(self, "Warning", f"No peak found for {self.molecule} in {self.sample}")
+                self.peak_idx = 0
+                self.peak = None                     # show the trace, no misleading peak
+            else:
+                self.peak_idx = int(found_idx)
+                self.peak = self.peak_list[self.peak_idx]
+
         self.ion_dropdown.blockSignals(True)
-        self.ion_dropdown.setCurrentText(str(self.ion))
+        self.ion_dropdown.setCurrentText(str(self.ion))    # 'TIC' or the ion number, both are in ion_list
         self.ion_dropdown.blockSignals(False)
 
         # render signals
         self.trace_view.update(self.ion)
         self.peak_view.update(self.peak)
         self.spectrum_view.update(self.intensity_matrix, self.peak)
+
+
+    def _load_sample(self, sample):
+        """load a sample's IM from the store with a busy cursor (may read from disk)"""
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            return self.run_data.intensity_matrices[sample]
+        finally:
+            QApplication.restoreOverrideCursor()
 
 class TraceViewWidget(QWidget):
     def __init__(self, time_array, int_array, ion, peak_list, parent=None):
@@ -560,17 +580,3 @@ class SpectrumViewWidget(QWidget):
         self.mzs = mzs
         self.abundances = abundances
         self.plot()
-
-if __name__ == "__main__":
-
-    app = QApplication(sys.argv)
-
-    with open("style.css", "r") as f:
-        app.setStyleSheet(f.read())
-
-    run_data = RunData("run_name", "test")
-
-    w = ChromatogramTab(run_data)
-    w.show()
-
-    sys.exit(app.exec_())

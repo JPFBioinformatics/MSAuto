@@ -14,10 +14,12 @@ with a given run/batch.
 """
 
 # region Imports
-
+import numpy as np
 from pathlib import Path
 from datetime import datetime
-import sqlite3
+import sqlite3, json
+from src.main_pipeline.utils import get_global_db, get_schema_path, cfg_hash
+
 
 # logging
 import logging
@@ -25,370 +27,269 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-# region                 ---------- BASIC ----------
+SCHEMA_VERSION = 1          # bump by hand whenever the db structure changes
 
-def connect(db_path: Path, create:bool = False):
+# upgrade steps: version -> SQL that takes a db from (version - 1) to version
+# the base schema (GCMSdata.sql) creates everything up to the current version for new dbs
+MIGRATIONS = {
+    # 2: "ALTER TABLE peaks ADD COLUMN new_metric REAL;",
+}
+
+# region fetch
+
+def get_project_names(conn):
+    return [r['project_name'] for r in
+            conn.execute("SELECT project_name FROM projects ORDER BY project_name").fetchall()]
+
+def get_run_names(conn, project_name):
+    rows = conn.execute(
+        """SELECT r.run_name FROM runs r JOIN projects p ON p.project_id = r.project_id
+           WHERE p.project_name = ? ORDER BY r.created_at""", (project_name,)).fetchall()
+    return [r['run_name'] for r in rows]
+
+def get_run(conn, project_name, run_name):
+    return conn.execute(
+        """SELECT r.* FROM runs r JOIN projects p ON p.project_id = r.project_id
+           WHERE p.project_name = ? AND r.run_name = ?""", (project_name, run_name)).fetchone()
+
+def get_run_samples(conn, project_name, run_name):
+    return conn.execute(
+        """SELECT s.* FROM samples s JOIN runs r ON r.run_id = s.run_id
+           JOIN projects p ON p.project_id = r.project_id
+           WHERE p.project_name = ? AND r.run_name = ?""", (project_name, run_name)).fetchall()
+
+def get_run_molecules(conn, project_name, run_name):
+    return conn.execute(
+        """SELECT m.* FROM molecules m JOIN runs r ON r.run_id = m.run_id
+           JOIN projects p ON p.project_id = r.project_id
+           WHERE p.project_name = ? AND r.run_name = ?""", (project_name, run_name)).fetchall()
+
+# endregion
+
+# region setup
+
+def init_db(db_path: Path, schema_path: Path):
+    """creates the database from the schema file (safe to rerun, tables use IF NOT EXISTS)"""
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = connect(db_path, create=True)
+    try:
+        with open(schema_path) as f:
+            conn.executescript(f.read())
+    finally:
+        conn.close()
+
+def ensure_db():
+    """returns the global db path, creating it or upgrading its schema to SCHEMA_VERSION"""
+    db_path = get_global_db()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = connect(db_path, create=True)
+    try:
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version == 0:
+            # brand new (or failed first setup): create everything from the schema file
+            with open(get_schema_path()) as f:
+                conn.executescript(f.read())
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        elif version < SCHEMA_VERSION:
+            # existing db from an older app version: apply each upgrade in order
+            for v in range(version + 1, SCHEMA_VERSION + 1):
+                if v in MIGRATIONS:
+                    conn.executescript(MIGRATIONS[v])
+                conn.execute(f"PRAGMA user_version = {v}")
+        elif version > SCHEMA_VERSION:
+            raise RuntimeError(f"Database version {version} is newer than this app ({SCHEMA_VERSION}), "
+                               f"please update the app")
+    finally:
+        conn.close()
+    return db_path
+
+
+
+# endregion
+
+# region projects/runs
+
+def get_project_id(conn, project_name):
+    row = conn.execute("SELECT project_id FROM projects WHERE project_name = ?",
+                       (project_name,)).fetchone()
+    return row['project_id'] if row else None
+
+def get_or_create_project(conn, project_name, description=None):
+    pid = get_project_id(conn, project_name)
+    if pid is not None:
+        return pid
+    return conn.execute(
+        "INSERT INTO projects (project_name, created_at, description) VALUES (?, ?, ?)",
+        (project_name, datetime.now().isoformat(), description)).lastrowid
+
+def get_run_id(conn, project_name, run_name):
+    row = conn.execute(
+        """SELECT r.run_id FROM runs r JOIN projects p ON p.project_id = r.project_id
+           WHERE p.project_name = ? AND r.run_name = ?""",
+        (project_name, run_name)).fetchone()
+    return row['run_id'] if row else None
+
+def run_exists(conn, project_name, run_name):
+    return get_run_id(conn, project_name, run_name) is not None
+
+def insert_run(conn, project_id, run_name, run_type, cfg, user='default', method='default',
+               norm_type='default'):
+    """inserts a run with the config it was processed with, returns run_id"""
+    return conn.execute(
+        """INSERT INTO runs (project_id, run_name, run_type, created_at, user, method, norm_type,
+                             input_dir, cfg_hash, config_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (project_id, run_name, run_type, datetime.now().isoformat(), user, method, norm_type,
+         str(cfg.get('input_dir')), cfg_hash(cfg), json.dumps(cfg.config, default=str))).lastrowid
+
+def delete_run(conn, project_name, run_name):
+    """removes a run and (via ON DELETE CASCADE) its samples, molecules, peaks, features, stats"""
+    run_id = get_run_id(conn, project_name, run_name)
+    if run_id is not None:
+        conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+
+# endregion
+
+# region run contents
+
+def insert_peak_batch(conn, im, sample_id, molecule_ids, matched_only=True):
     """
-    Connects to db
-    
+    inserts an IM's peaks; molecule_ids maps molecule_name -> molecule_id for this run
+    matched_only=True stores only peaks assigned to a molecule (full sets live in the .pkl)
+    """
+    cols = ('sample_id', 'molecule_id', 'ion', 'peak_idx') + PEAK_COLUMNS
+    rows = []
+    for ion, peak_list in im.peak_dict.items():
+        for idx, peak in enumerate(peak_list):
+            mol = peak.get('molecule')
+            if matched_only and mol is None:
+                continue
+            rows.append((sample_id, molecule_ids.get(mol), _py(ion), idx)
+                        + tuple(_py(peak.get(c)) for c in PEAK_COLUMNS))
+    conn.executemany(
+        f"INSERT INTO peaks ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", rows)
+    return len(rows)
+
+
+def insert_molecules(conn, run_id, molecules: dict):
+    """inserts the run's molecule table, returns {molecule_name: molecule_id}"""
+    ids = {}
+    for row in molecules.values():
+        ids[row['molecule_name']] = conn.execute(
+            """INSERT INTO molecules (run_id, molecule_name, ion, rt, std, casNo)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (run_id, row['molecule_name'], _py(row.get('ion')), _py(row.get('rt')),
+             row.get('std'), row.get('casNo'))).lastrowid
+    return ids
+
+def insert_sample(conn, run_id, row: dict, im=None):
+    """inserts sample metadata (+ IM summary if available), returns sample_id"""
+    matrix_type = noise_factor = n_ions = n_scans = scan_interval = None
+    if im is not None:
+        n_ions, n_scans = im.intensity_matrix.shape
+        times = np.array([t for _, t in sorted(im.time_map.items())])
+        scan_interval = float(np.median(np.diff(times))) if len(times) > 1 else None
+        matrix_type, noise_factor = im.matrix_type, im.noise_factor
+    return conn.execute(
+        """INSERT INTO samples (run_id, sample_name, modelID, group_name, sex, norm_factor,
+                                injection_order, matrix_type, noise_factor, n_ions, n_scans, scan_interval)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (run_id, row['sample_name'], row.get('modelID'), row.get('group_name'), row.get('sex'),
+         _py(row.get('norm_factor')), _py(row.get('injection_order')),
+         matrix_type, _py(noise_factor), _py(n_ions), _py(n_scans), scan_interval)).lastrowid
+
+def insert_sample_stats(conn, sample_id, im):
+    """per-sample summary of ALL detected peaks (for global comparisons without storing every peak)"""
+    peaks = [p for plist in im.peak_dict.values() for p in plist]
+    def med(key):
+        vals = np.array([_py(p.get(key)) for p in peaks], dtype=float)
+        vals = vals[np.isfinite(vals)]
+        return float(np.median(vals)) if len(vals) else None
+    n = len(peaks)
+    frac_overlap = (sum(1 for p in peaks if p.get('overlap_left') or p.get('overlap_right')) / n) if n else None
+    conn.execute(
+        """INSERT INTO sample_stats (sample_id, n_peaks, median_fwhh, median_sn, median_tailing,
+                                     median_height, frac_overlapped)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (sample_id, n, med('fwhh'), med('sn_ratio'), med('tailing_factor'), med('height'), frac_overlap))
+
+# endregion
+
+# region save full run
+
+def save_run_to_db(conn, project_name, run_name, run_type, cfg, samples: dict, molecules: dict,
+                   ims, overwrite=True, matched_only=True):
+    """
+    saves a whole run in one transaction (all-or-nothing)
+
     Params
     ------
-    db_path                 path to .db file to conect to
+    samples                 {sample_name: row dict} (sample table rows)
+    molecules               {molecule_name: row dict}
+    ims                     iterable of (sample_name, IntensityMatrix), loaded one at a time
+    overwrite               replace an existing run with the same name instead of failing
+    matched_only            only store molecule-matched peaks (full peak sets stay in the .pkl files)
 
     Returns
     -------
-    conn                    connection to db
+    dict of counts for logging / user feedback
     """
+    counts = {'samples': 0, 'molecules': 0, 'peaks': 0}
+    with conn:
+        if run_exists(conn, project_name, run_name):
+            if not overwrite:
+                raise ValueError(f"Run {run_name} already saved in project {project_name}")
+            delete_run(conn, project_name, run_name)
+
+        project_id = get_or_create_project(conn, project_name)
+        run_id = insert_run(conn, project_id, run_name, run_type, cfg)
+
+        molecule_ids = insert_molecules(conn, run_id, molecules)
+        counts['molecules'] = len(molecule_ids)
+
+        saved = set()
+        for sample_name, im in ims:
+            sample_id = insert_sample(conn, run_id, samples[sample_name], im)
+            insert_sample_stats(conn, sample_id, im)
+            counts['peaks'] += insert_peak_batch(conn, im, sample_id, molecule_ids, matched_only)
+            saved.add(sample_name)
+
+        # samples with no IM (failed processing) still get their metadata row
+        for sample_name, row in samples.items():
+            if sample_name not in saved:
+                insert_sample(conn, run_id, row, im=None)
+        counts['samples'] = len(samples)
+
+    return counts
+
+# endregion
+
+# region helpers
+
+def connect(db_path: Path, create: bool = False):
     if not create and not Path(db_path).exists():
         raise FileNotFoundError(f"Database not found: {db_path}")
     conn = sqlite3.connect(db_path)
-    #conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db(db_path: Path, schema_path: Path):
-    """
-    Creates empty database
+def _py(v):
+    """numpy -> plain python for sqlite (np.int64 is not accepted)"""
+    if v is None:
+        return None
+    if isinstance(v, (np.integer, np.bool_, bool)):
+        return int(v)
+    if isinstance(v, np.floating):
+        return None if np.isnan(v) else float(v)
+    if isinstance(v, float) and np.isnan(v):
+        return None
+    return v
 
-    Params
-    ------
-    db_path                 path to put .db file at
-    schema_path             path to .sql schema file
-    """
-
-    conn = connect(db_path, create=True)
-    with open(schema_path) as f:
-        conn.executescript(f.read())
-    conn.close()
-
-def init_run(run_name: str, project_name: str, app_dir: Path):
-    """
-    Initializes a run directory and prepares database
-    """
-    run_dir = app_dir / "databases" / project_name / run_name
-    run_dir.mkdir(parents=True,exist_ok=True)
-    db_path = run_dir / f"{run_name}.db"
-    schema_path = app_dir / "GCMSdata.sql"
-    init_db(db_path,schema_path)
-    conn = connect(db_path)
-    return conn, run_dir
-
-# endregion
-
-# region                 ---------- INSERT ----------
-
-def insert_sample(conn: sqlite3.Connection,
-                  sample_name: str,
-                  run_name: str,
-                  modelID: str,
-                  group_name: str,
-                  sex: str,
-                  norm_factor: float,
-                  injection_order: int):
-    """
-    Inserts into samples table
-    """
-    cur = conn.execute(
-        """ INSERT INTO samples (sample_name, run_name, modelID, group_name, sex, norm_factor, injection_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, run_name, modelID, group_name, sex, norm_factor, injection_order)
-    )
-    return cur.lastrowid
-
-def insert_molecule(conn: sqlite3.Connection,
-                    molecule_name: str,
-                    run_name: str,
-                    ion: int,
-                    rt: float,
-                    std: str,
-                    casNO: str):
-    """
-    Inserts into the molecules table
-    """
-    cur = conn.execute(
-        """ INSERT INTO molecules (molecule_name, run_name, ion, rt, std, casNO)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-            (molecule_name, run_name, ion, rt, std, casNO)
-    )
-    return cur.lastrowid
-
-def insert_feature(conn: sqlite3.Connection,
-                   sampleID: int,
-                   feat_rt: float,
-                   collection_ion: int,
-                   identification: str):
-    """
-    Inserts into the features table
-    """
-    cur = conn.execute(
-        """ INSERT INTO features (sampleID, feat_rt, collection_ion, identification)
-            VALUES (?, ?, ?, ?)""",
-            (sampleID, feat_rt, collection_ion, identification)
-    )
-    return cur.lastrowid
-
-def insert_im(conn: sqlite3.Connection,
-              sample_name: str,
-              run_name: str,
-              sample_type: str,
-              noise_factor: float,
-              n_ions: int,
-              n_timepoints: int):
-    """
-    Inserts into the intensity_matrices table
-    """
-    created_at = datetime.now().isoformat()
-    cur = conn.execute(
-        """ INSERT INTO intensity_matrices (sample_name, run_name, created_at, sample_type, noise_factor, n_ions, n_timepoints)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (sample_name, run_name, created_at, sample_type, noise_factor, n_ions, n_timepoints)
-    )
-    return cur.lastrowid
-
-def insert_peak(conn: sqlite3.Connection,
-                run_name: str,
-                sample_name: str,
-                molecule: str,
-                center: int,
-                left_bound: int,
-                right_bound: int,
-                rt: float,
-                height: float,
-                area: float,
-                sn_ratio: float,
-                ion: float,
-                fwhh: float,
-                tailing_factor: float,
-                bl_slope: float,
-                bl_yint: float,
-                conv: float,
-                valley_ratio:float,
-                peak_idx: int,
-                cluster: int,
-                featID: int = None):
-    """
-    Inserts into peaks table
-    """
-    conn.execute(
-        """ INSERT INTO peaks (run_name, sample_name, molecule, featID, center, left_bound, 
-        right_Bound, rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, 
-        conv, valley_ratio, peak_idx, cluster)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (str(run_name), str(sample_name), str(molecule), featID, int(center), int(left_bound), 
-            int(right_bound), rt, float(height), float(area), float(sn_ratio), str(ion), float(fwhh),
-            float(tailing_factor), float(bl_slope), float(bl_yint), conv, valley_ratio, peak_idx,
-            cluster)
-    )
-
-def insert_peak_batch(conn: sqlite3.Connection, im, run_name):
-    """
-    Converts peak dict to a list of tuples, then inserts in bulk
-    
-    Params
-    ------
-        conn                        sqlite connection
-        im                          IntensityMatrix object to insert peaks for
-        run_name                    name of this run
-    """
-    rows = []
-    sample_name = im.sample_name
-    for _, peak_list in im.peak_dict.items():
-        for peak in peak_list:
-            rows.append((
-                run_name, sample_name, peak['molecule'], peak['feature'], int(peak['center']), 
-                int(peak['left_bound']), int(peak['right_bound']), peak['rt'], peak['height'], peak['area'], 
-                peak['sn_ratio'],peak['ion'], peak['fwhh'], peak['tailing_factor'], peak['bl_slope'],
-                peak['bl_yint'], peak['conv'], peak['valley_ratio'], peak['peak_idx'], peak['cluster']
-            ))
-
-    conn.executemany(
-        """
-        INSERT INTO peaks (run_name, sample_name, molecule, feature, center, left_bound, right_bound,
-        rt, height, area, sn_ratio, ion, fwhh, tailing_factor, bl_slope, bl_yint, conv, valley_ratio,
-        peak_idx, cluster)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, rows
-    )
-
-def insert_run(conn: sqlite3.Connection,
-               run_name: str,
-               run_type: str,
-               user: str = 'default',
-               method: str = 'default',
-               file_type: str = 'default',
-               norm_type: str = 'default'):
-    """
-    Inserts a run into runs table
-    """
-    if run_exists(conn,run_name):
-        logger.warning(f"Run {run_name} already in database")
-        raise ValueError(f"Run {run_name} already in database, choose unique run name")
-    created_at = datetime.now().isoformat()
-    cur = conn.execute(
-        """ INSERT INTO runs (run_name, run_type, created_at, user, method, file_type, norm_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (run_name, run_type, created_at, user, method, file_type, norm_type)
-    )
-    return cur.lastrowid
-
-# endregion
-
-# region                 ---------- FETCH ----------
-
-def get_proj_samples(conn: sqlite3.Connection):
-    """
-    Gets rows for all samples associated with this project
-
-    Returns
-    -------
-    List of row objects, access with rows['sample_name']
-    """
-    cur = conn.execute(
-        "SELECT * FROM samples"
-    )
-    return cur.fetchall()
-
-def get_sample(conn: sqlite3.Connection, sampleID: int):
-    """
-    Gets row for a given sampleID
-
-    Returns
-    -------
-    Row object for 'sample_name'
-    """
-    cur = conn.execute(
-        "SELECT * FROM samples WHERE sampleID = ?", (sampleID,)
-    )
-    return cur.fetchone()
-
-def get_run_samples(conn: sqlite3.Connection, run_name: str):
-    """
-    Gets all samples associated with a given run
-    """
-    cur = conn.execute(
-        "SELECT * FROM samples WHERE run_name = ?", (run_name,)
-        )
-    return cur.fetchall()
-
-def get_smaple_im(conn: sqlite3.Connection, sampleID: int):
-    """
-    Gets IM row for a given sampleID
-    """
-    cur = conn.execute(
-        "SELECT * FROM intensity_matrices WHERE sampleID = ?", (sampleID,)
-    )
-    return cur.fetchone()
-
-def get_proj_molecules(conn: sqlite3.Connection):
-    """
-    Gets all molecules for this project
-    """
-    cur = conn.execute(
-        "SELECT * FROM molecules"
-        )
-    return cur.fetchall()
-
-def get_run_molecules(conn: sqlite3.Connection, run_name: str):
-    """
-    Gets all molecules for this run
-    """
-    cur = conn.execute(
-        "SELECT * FROM molecules WHERE run_name = ?", (run_name,)
-    )
-    return cur.fetchall()
-
-def get_mol(conn: sqlite3.Connection, molID: str):
-    """
-    Gets a molecule's row based on its ID
-    """
-    cur = conn.execute(
-        "SELECT * FROM molecules WHERE molID = ?", (molID,)
-    )
-    return cur.fetchone()
-
-def get_im_peaks(conn: sqlite3.Connection, imID: int):
-    """
-    Gets all peaks for a given intensity matrix
-    """
-    cur = conn.execute(
-        "SELECT * FROM peaks where imID = ?", (imID,)
-    )
-    return cur.fetchall()
-
-def get_im_feats(conn: sqlite3.Connection, imID: int):
-    """
-    Gets all features for a given intensity matrix
-    """
-    cur = conn.execute(
-        "SELECT * FROM features WHERE imID = ?", (imID,)
-    )
-    return cur.fetchall()
-
-def get_run_peaks(conn: sqlite3.Connection, run_name: str):
-    """
-    Generates a peak_data dict sample: peak_list structure for recreating a datamatrix
-    from stored peak data
-    """
-    cur = conn.execute(
-        """SELECT *
-        FROM peaks join intensity_matrices ON peaks.sample_name = intensity_matrices.sample_name
-        AND peaks.run_name = intensity_matrices.run_name
-        WHERE molecule IS NOT NULL 
-        AND peaks.run_name = ?""", (run_name,)
-    )
-    peak_rows = cur.fetchall()
-    peak_data = {}
-    for row in peak_rows:
-        sample = row['sample_name']
-        if sample not in peak_data:
-            peak_data[sample] = []
-        peak_data[sample].append(dict(row))
-    
-    return peak_data
-
-def get_run_names(conn: sqlite3.Connection):
-    """
-    Returns a list of all run names from database
-    """
-    cur = conn.execute(
-        " SELECT run_name FROM runs"
-    )
-    return [row['run_name'] for row in cur.fetchall()]
-
-# endregion
-
-# region                 ---------- UTILS ----------
-
-def run_exists(conn: sqlite3.Connection, run_name: str):
-    """
-    Returns bool true if a run_name already exists in the databse, false if it does not
-    """
-    row = conn.execute("SELECT 1 FROM runs WHERE run_name = ?", (run_name,)).fetchone()
-    return row is not None
-
-# endregion
-
-# region                 ---------- REPLACE ----------
-
-def replace_peak(conn: sqlite3.Connection,
-                 run_name: str,
-                 sample_name: str,
-                 molecule: str,
-                 peak: dict):
-    """
-    Replaces a given peak in the db with a new peak
-    """
-    conn.execute(
-        """
-        UPDATE peaks SET
-        center = ? AND left_bound = ? AND right_bound = ? AND rt = ? AND height = ? AND area = ? AND
-        sn_ratio = ? AND ion = ? AND fwhh = ? AND tailing_factor = ? AND bl_slope = ? AND bl_yint = ? AND
-        conv = ? AND valley_ratio = ? AND peak_idx = ?
-        WHERE run_name = ?, sample_name = ?, molecule = ?
-        """,
-        (int(peak['center']), int(peak['left_bound']), int(peak['right_bound']), float(peak['rt']), float(peak['height']), float(peak['area']),
-         float(peak['sn_ratio']), int(peak['ion']), float(peak['fwhh']), float(peak['tailing_factor']), float(peak['bl_slope']), float(peak['bl_yint']),
-         float(peak['conv']), float(peak['valley_ratio']), int(peak['peak_idx']), run_name, sample_name, molecule)
-    )
+PEAK_COLUMNS = ('center', 'left_bound', 'right_bound', 'rt', 'raw_height', 'height', 'area',
+                'sn_ratio', 'fwhh', 'tailing_factor', 'bound_symmetry', 'valley_ratio', 'conv',
+                'flat_top', 'symmetry_valid', 'overlap_left', 'overlap_right',
+                'cwt_score', 'cwt_scale', 'ridge_span', 'cluster')
 
 # endregion

@@ -8,7 +8,6 @@ is a different measured intensity value, used for analysis/QC
 # region Imports
 
 import numpy as np
-from src.main_pipeline.utils import get_proj_db
 from src.gui.analysis import full_preprocess
 
 from scipy.optimize import curve_fit
@@ -75,7 +74,6 @@ class DataMatrix:
             'SN_Ratio': float_empty(),
             'Theoretical_Plates': float_empty(),
             'peak_idx': int_empty(),
-            'bl_slope': float_empty(),
             'flat': bool_empty(),
             'gaussian_similarity': float_empty(),
             'norm_Area': float_empty(),
@@ -95,7 +93,6 @@ class DataMatrix:
             'Sharpness': bool_empty(),
             'SN_Ratio': bool_empty(),
             'Theoretical_Plates': bool_empty(),
-            'bl_slope': bool_empty(),
             'gaussian_similarity': bool_empty(),
             'spectra_similarity': bool_empty()
         }
@@ -148,7 +145,6 @@ class DataMatrix:
                 self.data['SN_Ratio'][row_i,col_i] = peak['sn_ratio']
                 self.data['Theoretical_Plates'][row_i,col_i] = self._theoretical_plates(peak['rt'],peak['fwhh'])
                 self.data['peak_idx'][row_i][col_i] = peak['peak_idx']
-                self.data['bl_slope'][row_i][col_i] = peak['bl_slope']
                 self.data['flat'][row_i][col_i] = peak['flat_top']
                 self.data['gaussian_similarity'][row_i][col_i] = self.gaussian_similarity(peak['peak_array'])
 

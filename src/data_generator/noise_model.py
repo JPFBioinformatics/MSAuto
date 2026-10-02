@@ -52,7 +52,6 @@ from pathlib import Path
 from wqio.ros import ROS
 import pandas as pd
 import numpy as np
-from scipy.stats import gaussian_kde
 from scipy.signal import savgol_filter
 import critband
 from matplotlib.backends.backend_pdf import PdfPages
@@ -61,11 +60,7 @@ from collections import Counter
 from scipy.special import erfc, erfcx
 from lmfit import Model
 
-from src.scripts.helpers import (rolling_median_2d, normalize_matrix)
-from src.main_pipeline.mzml_processor import (full_bulk_convert)
-from src.main_pipeline.config_loader import ConfigLoader
-from src.main_pipeline.intensity_matrix import IntensityMatrix as IM
-from src.main_pipeline.utils import (get_app_dir)
+from src.main_pipeline.utils import (get_noise_model_dir)
 
 from src.scripts.helpers import (plot_histogram, plot_table)
 
@@ -462,11 +457,6 @@ class NoiseModel:
         # collect fit resutls (shorter name for easy typing)
         fits_df = self.fits_df
 
-        # save fit results
-        fits_file = get_app_dir() / 'databases' / 'noise_models' / f'{self.model_name}_peak_fits.csv'
-        fits_df.to_csv(fits_file, index=False)
-        logger.info(f"Saved {len(fits_df)} peak fits to {fits_file}")
-
         # summary
         is_emg = fits_df['model'] == 'emg'
         is_gauss = fits_df['model'] == 'gauss'
@@ -500,8 +490,7 @@ class NoiseModel:
             return f"{100 * k / max(n_total,1):.2f}%"
 
         # out directory
-        out_dir = get_app_dir()/ 'databases' / 'noise_models' / self.model_name
-        out_dir.mkdir(exist_ok=True, parents=True)
+        out_dir = get_noise_model_dir() / self.model_name
         pdf_file = out_dir / 'nm_metrics.pdf'
 
         with PdfPages(pdf_file) as pdf:
@@ -706,7 +695,7 @@ class NoiseModel:
         saves models to <app_dir>/noise_models/<model_name>/
                         peak_fits.csv, row_stats.csv, model_meta.json, <sample>/bl_noise.npz
         """
-        out_dir = get_app_dir() / 'noise_models' / self.model_name
+        out_dir = get_noise_model_dir() / self.model_name
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # combined tables

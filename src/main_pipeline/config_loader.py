@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import yaml, shutil
 from openpyxl import load_workbook
-from src.main_pipeline.utils import get_app_dir
+from src.main_pipeline.utils import get_default_config_path
 
 # logging
 import logging
@@ -235,14 +235,14 @@ class ConfigLoader:
         """
         copies default config to run directory as config.yaml
         """
-        default = get_app_dir() / "default_config.yaml"
+        default = get_default_config_path()
         dest = run_dir / "config.yaml"
         shutil.copy(default,dest)
         return ConfigLoader(dest)
     
     @classmethod
     def load_default_config(cls, dest_path):
-        default = get_app_dir() / 'default_config.yaml'
+        default = get_default_config_path()
         with open(default, 'r') as f:
             config = yaml.safe_load(f)
         return cls(dest_path, config=config)

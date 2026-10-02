@@ -5,8 +5,8 @@ All functions return matplotlib Figure objects and never call plt.show().
 
 """
 
-# region Imports
-
+# region Imports 
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -22,6 +22,97 @@ logger = logging.getLogger(__name__)
 # region                 ---------- Primitives ----------
 
 DARK_MODE = True
+
+def symlog_bins(values, linthresh=1.0, n_bins=30):
+    values = np.asarray(values)
+    pos = values[values > linthresh]
+    neg = values[values < -linthresh]
+
+    edges = [np.linspace(-linthresh, linthresh, 5)]
+    if len(neg) > 0:
+        edges.insert(0, -np.geomspace(linthresh, abs(neg.min()), n_bins)[::-1])
+    if len(pos) > 0:
+        edges.append(np.geomspace(linthresh, pos.max(), n_bins))
+
+    return np.unique(np.concatenate(edges))
+
+def plot_im_histogram(pdf: PdfPages, title: str, xlabel: str, values, 
+                   bin_size: int = None, n_bins: int = None,
+                   symlog: bool = False, linthresh: float = 1.0, 
+                   log: bool = False, rotate_labels: bool = False,
+                   title_fontsize: int=None):
+
+    values = np.asarray(values)
+
+    if np.any(np.isnan(values)):
+        mask = ~np.isnan(values)
+        values = values[mask]
+    
+    fig, ax = plt.subplots()
+
+    if symlog:
+        bins = symlog_bins(values, linthresh=linthresh, n_bins = n_bins or 30)
+        ax.set_xscale('symlog', linthresh=linthresh)
+    elif log:
+        vals = np.asarray(values)
+        vals = vals[np.isfinite(vals) & (vals > 0)]
+        bins = np.geomspace(vals.min(), vals.max(), n_bins or 30)
+        ax.set_xscale('log')
+    elif n_bins is not None:
+        bins = n_bins
+    elif bin_size is not None:
+        vmin,vmax = np.nanmin(values), np.nanmax(values)
+        if vmin == vmax:
+            bins = [vmin - bin_size /2, vmin + bin_size / 2]
+        else:
+            bins = np.arange(np.nanmin(values), np.nanmax(values) + bin_size, bin_size)
+    else:
+        bins = 'auto'
+    if rotate_labels:
+        plt.setp(ax.get_xticklabels(), rotation=50, ha='right')
+
+    ax.hist(values, bins=bins)
+    if symlog and np.all(values >= 0):
+        ax.set_xlim(left=0)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Count")
+    ax.set_title(title, fontsize=title_fontsize)
+
+    pdf.savefig(fig)
+    plt.close(fig)
+
+def plot_im_scatter(pdf, title, xlabel, ylabel, x_values, y_values,
+                  color_values=None, color_label=None,
+                  xscale='linear', yscale='linear',
+                  x_linthresh=1.0, y_linthresh=1.0, alpha=0.5):
+    
+    fig, ax = plt.subplots()
+
+    if color_values is not None:
+        sc = ax.scatter(x_values, y_values, c=color_values, alpha=alpha, rasterized=True)
+        cbar = fig.colorbar(sc, ax=ax)
+        if color_label:
+            cbar.set_label(color_label)
+    else:
+        ax.scatter(x_values, y_values, alpha=alpha, rasterized=True)
+
+    if xscale == 'symlog':
+        ax.set_xscale('symlog', linthresh=x_linthresh)
+    else:
+        ax.set_xscale(xscale)
+
+    if yscale == 'symlog':
+        ax.set_yscale('symlog', linthresh=y_linthresh)
+    else:
+        ax.set_yscale(yscale)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+
+    pdf.savefig(fig)
+    plt.close(fig)
+
 
 def plot_boxplot(ax: Axes, data, labels, ylabel='', title='', cutoff=None, color=True):
     """
@@ -823,8 +914,7 @@ def plot_peak(time_array: np.ndarray, intensity_array: np.ndarray, peak: dict,
 
     t = time_array[view_l:view_r + 1]
     y = intensity_array[view_l:view_r + 1]
-    scan_indices = np.arange(view_l, view_r + 1)
-    baseline = peak['bl_slope'] * (scan_indices-lb) + peak['bl_yint']
+    baseline = peak['baseline']
 
     rel_lb = lb - view_l
     rel_rb = rb - view_l
@@ -834,12 +924,16 @@ def plot_peak(time_array: np.ndarray, intensity_array: np.ndarray, peak: dict,
     else:
         fig = ax.figure
 
-    # signal and baseline
+    # signal and baseline (baseline only spans left_bound..right_bound)
+    t_peak = time_array[lb:rb + 1]
+    y_peak = intensity_array[lb:rb + 1]
+    baseline = np.asarray(peak['baseline'], dtype=float)
+    if baseline.ndim == 0:                                  # scalar baseline -> flat line
+        baseline = np.full(len(t_peak), float(baseline))
+
     ax.plot(t, y, color='black', linewidth=1.2, label='Signal')
-    ax.plot(t, baseline, color='crimson', linewidth=0.8, linestyle='--', label='Baseline')
-    ax.fill_between(t[rel_lb:rel_rb + 1], baseline[rel_lb:rel_rb + 1],
-                    y[rel_lb:rel_rb + 1], alpha=0.15, color='lightblue')
-    
+    ax.plot(t_peak, baseline, color='crimson', linewidth=0.8, linestyle='--', label='Baseline')
+    ax.fill_between(t_peak, baseline, y_peak, alpha=0.15, color='lightblue')
     # endpoints
     ax.scatter(time_array[lb], intensity_array[lb], color='crimson')
     ax.scatter(time_array[rb], intensity_array[rb], color='crimson')

@@ -49,6 +49,8 @@ peak_metrics_data/
 *.db
 *.json
 *.pdf
+*pk1
+cache/
 
 # Environment
 .env

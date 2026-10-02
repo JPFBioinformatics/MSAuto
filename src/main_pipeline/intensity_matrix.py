@@ -5,22 +5,20 @@ Class that stores an mzml file's data as a matrix for peak identification and se
 """
 
 # region Imports
-
-import h5py, copy, pywt
+import os, pickle
+from pathlib import Path
+import copy, pywt
 import numpy as np
 from scipy.signal import find_peaks, savgol_filter
-from scipy.ndimage import maximum_filter1d, minimum_filter1d, uniform_filter1d
+from scipy.ndimage import maximum_filter1d, minimum_filter1d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 from src.main_pipeline.config_loader import ConfigLoader
-from src.main_pipeline.utils import get_run_dir, get_proj_dir, get_run_cfg_path
-from src.main_pipeline.db import insert_im
-from src.main_pipeline.utils import get_app_dir
-from src.main_pipeline.plotting import plot_violin
-
-from src.scripts.helpers import (plot_histogram, plot_scatter)
+from src.main_pipeline.utils import get_feature_diag_dir
+from src.main_pipeline.utils import cfg_hash
+from src.main_pipeline.plotting import (plot_im_histogram, plot_im_scatter)
 
 # logging
 import logging
@@ -60,13 +58,6 @@ class IntensityMatrix:
         logger.info(f"Max signal: {self.saturation_ceiling:.2e}")
         logger.info(f"Min signal: {np.nanmin(self.intensity_matrix):.2e}")
 
-        """# embedding matrices
-        self.first_derivs = np.zeros_like(intensity_matrix, dtype=float)
-        self.second_derivs = np.zeros_like(intensity_matrix, dtype=float)
-        self.smoothed_signal = np.zeros_like(intensity_matrix, dtype=float)
-        self.cwt_scores = np.zeros_like(intensity_matrix, dtype=float)
-        self.cwt_scales = np.zeros_like(intensity_matrix, dtype=float)"""
-
         # calculate and apply abundnace threshold transformation to intensity matrix
         self.calculate_threshold()
         if apply_threshold:
@@ -80,8 +71,7 @@ class IntensityMatrix:
 
         # plot distributions of peaks
         stamp = datetime.now().strftime("%Y_%m_%d")
-        out_dir = get_app_dir() / 'databases' / 'feature_diagnostics' 
-        out_dir.mkdir(exist_ok=True, parents=True)
+        out_dir = get_feature_diag_dir()
         pdf_file = out_dir / f'{self.sample_name}_{stamp}_featureinfo.pdf'
         peak_counts, cum_heights, bin_starts = self.feature_distributions(resolution_mod=10)
         with PdfPages(pdf_file) as pdf:
@@ -101,7 +91,7 @@ class IntensityMatrix:
                     ridge_spans.append(peak['ridge_span'])
                     neg_scales.extend(peak['neg_scales'])
 
-            plot_scatter(pdf, "Peak Amplitude vs FWHH by Tailing factor", "FWHH", "log(Amplitude)",
+            plot_im_scatter(pdf, "Peak Amplitude vs FWHH by Tailing factor", "FWHH", "log(Amplitude)",
                          fwhh_vals, amp_vals, tf_vals, 'Tailing Factor Value', yscale='log', xscale='log')
 
             fwhh_nan = np.sum(np.isnan(fwhh_vals)) / len(fwhh_vals)
@@ -110,18 +100,18 @@ class IntensityMatrix:
             width_nan = np.sum(np.isnan(width_vals)) / len(width_vals)
             ns_nan = np.sum(np.isnan(neg_scales))
 
-            plot_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f}\nMax={np.nanmax(fwhh_vals):.2f} Med={np.nanmedian(fwhh_vals):.2f} Min={np.nanmin(fwhh_vals):.2f}",
+            plot_im_histogram(pdf, f"FWHH Distribtuion\nNaN Frac={fwhh_nan:.2f}\nMax={np.nanmax(fwhh_vals):.2f} Med={np.nanmedian(fwhh_vals):.2f} Min={np.nanmin(fwhh_vals):.2f}",
                            "FWHH (Minutes)", fwhh_vals, log=True)
-            plot_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Minutes)",
+            plot_im_histogram(pdf, f"Width Distribution\nNan Frac={width_nan:.2f}", "Width (Minutes)",
                            width_vals, log=True)
-            plot_histogram(pdf, f"Amplitude Distribution\nNaN Frac={amp_nan:.2f}", "Amplitdue", amp_vals, log=True)
-            plot_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor",
+            plot_im_histogram(pdf, f"Amplitude Distribution\nNaN Frac={amp_nan:.2f}", "Amplitdue", amp_vals, log=True)
+            plot_im_histogram(pdf, f"Tailng Factor Distribution\nNaN Frac={tf_nan:.2f}", "Tailing Factor",
                            tf_vals, log=True)
-            plot_histogram(pdf, f"CWT Max Score distribution\nMax={np.nanmax(cwt_c):.0f} Med={np.nanmedian(cwt_c):.0f} Min={np.nanmin(np.abs(cwt_c)):.0f}", 
+            plot_im_histogram(pdf, f"CWT Max Score distribution\nMax={np.nanmax(cwt_c):.0f} Med={np.nanmedian(cwt_c):.0f} Min={np.nanmin(np.abs(cwt_c)):.0f}", 
                            "CWT Max Score", cwt_c, symlog=True)
-            plot_histogram(pdf, f"CWT Max Scale Distribution", "CWT Max Scale", cwt_a, bin_size=1)
-            plot_histogram(pdf, f"CWT Ridge Span Distribution", "Ridge Span", ridge_spans, bin_size=1)
-            plot_histogram(pdf, f"Negative Scale Locations\nNan Count={ns_nan} Min={np.nanmin(neg_scales):.2f} Max={np.nanmax(neg_scales):.2f} Med={np.nanmedian(neg_scales):.2f}",
+            plot_im_histogram(pdf, f"CWT Max Scale Distribution", "CWT Max Scale", cwt_a, bin_size=1)
+            plot_im_histogram(pdf, f"CWT Ridge Span Distribution", "Ridge Span", ridge_spans, bin_size=1)
+            plot_im_histogram(pdf, f"Negative Scale Locations\nNan Count={ns_nan} Min={np.nanmin(neg_scales):.2f} Max={np.nanmax(neg_scales):.2f} Med={np.nanmedian(neg_scales):.2f}",
                            "Scale", neg_scales, log=True)
 
     # region                       ---------- Utils ----------
@@ -2056,11 +2046,11 @@ class IntensityMatrix:
 
         if pdf is not None:
 
-            plot_histogram(pdf,
+            plot_im_histogram(pdf,
                            f"Feature Ridge Max C\nn_ridges={total_ridges} | neg-c count={nsf_count} | neg frac = {(nsf_count / total_ridges):.2f}",
                            "c_max", np.array(max_cs), symlog=True)
-            plot_histogram(pdf, f"Feature Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
-            plot_histogram(pdf, f"Feature Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
+            plot_im_histogram(pdf, f"Feature Ridge Max Scale\nn_ridges={len(max_as)}", "a_max", np.array(max_as), bin_size=1)
+            plot_im_histogram(pdf, f"Feature Ridge Scale Range\nn_ridges={len(scale_ranges)}", "scale_range", np.array(scale_ranges), bin_size=1)
 
             count_mask = counts >= 5
             cum_heights = cum_heights[count_mask]
@@ -2077,9 +2067,9 @@ class IntensityMatrix:
             min_c = np.nanmin(nonzero_counts)
             med_c = np.nanmedian(nonzero_counts)
             mad_c = np.nanmedian(np.abs(nonzero_counts - med_c))
-            plot_histogram(pdf, f"Feature Cumulative Height Distribution Zero_frac={zero_frac:.2f}\nMax={max_ch:.0f} Min={min_ch:.0f} Med={med_ch:.0f} MAD={mad_ch:.0f}",
+            plot_im_histogram(pdf, f"Feature Cumulative Height Distribution Zero_frac={zero_frac:.2f}\nMax={max_ch:.0f} Min={min_ch:.0f} Med={med_ch:.0f} MAD={mad_ch:.0f}",
                            "Cumulative Height", nonzero_ch, log=True)
-            plot_histogram(pdf, f"Feature Maxima Count Distribtuion Zero_frac={zero_frac:.2f}\nMax={max_c:.0f} Min={min_c:.0f} Med={med_c:.0f} MAD={mad_c:.0f}",
+            plot_im_histogram(pdf, f"Feature Maxima Count Distribtuion Zero_frac={zero_frac:.2f}\nMax={max_c:.0f} Min={min_c:.0f} Med={med_c:.0f} MAD={mad_c:.0f}",
                            "Maxima Count", nonzero_counts, bin_size=1)
 
         return sorted(features, key=lambda f: f['center_bin'])
@@ -2430,98 +2420,66 @@ class IntensityMatrix:
 
     # region                 ---------- Data Storage ----------
 
-    def save_sql_im(self, conn, run_name: str):
-        """
-        saves this intensity matrix object to the sql database
-        
-        Returns
-        -------
-        imID to use to query this object later
-        """
+    STATE_VERSION = 1      # bump when the saved fields change
 
-        return insert_im(conn,
-                    self.sample_name,
-                    run_name,
-                    self.matrix_type,
-                    self.noise_factor,
-                    self.intensity_matrix.shape[0],
-                    self.intensity_matrix.shape[1])
+    def to_state(self):
+        """everything needed to rebuild this IM without recomputation"""
+        return {
+            'state_version': self.STATE_VERSION,
+            'sample_name': self.sample_name,
+            'matrix_type': self.matrix_type,
+            'unique_mzs': list(self.unique_mzs),
+            'time_array': np.array([t for _, t in sorted(self.time_map.items())]),
+            'intensity_matrix': self.intensity_matrix,
+            'baseline_mask': self.baseline_mask,
+            'noise_factor': self.noise_factor,
+            'abundance_threshold': self.abundance_threshold,
+            'saturation_ceiling': self.saturation_ceiling,
+            'height_thresholds': self.height_thresholds,
+            'ridge_widths': self.ridge_widths,
+            'peak_dict': self.peak_dict,
+            'collected_peaks': self.collected_peaks,
+            'molecule_map': self.molecule_map,
+            'cfg': self.cfg.config,                     # config contents, not the loader object
+            'cfg_hash': cfg_hash(self.cfg),
+        }
 
-    def save_h5_object(self, proj_name: str, run_name: str):
-        """
-        Saves intensity matrix object to a .h5 file in the save_dir
-        """
-
-        rundir = get_run_dir(proj_name, run_name)
-        rundir.mkdir(exist_ok=True,parents=True)
-        h5_file = rundir / f"{run_name}.h5"
-
-        with h5py.File(h5_file, 'a') as f:
-
-            # define group
-            grp = f.require_group(f"intensity_matrices/{self.sample_name}")
-
-            # store compressed intensity matrix
-            grp.create_dataset('intensity_matrix',
-                               data=self.intensity_matrix,
-                               compression = 'gzip',
-                               compression_opts = 4,
-                               chunks = True)
-            # store compressed bool baseline mask matrix
-            grp.create_dataset('baseline_mask',
-                               data=self.baseline_mask,
-                               compression = 'gzip',
-                               compression_opts = 4,
-                               chunks = True)
-            # store time and ion maps as well as group atts
-            grp.create_dataset('time_array', data = np.array(list(self.time_map.values())))
-            grp.create_dataset('unique_mzs', data = np.array(self.unique_mzs))
-
-    @staticmethod
-    def load_h5_object(sample_name: str, proj_name: str, run_name: str):
-        """
-        Loads the .h5 object for a given sample
-
-        Params
-        ------
-        sample_name                     name of the sample to retreive
-
-        Returns
-        -------
-        im                              rebuilt IntensityMatrix obj
-        """
-        proj_dir = get_proj_dir(proj_name)
-        db_dir = proj_dir / run_name
-        h5_file = db_dir / f"{run_name}.h5"
-        cfg_path = get_run_cfg_path(proj_name,run_name)
-        cfg = ConfigLoader(cfg_path)
-
-        if not db_dir.exists():
-            raise FileNotFoundError(f"Database directory not found: {db_dir}")
-        if not h5_file.exists():
-            raise FileNotFoundError(f"H5 data file not found: {h5_file}")
-        
-        with h5py.File(h5_file, 'r') as f:
-            grp = f[f"intensity_matrices/{sample_name}"]
-
-            # intensity matrix
-            intensity_matrix = grp['intensity_matrix'][:]
-            baseline_mask = grp['baseline_mask'][:]
-            time_array = grp['time_array'][:]
-            unique_mzs = list(grp['unique_mzs'][:])
-
-            # reconstruct time map
-            time_map = {i:t for i,t in enumerate(time_array)}
-
-        
-        im = IntensityMatrix(intensity_matrix=intensity_matrix,
-                             unique_mzs=unique_mzs,
-                             cfg=cfg,
-                             sample_name=sample_name,
-                             time_map=time_map,
-                             detect_peaks=True)
-        im.baseline_mask = baseline_mask
-
+    @classmethod
+    def from_state(cls, state, cfg=None):
+        """rebuild an IM from to_state() output, no thresholding or peak detection"""
+        if state.get('state_version') != cls.STATE_VERSION:
+            raise ValueError(f"IM state version {state.get('state_version')} != {cls.STATE_VERSION}")
+        im = cls.__new__(cls)
+        im.sample_name = state['sample_name']
+        im.matrix_type = state['matrix_type']
+        im.unique_mzs = state['unique_mzs']
+        im.ion_map = {mz: i for i, mz in enumerate(im.unique_mzs)}
+        im.time_map = {i: t for i, t in enumerate(state['time_array'])}
+        im.intensity_matrix = state['intensity_matrix']
+        im.baseline_mask = state['baseline_mask']
+        im.noise_factor = state['noise_factor']
+        im.abundance_threshold = state['abundance_threshold']
+        im.saturation_ceiling = state['saturation_ceiling']
+        im.height_thresholds = state['height_thresholds']
+        im.ridge_widths = state['ridge_widths']
+        im.peak_dict = state['peak_dict']
+        im.collected_peaks = state['collected_peaks']
+        im.molecule_map = state['molecule_map']
+        im.cfg = cfg if cfg is not None else ConfigLoader(Path('loaded_from_state.yaml'), config=state['cfg'])
         return im
 
+    def save_state(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix('.tmp')
+        with open(tmp, 'wb') as f:
+            pickle.dump(self.to_state(), f, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, path)                 # atomic, a crash never leaves a half-written file
+
+    @classmethod
+    def load_state(cls, path, cfg=None):
+        with open(path, 'rb') as f:
+            return cls.from_state(pickle.load(f), cfg=cfg)
+
     # endregion
+

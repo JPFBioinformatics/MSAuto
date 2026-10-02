@@ -32,11 +32,6 @@ import src.main_pipeline.plotting as plotting_module
 
 from src.gui.analysis import pca
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    filename="debug.log"
-)
 logger = logging.getLogger(__name__)
 
 # endregion
