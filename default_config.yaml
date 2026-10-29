@@ -37,6 +37,8 @@ cwt_min_score: 0                    # minimum score from cwt matrix for a ridge 
 cwt_min_scale: 0                    # minimum scale at which a peak maximizes to be considered non-noise
 max_flat_top_width: 7               # max width in scans that a flat-topped peak would be
 min_width: 2
+min_consecutive_scans: 2            # uncensored scans in a row through the apex, removes single-ion spikes on sparse ions
+
 
 # feature generation
 # possible 1000 cumheight gate

@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 PEAK_KEYS = ('ion', 'center', 'left_bound', 'right_bound', 'rt', 'height',
              'baseline', 'fwhh', 'tailing_factor')
 
-
 def _cfg_hash(cfg_path):
     return hashlib.md5(Path(cfg_path).read_bytes()).hexdigest()[:8]
 

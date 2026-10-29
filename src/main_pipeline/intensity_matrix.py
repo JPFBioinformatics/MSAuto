@@ -348,6 +348,8 @@ class IntensityMatrix:
         """
         sn_threshold = self.cfg.get('sn_threshold')
         width_threshold = self.cfg.get('min_width')
+        min_run = self.cfg.get('min_consecutive_scans') or 1
+        at_row = self._at_per_scan(ion, len(array))
 
         # find maxima
         if mode == 'prom':
@@ -419,7 +421,8 @@ class IntensityMatrix:
                 'neg_scales': cwt_neg_scale[i],
                 'dropped': None,
                 'overlap_left': False,
-                'overlap_right': False
+                'overlap_right': False,
+                'apex_run': np.nan
             })
 
         # sort maxima by position
@@ -436,12 +439,19 @@ class IntensityMatrix:
         row_nm = self._fill_short_noise(row_nm, gap_tol=3)
         bl_indices = np.where(row_nm)[0]
 
-        # get median/mad of baseline to use in height filter
+        # noise from uncensored baselines to setup hieght iflter
         bl_vals = array[bl_indices]
-        median = np.nanmedian(bl_vals)
-        mad = np.nanmedian(np.abs(bl_vals - median))
+        uncens = bl_vals[bl_vals > at_row[bl_indices] * (1 + 1e-6)]
+        vals = uncens if len(uncens) >= 20 else bl_vals
+        median = np.nanmedian(vals)
+        mad = np.nanmedian(np.abs(vals - median))
+
+        # counting-noise floor (AMDIS-style, noise ~ Nf * sqrt(signal))
+        if self.noise_factor is not None and np.isfinite(self.noise_factor):
+            mad = max(mad, self.noise_factor * np.sqrt(max(median, 1.0)))
+
         height_multiplier = self.cfg.get("height_multiplier")
-        height_threshold = height_multiplier * (mad)
+        height_threshold = height_multiplier * mad
 
         # assign peak basleines
         self._generate_basline(array, maxima, row_nm, gap_tol=3, window_size=3)
@@ -454,10 +464,17 @@ class IntensityMatrix:
             # re-check bounds
             left_bound = entry['left_bound']
             right_bound = entry['right_bound']
-            l_width = peak_max - left_bound
-            r_width = right_bound - peak_max
+            l_width = entry['center'] - left_bound
+            r_width = right_bound - entry['center']
             if max(l_width, r_width) < width_threshold:
                 entry['valid'] = False
+                continue
+
+            # persistence check, a real peak covers several consecutive uncensored scans, a counting spike doesn't
+            entry['apex_run'] = self._apex_run_length(array, entry['center'], at_row)
+            if entry['apex_run'] < min_run:
+                entry['valid'] = False
+                entry['dropped'] = 'persistence'
                 continue
 
             # get bl_value at precise rt
@@ -501,7 +518,7 @@ class IntensityMatrix:
         valid_peaks = sorted(valid_peaks, key=lambda p: p['center'])
 
         # reassign baselines
-        self._generate_basline(array, valid_peaks, valid_nm, gap_tol=3, window_size=3)
+        self._generate_baseline(array, valid_peaks, valid_nm, gap_tol=3, window_size=3)
 
         # get peak indices and finish analysis
         for idx, peak in enumerate(valid_peaks):
@@ -509,6 +526,30 @@ class IntensityMatrix:
             peak['feature'] = None
 
         return valid_peaks, valid_nm, height_threshold
+
+    def _at_per_scan(self, ion, n):
+        """
+        abundance threshold value at every scan of this ion's row
+        """
+        row = self.ion_map[ion]
+        starts = np.asarray(self.abundance_threshold['start_idxs'])
+        seg = np.searchsorted(starts, np.arange(n), side='right') - 1
+        return self.abundance_threshold['values'][row][seg]
+
+    @staticmethod
+    def _apex_run_length(array, apex, floor):
+        """
+        number of consecutive uncensored scans (above the abundance threshold) that include the apex
+        """
+        above = array > floor * (1 + 1e-6)
+        if not above[apex]:
+            return 0
+        l = r = apex
+        while l > 0 and above[l - 1]:
+            l -= 1
+        while r < len(array) - 1 and above[r + 1]:
+            r += 1
+        return r - l + 1
 
     def _interpolate_baseline_at_rt(self, peak):
         """
@@ -540,7 +581,7 @@ class IntensityMatrix:
         bl_i2 = scan2 - peak['left_bound']
         return bl[bl_i1] + frac * (bl[bl_i2] - bl[bl_i1])
 
-    def _generate_basline(self, signal, maxima, bl_mask, gap_tol=2, window_size=2):
+    def _generate_baseline(self, signal, maxima, bl_mask, gap_tol=2, window_size=2):
         """
         adds baseline arrays to a set of maxima by looking at the nearest baseline section on either side
         of a section of signal, finding the minimal value and generating a linaer fit between these two points
@@ -584,7 +625,7 @@ class IntensityMatrix:
 
             # signal points for baseline fit
             segment = signal[start:end+1]
-            n_internal = 2*window_size
+            n_internal = window_size
             n_internal = min(n_internal, len(segment) // 2)
             internal_idxs = np.argsort(segment)[:n_internal]+start
             x_vals.append(internal_idxs)

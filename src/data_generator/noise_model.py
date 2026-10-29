@@ -30,9 +30,6 @@ impute the missing left-censored data and smooth the distribution
     transform_in/transform_out      defaults to log/exp but since our data will be negative sometimes (diff
                                     from mean is theoretically centered at 0) we will make them both linear
                                     with lambda x: x
-    as_array = True                 just makes it return a plain numpy array same length and order as the
-                                    input residuals with uncesored entries left alone and censroed
-                                    replaced with corrected values
     min_uncensored = 2              as the minimum number of uncensored values before
                                     ROS can be used to impute results, falls back to simple substitution if
                                     ROS cannot be used
@@ -45,26 +42,33 @@ PEAK MODEL
 """
 
 # region Imports
-import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import json
+import subprocess, os, json, time
 from pathlib import Path
 from wqio.ros import ROS
 import pandas as pd
 import numpy as np
-from scipy.signal import savgol_filter
-import critband
-from matplotlib.backends.backend_pdf import PdfPages
-from lmfit.models import GaussianModel
 from collections import Counter
+
+
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+from scipy.signal import savgol_filter
+from scipy.stats import skew
 from scipy.special import erfc, erfcx
+from scipy.stats import probplot, skew, probplot, norm
+from scipy.optimize import minimize
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
+
+from lmfit.models import GaussianModel
 from lmfit import Model
 
+from src.scripts.helpers import (plot_histogram, plot_table, plot_scatter, plot_hexbin)
 from src.main_pipeline.utils import (get_noise_model_dir)
+from src.data_generator.sample_cache import load_sample
 
-from src.scripts.helpers import (plot_histogram, plot_table)
-
-from pybaselines import Baseline
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # endregion
 
@@ -75,311 +79,30 @@ logger = logging.getLogger(__name__)
 
 # endregion
 
-# region critband zero-crossing hueristic
-
-def _silverman_rot(array, type:str = "MAD"):
-    """
-    Uses silverman's rule of thumb to estimate sigma for exponentially modified valley
-    method
-    """
-
-    n = len(array)
-    std = np.nanstd(array)
-
-    if type == 'IQR':
-        q75, q25 = np.nanpercentile(array,[75,25])
-        iqr = (q75 - q25) / 1.349
-        return 0.9 * min(std, iqr) * n**(-1/5)
-
-    else:
-        mad = np.nanmedian(np.abs(array - np.nanmedian(array))) * 1.4826
-        return 0.9  * min(std, mad) * n**(-1/5)
-    
-def _optimal_bins(array, type:str = "MAD"):
-    """
-    uses freedman-diaconis rule to optimize bin width for a given distribution
-    """
-    n = len(array)
-
-    if type == 'IQR':
-        q75, q25 = np.nanpercentile(array,[75,25])
-        iqr = (q75 - q25) / 1.349
-        bin_width = 2 * iqr * n**(-1/3)
-    else:
-        mad = np.nanmedian(np.abs(array - np.nanmedian(array))) * 1.4826
-        bin_width = 2 * mad * n**(-1/3)
-
-    edges = np.arange(array.min(), array.max() + bin_width, bin_width) 
-    binned_array, bin_edges = np.histogram(array, bins=edges)
-    bin_values = (bin_edges[:-1] + bin_edges[1:]) / 2
-
-    return binned_array, bin_values, bin_edges
-
-def otsus_method(array, bin_vals):
-    """
-    Uses the otsus method to determine the best thresholdfor a given distribution (1D/histogram 
-    not a 2D matrix/image), only splits 2 groups
-    returns the bin value to use as the threshold
-    """
-
-    t_vals = np.arange(len(array))
-    p_vals = array / np.sum(array)
-    u = np.sum(bin_vals * p_vals)
-
-    bcvs = np.zeros_like(t_vals, dtype=float)
-    for i,t in enumerate(t_vals):
-
-        if i == 0 or i == len(array)-1:
-            continue
-
-        split = t+1
-
-        p1 = p_vals[:split]
-        b1 = bin_vals[:split]
-        w1 = np.sum(p1)
-        u1 = np.sum(b1 * p1 / w1)
-
-        p2 = p_vals[split:]
-        b2 = bin_vals[split:]
-        w2 = np.sum(p2)
-        u2 = np.sum(b2 * p2 / w2)
-
-        bcvs[i] = w1*(u1-u)**2 + w2*(u2-u)**2
-
-    max_idx = np.nanargmax(bcvs)
-    return bin_vals[max_idx]
-
-def valley_emphasis_exp(array, log_norm=True):
-    """
-    Uses the exponentially-modified valley emphasis method to determine the best thresholdfor a 
-    given distribution (1D/histogram not a 2D matrix/image), only splits 2 groups
-    returns the bin value to use as the threshold
-    """
-    # log normalize array
-    if log_norm:
-        array = np.log1p(array)
-
-    # calculate sigma using silverman's rule of thumb
-    sigma = _silverman_rot(array, type='MAD')
-    array_counts, bin_vals, _ = _optimal_bins(array, type='MAD')
-
-    p_vals = array_counts / np.sum(array_counts)
-    u = np.sum(bin_vals * p_vals)
-
-    bcvs = np.zeros_like(array_counts, dtype=float)
-    for i,val in enumerate(bin_vals):
-
-        if i == 0 or i == len(array_counts)-1:
-            continue
-
-        split = i+1
-
-        weight = 1 - np.sum(p_vals * np.exp(-((bin_vals - bin_vals[i])**2) / (2*sigma**2)))
-
-        p1 = p_vals[:split]
-        b1 = bin_vals[:split]
-        w1 = np.sum(p1)
-        u1 = np.sum(b1 * p1 / w1)
-
-        p2 = p_vals[split:]
-        b2 = bin_vals[split:]
-        w2 = np.sum(p2)
-        u2 = np.sum(b2 * p2 / w2)
-
-        bcvs[i] = weight*(w1*(u1-u)**2 + w2*(u2-u)**2)
-
-    max_idx = np.nanargmax(bcvs)
-
-    threshold = bin_vals[max_idx]
-    if log_norm:
-        threshold = np.expm1(threshold)
-    return threshold
-
-def critband_threshold(array, data_label, log_norm=True):
-    """
-    Takes a raw data array and uses critband to generate a KDE optimized for bimodality and then
-    finds the threshold between the modes of the distribution and returns confidence statistics
-    """
-    logger.info(f"{data_label} Critband started")
-
-    # make sure input is an array
-    array = np.asarray(array)
-
-    # log correct data
-    if log_norm:
-        array = np.log1p(array)
-
-    # find critical bandwith for k=2 modal distribution
-    k=2
-    silverman_bandwith = critband.silverman_bandwidth(array)
-    min_h = silverman_bandwith / 20
-    max_h = silverman_bandwith * 10
-    h_crit, success = critband.critical_bandwidth(array, k=k, h_min=min_h, h_max=max_h)
-    logger.info("Critband complete")
-
-    # check if it was successful, if not fallback to MAD-based thresholding
-    if success is False:
-        logger.info(f'Critband could not generate {k}-modal distribution for {data_label}')
-        med = np.median(array)
-        mad = np.median(np.abs(array-med)) * 1.4826
-        threshold = min(med + 2 * mad, array.max())
-        if h_crit == min_h:
-            calc_type = 'unimodal'
-        elif h_crit == max_h:
-            calc_type = 'hypermodal'
-        else:
-            calc_type = 'critband_failure'
-        logger.info('Fallback_critband calculation complete')
-
-    # if successful then use find_trough
-    else:
-        threshold = critband.find_trough(array,h_crit)
-        if threshold is None:
-            logger.info(f"{k}-modal distributiuon calculated, find_trough failed for {data_label}")
-            med = np.median(array)
-            mad = np.median(np.abs(array-med)) * 1.4826
-            threshold = min(med + 2 * mad, array.max())
-            calc_type = 'trough_failure'
-            logger.info('Fallback_trough calculation complete')
-        else:
-            calc_type = 'critband'
-            logger.info('Critband calculation fully successful')
-
-    # adjust threshold if needed
-    if threshold is not None and log_norm:
-        threshold = np.expm1(threshold)
-    logger.info("Threshold Calculated")
-
-    # calculte hueristics
-    bimod_test = critband.bimodality_strength(array)
-    logger.info('Bimodality test completed')
-
-    return threshold, bimod_test, calc_type
-
-def process_row(array, label, segment_size:int=13, step:int = 5):
-    """
-    fully processes a row and denotes which sections are signal and which are noise
-    """
-    # determine number of segments
-    n_segments = len(array) // step
-
-    # process segments
-    zero_crossings, energies = [], []
-    for i in range(n_segments):
-
-        # get this segment
-        start = i * step
-        end = start + segment_size
-        segment = array[start:end]
-
-        # determine segment energy
-        energies.append(np.sum(np.abs(segment)))
-
-        # linear fit the segment and see how many times this fit is 'crossed'
-        x = np.arange(len(segment))
-        slope, intercept = np.polyfit(x,segment,1)
-        fit = slope*x + intercept
-        count = 0
-        for j, _ in enumerate(segment):
-
-            if j == len(segment)-1:
-                continue
-
-            if segment[j]-fit[j] > 0 and segment[j+1]-fit[j+1] < 0:
-                count += 1
-            elif segment[j]-fit[j] < 0 and segment[j+1]-fit[j+1] > 0:
-                count += 1
-
-        zero_crossings.append(count)
-
-    zc_thresh, zc_bimod, zc_type = critband_threshold(zero_crossings, f'{label} zero-crossings', log_norm=False)
-    energy_thresh, e_bimod, e_type = critband_threshold(energies, f'{label} energies', log_norm=True)
-
-    data = {
-        'zero_crossings':{
-            'threshold': zc_thresh,
-            'bimod_test': zc_bimod.strength_score,
-            'type': zc_type
-        },
-        'energies':{
-            'threshold': energy_thresh,
-            'bimod_test': e_bimod.strength_score,
-            'type': e_type
-        }
-    }
-    return data
-
-# endregion
-
-# region airPLS w/ L-curve lambda for baseline correction
-
-"""
-L-curve used to select the labmda for airPLS baseline determination, plots how well the baseline
-fits the data vs how smooth the resulting curve is by sweeping lambda from tiny to large
-plotting results and traces a L-shaped curve looking for the corner
-
-airPLS then uses an adaptive iteratively reweighted penalized least squares approach to 
-determine a baseline for the plot
-
-"""
-
-def calculate_arr_baseline(arr, min=0, max=12, n_tests=40, min_noise=1e-6):
-    """
-    uses the L-curve method to determine an optimal labmda for a fit
-    """
-    med = np.median(arr)
-    mad = np.median(np.abs(arr-med)) * 1.4826
-    relmad = mad / np.abs(med + 1e-12)
-    if relmad < min_noise:
-        baseline = np.full_like(arr, med)
-        return baseline, None, None, None, None
-    
-    lambdas = np.logspace(min, max, n_tests)
-    residuals, roughnesses, baselines = [], [], []
-
-    fitter = Baseline(x_data=np.arange(0,len(arr),dtype=int))
-    for lam in lambdas:
-        baseline,_ = fitter.airpls(arr, lam=lam)
-        baselines.append(baseline)
-        residuals.append(np.linalg.norm(arr-baseline))
-        roughnesses.append(np.linalg.norm(np.diff(baseline,n=2)) + 1e-12)
-
-    log_lam = np.log(lambdas)
-    log_res = np.log(residuals)
-    log_rough = np.log(roughnesses)
-
-    # find L-curve corner with hansen's L-curv curvature
-    eta_p = np.gradient(log_res, log_lam)
-    rho_p = np.gradient(log_rough, log_lam)
-    eta_pp = np.gradient(eta_p, log_lam)
-    rho_pp = np.gradient(rho_p, log_lam)
-
-    curvature = (eta_p * rho_pp - eta_pp * rho_p) / (eta_p**2 + rho_p**2)**1.5
-    best_idx = np.nanargmax(np.abs(curvature))
-    l_lam = lambdas[best_idx]
-
-    # use V-curve as a check
-    dist = np.sqrt(np.diff(log_res)**2 + np.diff(log_rough)**2)
-    geo_mean_lam = np.sqrt(lambdas[:-1] * lambdas[1:])
-    v_lam = geo_mean_lam[np.nanargmin(dist)]
-
-    return baseline, l_lam, v_lam, relmad, curvature
-
-# endregion
-
-# region model production
-
 class NoiseModel:
+
+    # default kwargs for missing peaks/bl noise analysis
+    MISSED_PEAK_KWARGS = dict(k=2.0, min_run=3, hard_k=6.0, grow=2) 
+    BL_NOISE_KWARGS = dict(seg_size=50, end_window=15, outlier_threshold=3.5, edge_trim=25, bl_lam=1e10, flat_len=100)
+
+
     def __init__(self,
                  cache_dirs,
                  model_name:str,
                  bic_margin: float = 2.0,
-                 n_workers: int = None
+                 n_workers: int = None,
+                 missed_kwargs: dict = None, bl_noise_kwargs: dict = None,
+                 qc_limits: dict = None,
+                 fit_peaks: bool = True, make_report: bool = True
                  ):
 
         # obj info
         self.model_name = model_name
         self.bic_margin = bic_margin
+        self.missed_kwargs = {**self.MISSED_PEAK_KWARGS, **(missed_kwargs or {})}
+        self.bl_noise_kwargs = {**self.BL_NOISE_KWARGS, **(bl_noise_kwargs or {})}
+        self.fit_peaks = fit_peaks
+        self.qc_limits = qc_limits
         cache_dirs = [Path(d) for d in cache_dirs]
 
         # per-sample info from cahce metadata
@@ -416,7 +139,8 @@ class NoiseModel:
         logger.info(f"Began Model Fitting: {len(self.samples)} samples, {len(tasks)} rows, {n_workers} workers")
         results = []
         with ProcessPoolExecutor(max_workers=n_workers, initializer=_init_worker,
-                                 initargs=(self.bic_margin,)) as ex:
+                                 initargs=(self.bic_margin, self.missed_kwargs,
+                                           self.bl_noise_kwargs, self.fit_peaks)) as ex:
             futures = [ex.submit(_run_ion, t) for t in tasks]
             for k,fut in enumerate(as_completed(futures), 1):
                 results.append(fut.result())
@@ -430,22 +154,29 @@ class NoiseModel:
         fits = []
         self.bl_models, self.noise_models = {}, {}
         self.at_vals = {}
+        self.missed_masks = {}
         max_scans = max(s['n_scans'] for s in self.samples.values())
         self.outlier_locations = np.zeros(max_scans,dtype=int)
+        self.missed_locations = np.zeros(max_scans,dtype=int)
         for r in results:
             key = (r['sample'], r['ion'])
             self.bl_models[key] = r['baseline']
             self.noise_models[key] = r['residuals']
             self.at_vals[key] = r['at_vals']
             self.outlier_locations[:len(r['outliers'])] += r['outliers']
+            self.missed_locations[:len(r['missed'])] += r['missed']
             self.exec_counter.update(r['errors'])
+            self.missed_masks[key] = r['missed']
             fits.extend(r['fits'])
         logger.info(f"Fit Errors:\n{self.exec_counter.most_common(10)}")
 
         # tables
-        row_cols = ('sample', 'ion', 'row', 'n_outliers', 'kde_h', 'bl_count', 'signal_count', 'n_peaks')
+        diag_cols = ('skew', 'tail_ratio', 'acf1', 'frac_gt3', 'sigma', 'level')
+        row_cols = ('sample', 'ion', 'row', 'n_outliers', 'kde_h', 'bl_count', 'signal_count', 'n_peaks', 'n_missed', 'bl_level', 'frac_censored',
+                    *diag_cols, *(f'{c}_pre' for c in diag_cols), *(f'{c}_post' for c in diag_cols))
         self.row_df = pd.DataFrame([{k: r[k] for k in row_cols} for r in results])
         self.row_df['model_name'] = self.model_name
+        self.row_df['frac_missed'] = self.row_df['n_missed'] / self.row_df['bl_count'].clip(lower=1)
         self.fits_df = pd.DataFrame(fits)
         self.fits_df['model_name'] = self.model_name
 
@@ -454,108 +185,108 @@ class NoiseModel:
         self.kde_bandwiths = self.row_df['kde_h'].to_numpy(dtype=float)
         self.n_rows = len(self.row_df)
 
-        # collect fit resutls (shorter name for easy typing)
-        fits_df = self.fits_df
+        # summary logs
+        if self.fit_peaks:
+            fd = self.fits_df
+            logger.info(f"Fit status counts:\n{fd['status'].value_counts(dropna=False)}")
+            logger.info(f"Model Counts:\n{pd.crosstab(fd['model'], fd['fronting'])}")
+            logger.info(f"Fit Errors: {self.exec_counter.most_common(10)}")
 
-        # summary
-        is_emg = fits_df['model'] == 'emg'
-        is_gauss = fits_df['model'] == 'gauss'
-        is_front = fits_df['fronting'] & is_emg
-        logger.info(f"Fit status counts:\n{fits_df['status'].value_counts(dropna=False)}")
-        logger.info(f"Model Counts:\n{pd.crosstab(fits_df['model'], fits_df['fronting'])}")
-        logger.info(f"Fit Errors: {self.exec_counter.most_common(10)}")
+        # QC + peak/noise joins (before the report so they're also saved by save_data)
+        self._assign_qc(**(qc_limits or {}))
+        if self.fit_peaks:
+            self._add_peak_noise_stats()
 
-        # prepare fit result plotting info
-        df = fits_df
-        is_emg = is_emg.to_numpy()
-        is_gauss = is_gauss.to_numpy()
-        is_front = is_front.to_numpy()
-        is_tail = is_emg & ~is_front
-        fit_ok = df['status'].isin(['ok', 'no_errorbars']).to_numpy()
+        if make_report and self.fit_peaks:
+            self.write_report()
 
-        n_total = len(df)
-        n_informed = int((df['guess_type'] == 0).sum())
-        n_ok = int((df['status'] == 'ok').sum())
-        n_noerr = int((df['status'] == 'no_errorbars').sum())
-        n_failed = int((df['status'] == 'both_failed').sum())
-        n_short = int((df['status'] == 'short').sum())
-        tg_fails = int(df['tg_fail'].sum())
-        sg_fails = int(df['sg_fail'].sum())
+    # region Report Writer
 
-        # tail length relative to wdith, scale free shape metric (tau / sigma = 1 / (gamma * sigma))
-        tau_over_sigma = 1.0 / (df['gamma'] * df['sigma'])
-
-        # pct formatter
-        def pct(k):
-            return f"{100 * k / max(n_total,1):.2f}%"
-
-        # out directory
+    def write_report(self):
+        """
+        builds nm_metrics.pdf, sections in the order you'd read/justify them
+        """
         out_dir = get_noise_model_dir() / self.model_name
-        pdf_file = out_dir / 'nm_metrics.pdf'
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-        with PdfPages(pdf_file) as pdf:
-
-            # plot outlier counts and KDE results
-            self.plot_oc_and_h(self.row_df['bl_count'].to_numpy(), pdf)
-
-            # plot row information
-            plot_histogram(pdf, "Baseline Points per-row", "N Points", self.row_df['bl_count'])
-            plot_histogram(pdf, "Signal Points per-row", "N Points", self.row_df['signal_count'])
-            plot_histogram(pdf, "Peak Count per-row", "N Peaks", self.row_df['n_peaks'])
+        with PdfPages(out_dir / 'nm_metrics.pdf') as pdf:
 
 
-            # fit outcome summary table
-            outcome = pd.crosstab(df['status'].fillna('none'),
-                                  df['model'].fillna('none'), margins=True)
-            plot_table(pdf, f"Peak Fit Outcomes (n={n_total}, informed={n_informed}, "
-                            f"TG_fails={tg_fails}, SG_fails={sg_fails})",
-                       [[idx] + list(row) for idx, row in outcome.iterrows()],
-                       ['status'] + list(outcome.columns))
+            self._plot_summary(pdf)
 
-            # model choice
-            self._hist(pdf, f"Delta BIC (gauss - emg), >{bic_margin} = EMG chosen\n"
-                            f"EMG={is_emg.sum()} ({pct(is_emg.sum())}) "
-                            f"Gauss={is_gauss.sum()} ({pct(is_gauss.sum())}) "
-                            f"Fronting={is_front.sum()}",
-                       "Delta BIC", df['delta_bic'], symlog=True, title_fontsize=10)
+            self._section_page(pdf, "1. Input data",
+                               ["What the CWT picker gave the model: noise/signal points and peaks per row"])
+            self._plot_input_section(pdf)
 
-            # amplitudes
-            self._hist(pdf, f"Amplitudes (area), all fitted\nok={n_ok} no_errbars={n_noerr}",
-                       "Amplitude", df.loc[fit_ok, 'amplitude'], log=True)
+            self._section_page(pdf, "2. Noise cleaning & row QC",
+                               ["Missed-peak filter and ROS effects, row QC labels",
+                                "Generator draws only from qc == 'ok' rows"])
+            self._plot_noise_section(pdf)
+            self._plot_by_sample(pdf)
 
-            # sigmas by model
-            for mask, name in [(is_gauss, "Gaussian"), (is_emg, "EMG")]:
-                s = df.loc[mask, 'sigma']
-                if len(s):
-                    self._hist(pdf, f"Sigma ({name}), n={len(s)}\n"
-                                    f"Med={np.nanmedian(s):.2f} Max={np.nanmax(s):.2f} scans",
-                               "Sigma (scans)", s, log=True)
+            self._section_page(pdf, "3. Noise model",
+                               ["Shape of the residuals the generator resamples, example rows"])
+            self._plot_pooled_residuals(pdf)
+            self._plot_baseline_examples(pdf)
 
-            # gammas by direction
-            for mask, name in [(is_tail, "tailing"), (is_front, "fronting")]:
-                g = df.loc[mask, 'gamma']
-                if len(g):
-                    at_bound = int((g >= 9.99).sum() + (g <= 0.0101).sum())
-                    self._hist(pdf, f"Gamma (EMG {name}), n={len(g)}\n"
-                                    f"Med={np.nanmedian(g):.2f} at_bounds={at_bound}",
-                               "Gamma (1/scans)", g, log=True)
+            self._section_page(pdf, "4. Peak models",
+                               ["Fit outcomes, model choice (Gauss vs EMG), shape parameters, examples"])
+            self._plot_peak_joint(pdf)
+            self._plot_peak_fits(pdf)
+            self._plot_peak_section(pdf)
+            self._plot_fit_examples(pdf)
 
-            # tail shape, scale-free
-            self._hist(pdf, "Tail length / width (tau/sigma), EMG only\n<0.3 ~ gaussian-like, >1 = strong tail",
-                       "tau / sigma", tau_over_sigma[is_emg], log=True)
+        logger.info(f"Wrote report to {out_dir / 'nm_metrics.pdf'}")
 
-            # fit quality
-            self._hist(pdf, f"Reduced Chi-Squared (chosen model)\nok={n_ok} no_errbars={n_noerr} "
-                            f"both_failed={n_failed} short={n_short}",
-                       "Redchi", df.loc[fit_ok, 'redchi'], log=True, title_fontsize=10)
+    @staticmethod
+    def _section_page(pdf, title, lines=()):
+        """
+        divider page so the pdf reads in sections
+        """
+        fig = plt.figure(figsize=(8.5, 4))
+        fig.text(0.05, 0.8, title, fontsize=18, weight='bold')
+        for i, line in enumerate(lines):
+            fig.text(0.05, 0.62 - 0.1 * i, line, fontsize=10)
+        pdf.savefig(fig); plt.close(fig)
+    
+    def _plot_by_sample(self, pdf):
+        rd = self.row_df
+        # row QC mix per sample, one odd sample stands out
+        ct = pd.crosstab(rd['sample'], rd['qc'], normalize='index')
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ct.plot.bar(stacked=True, ax=ax, width=0.8)
+        ax.set_ylabel('Fraction of rows'); ax.set_title('Row QC by sample'); ax.legend(fontsize=7)
+        fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
 
-            # where do failures come from
-            self._hist(pdf, f"Peak height: fitted (n={fit_ok.sum()})", "Height",
-                       df.loc[fit_ok, 'height'], log=True)
-            self._hist(pdf, f"Peak height: failed/short (n={(~fit_ok).sum()})", "Height",
-                       df.loc[~fit_ok, 'height'], log=True)
-            self._hist(pdf, f"Window size: failed/short (n={(~fit_ok).sum()})", "N points",
-                       df.loc[~fit_ok, 'n_points'], bin_size=1)
+        # sigma vs level per sample, overlapping lines = noise can be pooled across samples
+        ok = rd[(rd['qc'] == 'ok') & (rd['sigma'] > 0) & (rd['bl_level'] > 0)]
+        fig, ax = plt.subplots(figsize=(7, 5))
+        for name, g in ok.groupby('sample'):
+            if len(g) < 10:
+                continue
+            lx, ly = np.log10(g['bl_level']), np.log10(g['sigma'])
+            b, a = np.polyfit(lx, ly, 1)
+            xx = np.linspace(lx.min(), lx.max(), 50)
+            ax.plot(10 ** xx, 10 ** (a + b * xx), lw=1.2, label=f"{name}  slope={b:.2f}")
+        ax.set_xscale('log'); ax.set_yscale('log')
+        ax.set_xlabel('Baseline level'); ax.set_ylabel('Noise sigma')
+        ax.set_title('Noise sigma vs level by sample (ok rows)\noverlapping lines = poolable')
+        ax.legend(fontsize=7); fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+    def _plot_peak_joint(self, pdf, sn_min=20):
+        d = self.fits_df
+        d = d[d['status'].isin(['ok', 'no_errorbars']) & (d['model'] == 'emg') & (d['sn'] > sn_min)
+              & (d['row_qc'] == 'ok')]
+        if len(d) < 50:
+            return
+        plot_hexbin(pdf, f"EMG shape, joint (S/N>{sn_min}, ok rows, n={len(d)})",
+                    "log10 sigma (scans)", "log10 tau/sigma",
+                    np.log10(d['sigma']), np.log10(1 / (d['gamma'] * d['sigma'])))
+
+    # endregion
+    
+    # region Plotting Helpers
+
     @staticmethod
     def _hist(pdf, title, xlabel, values, **kwargs):
         """
@@ -570,28 +301,136 @@ class NoiseModel:
             return
         plot_histogram(pdf, title, xlabel, vals, **kwargs)
 
-    def plot_oc_and_h(self, baseline_mask, pdf):
+    @staticmethod
+    def _plot_locations(pdf, title, counts):
+        """
+        counts per scan as a profile across the run (not a histogram of the counts)
+        """
+
+        fig, ax = plt.subplots(figsize=(11, 4))
+        ax.fill_between(np.arange(len(counts)), counts, step='mid', alpha=0.6)
+        ax.set_xlabel('Scan idx'); ax.set_ylabel('Count (all rows)'); ax.set_title(title)
+        pdf.savefig(fig); plt.close(fig)
+
+    @staticmethod
+    def _before_after(pdf, title, x, y, log=False):
+        """
+        step effect per row, points on the dashed line = unchanged
+        """
+
+        x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+        m = np.isfinite(x) & np.isfinite(y)
+        if log:
+            m &= (x > 0) & (y > 0)
+        if not m.any():
+            return
+        x, y = x[m], y[m]
+        fig, ax = plt.subplots()
+        ax.scatter(x, y, s=6, alpha=0.3, rasterized=True)
+        lo, hi = min(x.min(), y.min()), max(x.max(), y.max())
+        ax.plot([lo, hi], [lo, hi], 'k--', lw=1)
+        if log:
+            ax.set_xscale('log'); ax.set_yscale('log')
+        ax.set_xlabel('before'); ax.set_ylabel('after'); ax.set_title(title)
+        pdf.savefig(fig); plt.close(fig)
+
+    # endregion
+
+    # region QC Ploting
+
+    def _plot_input_section(self, pdf):
+        rd = self.row_df
+        plot_histogram(pdf, "Noise (baseline) points per row", "N points", rd['bl_count'])
+        plot_histogram(pdf, "Signal points per row", "N points", rd['signal_count'])
+        plot_histogram(pdf, "Picked peaks per row", "N peaks", rd['n_peaks'])
+        self._plot_oc_and_h(pdf)
+
+    def _plot_peak_fits(self, pdf):
+        df = self.fits_df
+        is_emg = (df['model'] == 'emg').to_numpy()
+        is_gauss = (df['model'] == 'gauss').to_numpy()
+        is_front = (df['fronting'].astype(bool) & (df['model'] == 'emg')).to_numpy()
+        is_tail = is_emg & ~is_front
+        fit_ok = df['status'].isin(['ok', 'no_errorbars']).to_numpy()
+
+        n_total = len(df)
+        n_informed = int((df['guess_type'] == 0).sum())
+        n_ok = int((df['status'] == 'ok').sum())
+        n_noerr = int((df['status'] == 'no_errorbars').sum())
+        tg_fails, sg_fails = int(df['tg_fail'].sum()), int(df['sg_fail'].sum())
+        tau_over_sigma = 1.0 / (df['gamma'] * df['sigma'])
+
+        def pct(k):
+            return f"{100 * k / max(n_total, 1):.2f}%"
+
+        # fit outcome summary table
+        outcome = pd.crosstab(df['status'].fillna('none'), df['model'].fillna('none'), margins=True)
+        plot_table(pdf, f"Peak Fit Outcomes (n={n_total}, informed={n_informed}, "
+                        f"TG_fails={tg_fails}, SG_fails={sg_fails})",
+                   [[idx] + list(row) for idx, row in outcome.iterrows()],
+                   ['status'] + list(outcome.columns))
+
+        # model choice
+        self._hist(pdf, f"Delta BIC (gauss - emg), >{self.bic_margin} = EMG chosen\n"
+                        f"EMG={is_emg.sum()} ({pct(is_emg.sum())}) "
+                        f"Gauss={is_gauss.sum()} ({pct(is_gauss.sum())}) Fronting={is_front.sum()}",
+                   "Delta BIC", df['delta_bic'], symlog=True, title_fontsize=10)
+
+        # amplitudes
+        self._hist(pdf, f"Amplitudes (area), all fitted\nok={n_ok} no_errbars={n_noerr}",
+                   "Amplitude", df.loc[fit_ok, 'amplitude'], log=True)
+
+        # sigmas by model
+        for mask, name in [(is_gauss, "Gaussian"), (is_emg, "EMG")]:
+            s = df.loc[mask, 'sigma']
+            if len(s):
+                self._hist(pdf, f"Sigma ({name}), n={len(s)}\n"
+                                f"Med={np.nanmedian(s):.2f} Max={np.nanmax(s):.2f} scans",
+                           "Sigma (scans)", s, log=True)
+
+        # gammas by direction
+        for mask, name in [(is_tail, "tailing"), (is_front, "fronting")]:
+            g = df.loc[mask, 'gamma']
+            if len(g):
+                at_bound = int((g >= 9.99).sum() + (g <= 0.0101).sum())
+                self._hist(pdf, f"Gamma (EMG {name}), n={len(g)}\n"
+                                f"Med={np.nanmedian(g):.2f} at_bounds={at_bound}",
+                           "Gamma (1/scans)", g, log=True)
+
+        # tail shape, scale-free
+        self._hist(pdf, "Tail length / width (tau/sigma), EMG only\n<0.3 ~ gaussian-like, >1 = strong tail",
+                   "tau / sigma", tau_over_sigma[is_emg], log=True)
+
+        # where do failures come from
+        self._hist(pdf, f"Peak height: fitted (n={fit_ok.sum()})", "Height", df.loc[fit_ok, 'height'], log=True)
+        self._hist(pdf, f"Peak height: failed/short (n={(~fit_ok).sum()})", "Height",
+                   df.loc[~fit_ok, 'height'], log=True)
+        self._hist(pdf, f"Window size: failed/short (n={(~fit_ok).sum()})", "N points",
+                   df.loc[~fit_ok, 'n_points'], bin_size=1)
+
+    def _plot_oc_and_h(self, pdf):
         """
         plots a histogram and table of outliers in KDE and Outleir count values
         """
-        oc_data = self.outlier_counts
-        oc_clean = oc_data[~np.isnan(oc_data)]
-        oc_median = np.nanmedian(oc_data)
-        oc_mad = np.nanmedian(np.abs(oc_data - oc_median))
-        oc_title = f"Outlier Counts\nMedian:{oc_median:.2f} | MAD:{oc_mad:.2f} | Min:{np.nanmin(oc_clean):.2f} | Max:{np.nanmax(oc_clean):.2f}"
-        plot_histogram(pdf, oc_title, "Outlier Count", oc_clean, bin_size=1)
+        # outlier counts
+        oc = self.outlier_counts
+        oc_clean = oc[np.isfinite(oc)]
+        oc_med = np.median(oc_clean)
+        oc_mad = np.median(np.abs(oc_clean - oc_med))
+        plot_histogram(pdf, f"Segment outliers per row\nMedian:{oc_med:.2f} | MAD:{oc_mad:.2f} | "
+                            f"Min:{oc_clean.min():.0f} | Max:{oc_clean.max():.0f}",
+                    "Outlier count", oc_clean, bin_size=1)
+        
+        # normalised by noise points so rows of different lengths compare
+        bl = self.row_df['bl_count'].to_numpy(dtype=float)
+        ol_pct = np.where(bl > 0, 100 * oc / np.where(bl > 0, bl, 1), np.nan)
+        pct_med = np.nanmedian(ol_pct)
+        pct_mad = np.nanmedian(np.abs(ol_pct - pct_med))
+        self._hist(pdf, f"Segment outliers per row, % of noise points\n"
+                        f"Median:{pct_med:.2f}% | MAD:{pct_mad:.2f}% | rows without noise pts: {int((bl == 0).sum())}",
+                "Outliers (% of noise points)", ol_pct, n_bins=50)
 
-        n_bls = np.zeros(self.n_rows)
-        ol_pcts = np.zeros(self.n_rows)
-        for i in range(self.n_rows):
-            n_bls[i] = np.sum(baseline_mask[i])
-            ol_pcts[i] = 100 * self.outlier_counts[i] / n_bls[i] if n_bls[i] > 0 else -1
-        ol_med = np.nanmedian(ol_pcts)
-        ol_mad = np.median(np.abs(ol_pcts - ol_med))
-        n_outliers = np.sum(self.outlier_locations)
-        ol_title = f"Outlier Locations\nTotal Outliers:{n_outliers} Outlier Pct Median:{ol_med:.2f} Outlier Pct MAD:{ol_mad:.2f}"
-        plot_histogram(pdf, ol_title, "Scan Idx", self.outlier_locations, bin_size=1)
-
+        # kde h values
         h_data = self.kde_bandwiths
         h_clean = h_data[~np.isnan(h_data)]
         h_nans = np.sum(np.isnan(h_data))
@@ -601,11 +440,343 @@ class NoiseModel:
         h_title = f"KDE h values NaN's:{h_nans} | Successes:{h_nums}\nMedian:{h_median:.2f} | MAD:{h_mad:.2f} | Min:{np.nanmin(h_clean):.2f} | Max:{np.nanmax(h_clean):.2f}"
         plot_histogram(pdf, h_title, "KDE Bandwithd (h)", h_clean, log=True)
 
-    def gen_bl_and_noise_models(self, raw_signal: np.ndarray, noise_mask: np.ndarray, at_start_idxs: list, 
-                                at_vals: np.ndarray, ion_idx: int, seg_size: int=13, end_window: int=5, 
-                                outlier_threshold: float=3.5):
+    def _plot_summary(self, pdf):
+        rd, fd = self.row_df, self.fits_df
+        qc = rd['qc'].value_counts()
+        fit_ok = fd['status'].isin(['ok', 'no_errorbars'])
+        rows = [
+            ['samples', len(self.samples)],
+            ['ion rows', len(rd)],
+            ['rows ok / suspect / too_censored / no_data',
+                f"{qc.get('ok', 0)} / {qc.get('suspect', 0)} / {qc.get('too_censored', 0)} / {qc.get('no_data', 0)}"],
+            ['median noise points per row', int(rd['bl_count'].median())],
+            ['median flagged fraction', f"{rd['frac_missed'].median():.2%}"],
+            ['peaks fitted', f"{fit_ok.sum()} / {len(fd)} ({fit_ok.mean():.1%})"],
+            ['EMG share of fitted', f"{(fd.loc[fit_ok, 'model'] == 'emg').mean():.1%}"],
+            ['bic_margin', self.bic_margin],
+            ['missed-peak filter', ', '.join(f"{k}={v}" for k, v in self.missed_kwargs.items())],
+            ['baseline/noise', ', '.join(f"{k}={v}" for k, v in self.bl_noise_kwargs.items())],
+            ['QC limits', ', '.join(f"{k}={v}" for k, v in self.qc_limits.items())],
+        ]
+        plot_table(pdf, f"Noise model '{self.model_name}'", rows, ['item', 'value'])
+
+    def _plot_noise_section(self, pdf):
+        rd = self.row_df
+
+        # how much the filter removed, where in the run, and on which ions
+        self._hist(pdf, f"Fraction of noise points flagged as missed peaks\nMed={rd['frac_missed'].median():.3f}",
+                "Flagged fraction", rd['frac_missed'], n_bins=50)
+        self._plot_locations(pdf, f"Flagged points by scan (total={int(self.missed_locations.sum())})",
+                            self.missed_locations)
+        self._plot_locations(pdf, f"Segment outliers by scan (total={int(self.outlier_locations.sum())})",
+                            self.outlier_locations)
+        plot_scatter(pdf, "Flagged fraction by ion", "m/z", "Flagged fraction", rd['ion'], rd['frac_missed'],
+                    color_values=np.log1p(rd['n_peaks']), color_label='log(1 + picked peaks)', alpha=0.4)
+
+        # each cleaning step, isolated
+        for a, b, step in (('_pre', '_post', 'missed-peak filter'), ('_post', '', 'ROS imputation')):
+            for col, log in (('tail_ratio', True), ('skew', False), ('sigma', True)):
+                self._before_after(pdf, f"{col}: effect of {step}", rd[col + a], rd[col + b], log=log)
+
+        # what's left
+        self._hist(pdf, "Tail ratio, final (~1 = clean)", "Tail ratio", rd['tail_ratio'], n_bins=50)
+        self._hist(pdf, "Lag-1 autocorrelation, final (high = drift left in)", "acf1", rd['acf1'], n_bins=50)
+        self._hist(pdf, "Median residual / sigma (~0 = baseline centred in the noise)", "level / sigma",
+                rd['level'] / rd['sigma'], n_bins=50)
+
+        ok = (rd['sigma'] > 0) & (rd['bl_level'] > 0) & (rd['qc'] == 'ok')
+        if ok.sum() >= 3:
+            slope = np.polyfit(np.log10(rd.loc[ok, 'bl_level']), np.log10(rd.loc[ok, 'sigma']), 1)[0]
+            plot_scatter(pdf, f"Noise sigma vs baseline level (ok rows)\nlog-log slope={slope:.2f} (0.5 = shot noise)",
+                        "Baseline level", "Sigma", rd.loc[ok, 'bl_level'], rd.loc[ok, 'sigma'],
+                        xscale='log', yscale='log', alpha=0.3)
+
+        # QC
+        qc_rows = [[name, int(m.sum()), f"{m.mean():.1%}"] for name, m in self.qc_checks.items()]
+        qc_rows += [[f"qc = {k}", int(v), f"{v / len(rd):.1%}"] for k, v in rd['qc'].value_counts().items()]
+        plot_table(pdf, f"Row QC (n={len(rd)})", qc_rows, ['check', 'rows', 'pct'])
+        cols = ['sample', 'ion', 'n_peaks', 'frac_missed', 'tail_ratio', 'skew', 'acf1']
+        worst = rd[rd['qc'] == 'suspect'].sort_values('frac_missed', ascending=False).head(15)
+        plot_table(pdf, "Worst 15 suspect rows",
+                [[r[c] if isinstance(r[c], str) else f"{r[c]:.3g}" for c in cols] for _, r in worst.iterrows()],
+                cols)
+
+    def _plot_pooled_residuals(self, pdf, max_points=200_000, seed=0):
+        """all ok rows on one scale, shows the shape the generator will resample"""
+        rd = self.row_df[self.row_df['qc'] == 'ok']
+        zs = [(self.noise_models[(r['sample'], r['ion'])] - r['level']) / r['sigma'] for _, r in rd.iterrows()]
+        if not zs:
+            return
+        z = np.concatenate(zs)
+        if len(z) > max_points:
+            z = np.random.default_rng(seed).choice(z, max_points, replace=False)
+
+        fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.5))
+        xx = np.linspace(-8, 8, 400)
+        a1.hist(np.clip(z, -8, 8), bins=np.linspace(-8, 8, 161), density=True, alpha=0.6, label='residuals')
+        a1.plot(xx, np.exp(-xx ** 2 / 2) / np.sqrt(2 * np.pi), 'k--', label='N(0,1)')
+        a1.set_yscale('log'); a1.set_xlabel('z (per-row robust scale)'); a1.legend(fontsize=8)
+        probplot(z, dist='norm', plot=a2)
+        fig.suptitle(f"Pooled standardized residuals ({len(rd)} ok rows)\n"
+                    f"frac |z|>3 = {(np.abs(z) > 3).mean():.4f} (normal = 0.0027)", fontsize=10)
+        fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+    def _plot_baseline_examples(self, pdf, n_ok=4, n_worst=4, seed=0):
+        rd = self.row_df
+        picks = pd.concat([
+            rd[rd['qc'] == 'ok'].sample(min(n_ok, (rd['qc'] == 'ok').sum()), random_state=seed),
+            rd[rd['qc'] == 'suspect'].sort_values('frac_missed', ascending=False).head(n_worst),
+        ])
+        for _, r in picks.iterrows():
+            key = (r['sample'], r['ion'])
+            s = load_sample(self.samples[r['sample']]['cache_dir'])
+            raw = np.asarray(s['intensity'][r['row']], dtype=float)
+            sig = ~np.asarray(s['noise_mask'][r['row']], dtype=bool)
+            missed = self.missed_masks[key]
+            x = np.arange(len(raw))
+
+            fig, ax = plt.subplots(figsize=(11, 4))
+            edges = np.flatnonzero(np.diff(np.r_[0, sig.astype(np.int8), 0]))
+            for a, b in zip(edges[::2], edges[1::2]):
+                ax.axvspan(a, b, color='tab:blue', alpha=0.12, lw=0)
+            ax.plot(x, raw, lw=0.6, color='k', label='raw')
+            ax.plot(x, self.bl_models[key], lw=1.2, color='tab:green', label='baseline')
+            ax.scatter(x[missed], raw[missed], s=8, color='tab:red', zorder=3, label='flagged')
+            ax.set_yscale('symlog', linthresh=max(r['bl_level'], 1))
+            ax.set_title(f"[{r['qc']}] {r['sample']} m/z {r['ion']:g} | flagged={r['frac_missed']:.1%} "
+                        f"tail={r['tail_ratio']:.2f} acf1={r['acf1']:.2f} (blue = CWT signal)", fontsize=9)
+            ax.legend(fontsize=7, loc='upper right')
+            fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+    def _plot_peak_section(self, pdf):
+        fd = self.fits_df
+        ok = fd['status'].isin(['ok', 'no_errorbars']) & (fd['sn'] > 0)
+        d = fd[ok].copy()
+
+        if len(d) == 0:
+            logger.info("No fited peaks, skiping peak section")
+            return
+
+        # S/N range of real peaks -> range the generator should cover
+        self._hist(pdf, f"Peak S/N (height / row noise sigma), n={len(d)}", "S/N", d['sn'], log=True)
+
+        # noise-normalized fit quality (replaces raw redchi)
+        self._hist(pdf, "Fit quality: redchi / noise sigma²\n~1 = fit within noise, >>1 = shape mismatch",
+                "redchi_norm", d['redchi_norm'], log=True)
+
+        # model choice depends on S/N
+        if len(d) >= 50:
+            d['sn_bin'] = pd.qcut(np.log10(d['sn']), 12, duplicates='drop')
+            g = d.groupby('sn_bin', observed=True)
+            x, p, n = g['sn'].median(), g['model'].apply(lambda s: (s == 'emg').mean()), g.size()
+            fig, ax = plt.subplots()
+            ax.errorbar(x, p, yerr=np.sqrt(p * (1 - p) / n), marker='o', capsize=3)
+            ax.set_xscale('log'); ax.set_ylim(0, 1)
+            ax.set_xlabel('Peak S/N (bin median)'); ax.set_ylabel('Fraction EMG')
+            ax.set_title('EMG chosen vs S/N\nlow S/N cannot support the extra tail parameter')
+            pdf.savefig(fig); plt.close(fig)
+
+        # sensitivity of the EMG share to bic_margin
+        db = fd['delta_bic'].dropna()
+        margins = [(0, 'any'), (2, 'positive'), (6, 'strong'), (10, 'very strong')]
+        plot_table(pdf, f"EMG share vs BIC margin (n={len(db)} peaks with both fits), current={self.bic_margin}",
+                [[m, f"{(db > m).mean():.1%}", lab] for m, lab in margins],
+                ['margin', 'EMG share', 'evidence (Kass & Raftery)'])
+
+        # width vs retention, does the generator need RT-dependent widths?
+        plot_hexbin(pdf, "Peak sigma vs retention (scan)", "Center scan", "log10 sigma (scans)",
+                    d['center_scan'], np.log10(d['sigma']))
+        emg = d[d['model'] == 'emg']
+        if len(emg):
+            plot_hexbin(pdf, "EMG tail (tau/sigma) vs S/N", "log10 S/N", "log10 tau/sigma",
+                        np.log10(emg['sn']), np.log10(1 / (emg['gamma'] * emg['sigma'])))
+
+    def _plot_fit_examples(self, pdf, n_per_page=4, seed=0):
+        fd = self.fits_df
+        ok = fd[fd['status'].isin(['ok', 'no_errorbars']) & np.isfinite(fd['redchi_norm'])]
+        worker = NoiseModel._make_worker(self.bic_margin)
+        for model in ('gauss', 'emg'):
+            m = ok[ok['model'] == model]
+            if len(m) < 3 * n_per_page:
+                continue
+            q10, q45, q55, q90 = m['redchi_norm'].quantile([0.1, 0.45, 0.55, 0.9])
+            groups = {'best 10%': m[m['redchi_norm'] <= q10],
+                    'median': m[m['redchi_norm'].between(q45, q55)],
+                    'worst 10%': m[m['redchi_norm'] >= q90]}
+            for label, sub in groups.items():
+                sub = sub.sample(min(n_per_page, len(sub)), random_state=seed)
+                fig, axes = plt.subplots(1, len(sub), figsize=(3.2 * len(sub), 3.2), squeeze=False)
+                for ax, (_, p) in zip(axes[0], sub.iterrows()):
+                    self._draw_fit(ax, worker, p)
+                fig.suptitle(f"{model} fits, {label} by redchi_norm", fontsize=10)
+                fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
+    def _draw_fit(self, ax, worker, p):
+        info = self.samples[p['sample']]
+        s = load_sample(info['cache_dir'])
+        row = {float(k): v for k, v in s['meta']['ion_rows'].items()}[float(p['ion'])]
+        peak = next((pk for pk in s['peaks_by_ion'].get(p['ion'], []) if pk['center'] == p['center_scan']), None)
+        if peak is None:
+            ax.set_axis_off(); return
+        worker.scan_interval = info['scan_interval']
+        res = worker.gen_peak_model(peak, np.asarray(s['intensity'][row], dtype=float),
+                                    bic_margin=self.bic_margin, return_curves=True)
+        if not isinstance(res, tuple):              # 'short' / 'both_failed' return early
+            ax.set_axis_off(); return
+        out, x, y, g_fit, e_fit = res
+        ax.plot(x, y, 'k.', ms=4, label='data')
+        if g_fit is not None:
+            ax.plot(x, g_fit, lw=1.2, label='gauss')
+        if e_fit is not None:
+            ax.plot(x, e_fit, lw=1.2, label='emg')
+        ax.set_title(f"m/z {p['ion']:g} scan {p['center_scan']} S/N={p['sn']:.0f}\n"
+                    f"chosen={out['model']} ΔBIC={out['delta_bic']:.1f} rχ²n={p['redchi_norm']:.1f}", fontsize=7)
+        ax.legend(fontsize=6)
+
+    # endregion
+
+    # region QC Calculations
+
+    @staticmethod
+    def qc_labels(rd, tail_max=2.0, skew_max=0.5, acf_max=0.3, missed_max=0.10, suffix='_post'):
+        """contamination checks on uncensored post-filter diagnostics by default"""
+        tail, skw, acf = rd[f'tail_ratio{suffix}'], rd[f'skew{suffix}'], rd[f'acf1{suffix}']
+        checks = {
+            f'tail_ratio{suffix} > {tail_max}': tail > tail_max,
+            f'skew{suffix} > {skew_max}': skw > skew_max,
+            f'acf1{suffix} > {acf_max}': acf > acf_max,
+            f'frac_missed > {missed_max:.0%}': rd['frac_missed'] > missed_max,
+        }
+        suspect = np.logical_or.reduce(list(checks.values()))
+        no_data = rd['sigma'].isna() | rd[f'sigma{suffix}'].isna()    # unusable either before or after ROS
+
+        # older row tables (before frac_censored existed) skip this check
+        if 'frac_censored' in rd:
+            too_censored = rd['frac_censored'] > 0.8
+        else:
+            too_censored = pd.Series(False, index=rd.index)
+
+        labels = np.select([no_data, too_censored, suspect], ['no_data', 'too_censored', 'suspect'], default='ok')
+
+        return labels, checks
+
+    def _assign_qc(self, **limits):
+        self.qc_limits = {**dict(tail_max=2.0, skew_max=0.5, acf_max=0.3, missed_max=0.10), **limits}
+        self.row_df['qc'], self.qc_checks = self.qc_labels(self.row_df, **self.qc_limits)
+
+    def _add_peak_noise_stats(self):
         """
-        Produces a noise and baseline model for a given row of an intensity matrix
+        joins each peak to its row's noise sigma -> S/N and noise-normalized fit quality
+        """
+
+        noise = self.row_df[['sample', 'ion', 'sigma', 'qc']].rename(columns={'sigma': 'noise_sigma', 'qc': 'row_qc'})
+        fd = self.fits_df.copy()
+        fd['ion'] = fd['ion'].astype(float)
+        fd = fd.merge(noise, on=['sample', 'ion'], how='left')
+        fd['sn'] = fd['height'] / fd['noise_sigma']
+        fd['redchi_norm'] = fd['redchi'] / fd['noise_sigma'] ** 2
+        self.fits_df = fd
+
+    @staticmethod
+    def _flag_missed_peaks(residuals, valid, censored=None, run_mask = None, k=2.0, min_run=3, hard_k=6.0, grow=2):
+        """
+        Flags runs of positive residuals that look like unpicked peaks, sigma
+        comes from lower half only which missed peaks won't inflate
+        """
+        # remove invalid values from censored
+        est = valid if censored is None else valid & ~censored
+        r = residuals[est]
+
+        # return zeros if not enough points in residals
+        if len(r) < 10:
+            return np.zeros_like(valid)
+
+        # get median, if no points are below median there is no noise and we return zeros
+        med = np.median(r)
+        lower = r[r<med]
+        if len(lower) == 0:
+            return np.zeros_like(valid)
+
+        # get sigam of distribution and return zeros if sigma = 0
+        sigma = np.median(med - lower) * 1.4826
+        if sigma == 0:
+            return np.zeros_like(valid)
+
+        # flag consistent, high values as likely missed peaks
+        search = valid if run_mask is None else run_mask
+        high = search & (residuals - med > k * sigma)
+        edges = np.flatnonzero(np.diff(np.r_[0, high.astype(np.int8), 0]))
+        flag = np.zeros_like(valid)
+        for s,e in zip(edges[::2], edges[1::2]):
+            if e-s >= min_run or residuals[s:e].max() - med > hard_k * sigma:
+                flag[max(0,s-grow):e + grow] = True
+        return flag & valid
+
+    @staticmethod
+    def residual_diagnostics(r):
+        nan_out = dict.fromkeys(('skew', 'tail_ratio', 'acf1', 'frac_gt3', 'sigma', 'level'), np.nan)
+        r = np.asarray(r, dtype=float)
+        if len(r) < 10:
+            return nan_out
+        med = np.median(r)
+        sigma = 1.4826 * np.median(med - r[r <= med])     # lower-half scale
+        if not sigma > 0:
+            return{**nan_out, 'level':med}
+        z = (r - med) / sigma
+        n_up, n_down = int((z>3).sum()), int((z < -3).sum())
+        return {
+            'skew': skew(r),                                        # >~0.5 → positive contamination
+            'tail_ratio': (n_up+1)/ (n_down+1),   # ~1 for symmetric noise
+            'acf1': np.corrcoef(r[:-1], r[1:])[0, 1],               # high → slow structure/peaks left in
+            'frac_gt3': (np.abs(z) > 3).mean(),                     # ~0.003 if normal, a few % is typical
+            'sigma': sigma,
+            'level': med,
+        }
+
+    @staticmethod
+    def censored_normal_fit(y, limit, min_uncensored=30):
+        """
+        Tobit-style MLE of mean/sd for noise left-censored at a per-scan limit
+        uncensored points use the normal density, censored ones the probability of falling below their limit
+        also returns the upper-tail rate (points above mu + 3 sd over all points), which censoring
+        can't bias since it only removes low values
+
+        Returns
+        -------
+        dict cen_mu, cen_sigma, n_uncens, cen_upper_rate (NaN when too few uncensored points)
+        """
+        y, limit = np.asarray(y, float), np.asarray(limit, float)
+        cen = y <= limit * (1 + 1e-6) + 1e-9
+        yo, lc = y[~cen], limit[cen]
+        out = {'cen_mu': np.nan, 'cen_sigma': np.nan, 'n_uncens': int(len(yo)), 'cen_upper_rate': np.nan}
+        if len(yo) < min_uncensored:
+            return out
+
+        def nll(p):
+            mu, log_s = p
+            s = np.exp(log_s)
+            return -(norm.logpdf(yo, mu, s).sum() + norm.logcdf(lc, mu, s).sum())
+
+        mad = 1.4826 * np.median(np.abs(yo - np.median(yo)))
+        x0 = [np.median(yo), np.log(max(mad, np.std(yo), 1e-6))]
+        res = minimize(nll, x0, method='Nelder-Mead', options={'maxiter': 2000})
+        if not res.success:
+            return out
+
+        mu, sigma = float(res.x[0]), float(np.exp(res.x[1]))
+        out.update(cen_mu=mu, cen_sigma=sigma, cen_upper_rate=float((yo - mu > 3 * sigma).sum() / len(y)))
+        return out
+
+
+    # endregion
+
+    # region Modeling
+    def gen_bl_and_noise_models(self, raw_signal, noise_mask, at_start_idxs, at_vals, ion_idx,
+                                seg_size=50, end_window=15, outlier_threshold=3.5, edge_trim=25,
+                                bl_lam=1e10, flat_len=100):
+        """
+        Produces a noise and baseline model for a given row of an intensity matrix, noise first since the
+        baseline is fit only through the noise points that survive it
 
         Params
         ------
@@ -613,55 +784,79 @@ class NoiseModel:
         noise_mask                      bool mask 1=noise 0=signal for raw_signal
         at_start_idxs                   start idxs for abundance thresholds
         at_vals                         values array for each sgment for abundance thresholds
-        seg_size                        size of segments for baseline generation
+        seg_size                        size of segments for the local noise fits
         end_window                      how far to search for median when imputing baseline of signal sections
         outlier_threshold               threshold for median/mad based outlier-detection
+        edge_trim                       scans at each end excluded from noise and baseline
+        bl_lam                          whittaker stiffness, larger = smoother baseline
+        flat_len                        slope penalty length in scans, smaller = flatter baseline, None = off
 
         Returns
         -------
-        smoothed_baseline               smoothed baseline array for this row
-        corrected_residuals             corrected residuals array for this row's noise (signal - baseline)
+        smoothed_baseline               whittaker baseline array for this row
+        corrected_residuals             ROS corrected noise residuals for this row (signal - segment fit)
+        n_outliers ... frac_censored    see gen_noise_model
+        """
+        noise = self.gen_noise_model(raw_signal, noise_mask, at_start_idxs, at_vals,
+                                     seg_size=seg_size, end_window=end_window,
+                                     outlier_threshold=outlier_threshold, edge_trim=edge_trim)
 
+        smoothed_baseline = NoiseModel.gen_baseline_model(raw_signal, noise['valid'], lam=bl_lam, flat_len=flat_len)
+
+        return (smoothed_baseline, noise['corrected_residuals'], noise['n_outliers'], noise['outliers'],
+                noise['h'], noise['n_missed'], noise['missed'], noise['diag_before'], noise['diag_after'],
+                noise['frac_censored'])
+
+    def gen_noise_model(self, raw_signal, noise_mask, at_start_idxs, at_vals,
+                        seg_size=50, end_window=15, outlier_threshold=3.5, edge_trim=25):
+        """
+        Noise residuals from local linear segment fits, then edge trim, outliers, censoring, missed peaks
+        and ROS imputation of censored residuals
+
+        Returns
+        -------
+        dict with valid (final noise mask, used for the baseline), corrected_residuals, n_outliers, outliers,
+        h, n_missed, missed, diag_before, diag_after, frac_censored
         """
         # get the number of segments for this portion of signal
         n_segments = len(raw_signal) // seg_size
         if len(raw_signal) % seg_size != 0:
             n_segments += 1
 
-        # remove peaks from signal and replace with linear imputed baseline values
+        # remove peaks from signal and replace with linear imputed values so they don't skew segment fits
         signal = NoiseModel._impute_missing_signal(raw_signal, noise_mask, window=end_window)
 
-        # process each segment for noise and baseline
-        start_idxs = []
-        baseline = np.zeros_like(raw_signal)
-        residuals = np.zeros_like(raw_signal)
+        # process each segment for residuals, validity and outliers
+        residuals = np.zeros_like(raw_signal, dtype=float)
         valid = np.zeros_like(raw_signal, dtype=bool)
         outliers = np.zeros_like(raw_signal, dtype=bool)
-        n_outliers = 0
         for i in range(n_segments):
 
             # get start and end points
-            start = 0 + seg_size * i
-            start_idxs.append(start)
+            start = seg_size * i
             end = start + seg_size
 
             # get segment info
             segment_noise_mask = noise_mask[start:end]
             segment = signal[start:end]
 
-            # process for baseline, residuals, validity and otuliers
-            seg_bl, seg_res, seg_valid, seg_out_mask = NoiseModel._process_segment(segment, segment_noise_mask, 
+            # residuals against this segment's linear fit
+            _, seg_res, seg_valid, seg_out_mask = NoiseModel._process_segment(segment, segment_noise_mask,
                                                                               threshold=outlier_threshold)
-            n_outliers += np.sum(seg_out_mask)
-
             # update stored values
-            baseline[start:end] = seg_bl
             residuals[start:end] = seg_res
             valid[start:end] = seg_valid
             outliers[start:end] = seg_out_mask
 
-        # smooth baseline
-        smoothed_baseline = NoiseModel._smooth_baseline(baseline, start_idxs, filter_1=4, filter_2=5)
+        # trim edges
+        if edge_trim:
+            for m in (valid, outliers):
+                m[:edge_trim] = False
+                m[-edge_trim:] = False
+
+        # count outliers only in noise points, not signal sections
+        outliers &= noise_mask.astype(bool)
+        n_outliers = int(outliers.sum())
 
         # detect row censoring
         censored = NoiseModel._detect_censored(raw_signal,
@@ -669,70 +864,86 @@ class NoiseModel:
                                                start_idxs=at_start_idxs)
 
         # mask outlier scans
+        uncens = valid & ~censored
+
+        diag_before = NoiseModel.residual_diagnostics(residuals[uncens])
+
+        missed = NoiseModel._flag_missed_peaks(residuals, valid, censored, run_mask=valid | outliers,
+                                               **self.missed_kwargs)
+
+        valid &= ~missed
+        frac_censored = float(censored[valid].mean()) if valid.any() else np.nan
+        n_missed = int(missed.sum())
+
+        diag_after = NoiseModel.residual_diagnostics(residuals[valid & uncens])
+
         valid_censored = censored[valid]
         valid_residuals = residuals[valid]
-        
+
         if censored.any() and len(valid_residuals) >= 3:
-            df = pd.DataFrame({'residual': valid_residuals,
-                              'censored': valid_censored})
-            corrected_residuals = ROS(
-                'residual', 'censored', df=df,
-                transform_in=lambda x: x, transform_out=lambda x: x,
-                min_uncensored=2, max_fraction_censored=0.8,
-                as_array=True
-            )
+            df = pd.DataFrame({'residual': valid_residuals, 'censored': valid_censored})
+            ros = ROS('residual', 'censored', df=df,
+                      transform_in=lambda x: x, transform_out=lambda x: x,
+                      min_uncensored=2, max_fraction_censored=0.8,
+                      as_array=False)
+
+            # wqio returns values sorted, put imputed values back on the censored scans by rank
+            imputed = np.sort(ros.loc[ros['censored'].astype(bool), 'final'].to_numpy(dtype=float))
+            corrected_residuals = valid_residuals.astype(float).copy()
+            cen_pos = np.flatnonzero(valid_censored)
+            cen_pos = cen_pos[np.argsort(valid_residuals[cen_pos], kind='stable')][:len(imputed)]
+            corrected_residuals[cen_pos] = imputed
         else:
             corrected_residuals = valid_residuals
 
         # save outler info and kde bandwith info
         h = NoiseModel._silverman_rot(corrected_residuals) if len(corrected_residuals) >= 2 else np.nan
 
-        # return the baseline and corrected residuals
-        return smoothed_baseline, corrected_residuals, n_outliers, outliers, h
+        return dict(valid=valid, corrected_residuals=corrected_residuals, n_outliers=n_outliers,
+                    outliers=outliers, h=h, n_missed=n_missed, missed=missed,
+                    diag_before=diag_before, diag_after=diag_after, frac_censored=frac_censored)
 
-    def save_data(self):
+    @staticmethod
+    def gen_baseline_model(raw_signal, valid, lam=1e10, flat_len=100):
         """
-        saves models to <app_dir>/noise_models/<model_name>/
-                        peak_fits.csv, row_stats.csv, model_meta.json, <sample>/bl_noise.npz
+        smooth baseline through the final clean noise points (not peaks, outliers, missed peaks or trimmed
+        edges), whittaker with an optional slope penalty for a flatter baseline
         """
-        out_dir = get_noise_model_dir() / self.model_name
-        out_dir.mkdir(parents=True, exist_ok=True)
+        return NoiseModel._whittaker_baseline(raw_signal, valid, lam=lam, flat_len=flat_len)
 
-        # combined tables
-        self.fits_df.to_csv(out_dir / 'peak_fits.csv', index=False)
-        self.row_df.to_csv(out_dir / 'row_stats.csv', index=False)
+    @staticmethod
+    def _whittaker_baseline(y, use, lam=1e7, flat_len=100):
+        """
+        weighted whittaker smoother (Eilers 2003): only points in use (noise, not outliers) pull on the
+        baseline, gaps are bridged by the smoothest curve, lam sets stiffness
+        """
+        n = len(y)
+        if use.sum() < 3:
+            return np.full(n, np.median(y[use]) if use.any() else np.median(y))
+        w = use.astype(float)
+        D2 = sparse.diags([1.0, -2.0, 1.0], [0, 1, 2], shape=(n - 2, n))
+        A = sparse.diags(w) + lam * (D2.T @ D2)
+        if flat_len:
+            D1 = sparse.diags([-1.0, 1.0], [0, 1], shape=(n - 1, n))
+            A = A + (lam / flat_len**2) * (D1.T @ D1)
+        bl = spsolve(A.tocsc(), w * y)
 
-        # per-sample baselines and residuals (scan counts can differ between samples)
-        for name in self.samples:
-            keys = [k for k in self.bl_models if k[0] == name]
-            ions = np.array([k[1] for k in keys])
-            residuals = [self.noise_models[k] for k in keys]
-            offsets = np.concatenate([[0], np.cumsum([len(r) for r in residuals])]).astype(np.int64)
-            at_start_idxs = np.load(Path(self.samples[name]['cache_dir']) / 'at_start_idxs.npy')
+        # no data beyond the first/last used point: hold flat rather than extend the end slope
+        idx = np.flatnonzero(use)
+        bl[:idx[0]] = bl[idx[0]]
+        bl[idx[-1] + 1:] = bl[idx[-1]]
+        return bl
 
-            sample_dir = out_dir / name
-            sample_dir.mkdir(exist_ok=True)
-            np.savez_compressed(
-                sample_dir / 'bl_noise.npz',
-                ions=ions,
-                baselines=np.vstack([self.bl_models[k] for k in keys]),
-                at_values=np.vstack([self.at_vals[k] for k in keys]),
-                at_start_idxs=at_start_idxs,
-                residuals_flat=np.concatenate(residuals) if residuals else np.array([]),
-                residual_offsets=offsets,
-            )
-
-        meta = {
-            'model_name': self.model_name,
-            'bic_margin': self.bic_margin,
-            'samples': self.samples,                      # name -> scan_interval, n_scans
-            'n_rows': int(len(self.row_df)),
-            'n_peaks': int(len(self.fits_df)),
-        }
-        with open(out_dir / 'model_meta.json', 'w') as f:
-            json.dump(meta, f, indent=2)
-
-        logger.info(f"Saved noise model '{self.model_name}' ({len(self.samples)} samples) to {out_dir}")
+    @staticmethod
+    def _sg_baseline(y, window=201, order=2):
+        """
+        single savgol pass over the whole row, window forced odd and no longer than the row
+        """
+        n = len(y)
+        window = min(window | 1, n if n % 2 else n - 1)     # | 1 makes it odd
+        if window <= order:
+            return y.copy()
+        return savgol_filter(y, window_length=window, polyorder=order, mode='interp')
 
     def _estimate_emg_guess(self, peak, front_thresh=1.1):
         """
@@ -797,6 +1008,15 @@ class NoiseModel:
             return None, f"no_converge {str(result.message)[:60]}"
         return result, None
 
+    def _sigma_level_fit(self):
+        """log10 sigma = a + b log10 level on ok rows, generator uses it to scale noise to any baseline"""
+        rd = self.row_df
+        ok = (rd['qc'] == 'ok') & (rd['sigma'] > 0) & (rd['bl_level'] > 0)
+        if ok.sum() < 3:
+            return None
+        b, a = np.polyfit(np.log10(rd.loc[ok, 'bl_level']), np.log10(rd.loc[ok, 'sigma']), 1)
+        return {'a': float(a), 'b': float(b), 'n_rows': int(ok.sum())}
+
     @staticmethod
     def emg_stable(x, amplitude=1.0, center=0.0, sigma=1.0, gamma=1.0):
         """
@@ -813,7 +1033,8 @@ class NoiseModel:
         
         return amplitude * (gamma / 2) * out
 
-    def gen_peak_model(self, peak: dict, raw_signal: np.ndarray, bic_margin=2.0):
+    def gen_peak_model(self, peak: dict, raw_signal: np.ndarray, bic_margin=2.0,
+                       return_curves=False):
         """
         Models a given peak as an exponentially modified gaussian or gaussian depending on which
         is a more accurate fit
@@ -925,6 +1146,15 @@ class NoiseModel:
         out['redchi'] = chosen.redchi
         out['status'] = 'ok' if chosen.errorbars else 'no_errorbars'
 
+        # return curves for visualization
+        if return_curves:
+            g_fit = g_res.best_fit if g_res is not None else None
+            e_fit = None
+            if e_res is not None:
+                e_fit = e_res.best_fit[::-1] if fronting else e_res.best_fit
+            return out, x, y, g_fit, e_fit
+
+        # return fit info
         return out
         
     @ staticmethod
@@ -1153,13 +1383,13 @@ class NoiseModel:
             return 0.9  * min(std, mad) * n**(-1/5)
 
     @classmethod
-    def _make_worker(cls, bic_margin):
-        """
-        lightweight instance for worker process, conifig + lmfit models only
-        """
+    def _make_worker(cls, bic_margin, missed_kwargs=None, bl_noise_kwargs=None, fit_peaks=True):
         w = cls.__new__(cls)
         w.scan_interval = None
         w.bic_margin = bic_margin
+        w.missed_kwargs = missed_kwargs or dict(cls.MISSED_PEAK_KWARGS)
+        w.bl_noise_kwargs = bl_noise_kwargs or dict(cls.BL_NOISE_KWARGS)
+        w.fit_peaks = fit_peaks
         w.emg_model = Model(cls.emg_stable)
         w.gauss_model = GaussianModel()
         w.exec_counter = Counter()
@@ -1171,11 +1401,12 @@ class NoiseModel:
         """
         self.scan_interval = task['scan_interval']
         self.exec_counter = Counter()
-        bl, residuals, n_outliers, outliers, h = self.gen_bl_and_noise_models(
+        bl, residuals, n_outliers, outliers, h, n_missed, missed, diag_before, diag_after, frac_censored = self.gen_bl_and_noise_models(
             task['raw_signal'], task['noise_mask'], task['at_start_idxs'], task['at_vals'],
-            task['row'], seg_size=13, end_window=5, outlier_threshold=3.5)
-        fits = [self.gen_peak_model(p, task['raw_signal'], bic_margin=self.bic_margin)
-                for p in task['peaks']]
+            task['row'], **self.bl_noise_kwargs)
+        fits = ([self.gen_peak_model(p, task['raw_signal'], bic_margin=self.bic_margin) for p in task['peaks']]
+            if self.fit_peaks else [])
+
         for f in fits:
             f['sample'] = task['sample']
         return {
@@ -1186,7 +1417,11 @@ class NoiseModel:
             'bl_count': int(task['noise_mask'].sum()),
             'signal_count': int((~task['noise_mask']).sum()),
             'n_peaks': len(task['peaks']),
-            'at_vals': np.asarray(task['at_vals'], dtype=float)
+            'at_vals': np.asarray(task['at_vals'], dtype=float),
+            'n_missed': n_missed, 'missed': missed, 'bl_level': float(np.median(bl)), 'frac_censored': frac_censored,
+            **NoiseModel.residual_diagnostics(np.asarray(residuals, dtype=float)),  # final, post ROS diagnostics on fully clean data
+            **{f'{k}_pre':v for k,v in diag_before.items()},                        # diagnostics on valid + uncensored residuals
+            **{f'{k}_post':v for k,v in diag_after.items()}                         # diagnostics after chekcing if there are probable missed peaks
         }
 
     @staticmethod
@@ -1201,18 +1436,71 @@ class NoiseModel:
         xx = (center - x) if fronting else (x - center)            # mirror for fronting peaks
         return (height / unit_max) * NoiseModel.emg_stable(xx, 1.0, 0.0, sigma, gamma)
 
-# endregion
+    # endregion
+
+    def save_data(self):
+        """
+        saves models to <app_dir>/noise_models/<model_name>/
+                        peak_fits.csv, row_stats.csv, model_meta.json, <sample>/bl_noise.npz
+        """
+        out_dir = get_noise_model_dir() / self.model_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # combined tables
+        self.fits_df.to_csv(out_dir / 'peak_fits.csv', index=False)
+        self.row_df.to_csv(out_dir / 'row_stats.csv', index=False)
+
+        # per-sample baselines and residuals (scan counts can differ between samples)
+        qc = self.row_df.set_index(['sample', 'ion'])['qc']
+        for name in self.samples:
+            keys = [k for k in self.bl_models if k[0] == name]
+            ions = np.array([k[1] for k in keys])
+            residuals = [self.noise_models[k] for k in keys]
+            offsets = np.concatenate([[0], np.cumsum([len(r) for r in residuals])]).astype(np.int64)
+            at_start_idxs = np.load(Path(self.samples[name]['cache_dir']) / 'at_start_idxs.npy')
+
+            sample_dir = out_dir / name
+            sample_dir.mkdir(exist_ok=True)
+            np.savez_compressed(
+                sample_dir / 'bl_noise.npz',
+                ions=ions,
+                baselines=np.vstack([self.bl_models[k] for k in keys]),
+                at_values=np.vstack([self.at_vals[k] for k in keys]),
+                at_start_idxs=at_start_idxs,
+                residuals_flat=np.concatenate(residuals) if residuals else np.array([]),
+                residual_offsets=offsets,
+                qc=np.array([qc[k] for k in keys]),
+            )
+
+        meta = {
+            'model_name': self.model_name,
+            'bic_margin': self.bic_margin,
+            'missed_peak_kwargs': self.missed_kwargs,
+            'bl_noise_kwargs': self.bl_noise_kwargs,
+            'qc_limits': self.qc_limits,
+            'samples': self.samples,                      # name -> scan_interval, n_scans
+            'n_rows': int(len(self.row_df)),
+            'n_peaks': int(len(self.fits_df)),
+            'git_commit': subprocess.run(['git', 'rev-parse', '--short', 'HEAD'],
+                                         capture_output=True, text=True).stdout.strip(),
+            'created': time.strftime('%Y-%m-%d %H:%M'),
+            'cache_dirs': [s['cache_dir'] for s in self.samples.values()],   # name includes the config hash
+            'sigma_vs_level': self._sigma_level_fit(),                        # noise scaling for the generator
+        }
+
+        with open(out_dir / 'model_meta.json', 'w') as f:
+            json.dump(meta, f, indent=2)
+
+        logger.info(f"Saved noise model '{self.model_name}' ({len(self.samples)} samples) to {out_dir}")
 
 # region parallel workers
 
-from src.data_generator.sample_cache import load_sample
-
 _WORKER = None
 
-def _init_worker(bic_margin):
+def _init_worker(bic_margin, missed_kwargs, bl_noise_kwargs, fit_peaks):
     """runs once per worker process"""
     global _WORKER
-    _WORKER = NoiseModel._make_worker(bic_margin)
+    _WORKER = NoiseModel._make_worker(bic_margin, missed_kwargs, bl_noise_kwargs, fit_peaks)
 
 def _run_ion(task):
     """loads one row from the sample cache and fits it"""
